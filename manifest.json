@@ -1,6 +1,10 @@
 {
     "name": "MCT",
     "version": "2024.02.06",
+    "home_assistant_domain": "esphome",
+    "funding_url": "https://esphome.io/guides/supporters.html",
+    "new_install_prompt_erase": false,
+   
     "builds": [
       {
         "chipFamily": "ESP32",
