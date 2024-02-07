@@ -6,20 +6,25 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP Web Install Button</title>
+    <title>AVS MCT Install Button</title>
     <script type="module" src="https://unpkg.com/esp-web-tools@9/dist/web/install-button.js?module"></script>
     <style>
-        /* Position the button container over the canvas */
+        /* Style and position the button container */
         #install-button-container {
-            position: fixed; /* Or absolute, depending on your layout */
-            top: 10px; /* Adjust as needed */
-            right: 10px; /* Adjust as needed */
+            position: fixed; /* Keep the button fixed over the content */
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            justify-content: center; /* Center horizontally */
+            align-items: center; /* Center vertically */
             z-index: 100; /* Ensure it's above the Three.js canvas */
         }
-        /* Optional: Additional styles for your Three.js canvas container */
-        #canvas-container {
-            position: relative;
-            z-index: 1; /* Lower than the button's container */
+
+        esp-web-install-button {
+            --esp-tools-button-color: #00ff33; /* Change button background color */
+            --esp-tools-button-text-color: #000000; /* Change button text color */
         }
     </style>
 </head>
