@@ -1,7 +1,6 @@
 {
     "name": "MCT",
     "version": "2024.02.06",
-    "new_install_prompt_erase": false,
     "builds": [
       {
         "chipFamily": "ESP32",
