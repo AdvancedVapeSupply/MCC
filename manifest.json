@@ -1,13 +1,12 @@
 {
-    "name": "ESPHome Web",
-    "version": "2023.12.8",
-    "home_assistant_domain": "esphome",
+    "name": "AVS MCT",
+    "version": "2024.02.07",
     "builds": [
       {
         "chipFamily": "ESP32",
         "parts": [
           {
-            "path": "/esphome-web/esp32/esphome-web-esp32.bin",
+            "path": "/merged-mct.bin",
             "offset": 0
           }
         ]
