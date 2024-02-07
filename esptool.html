@@ -4,21 +4,38 @@
     <link rel="shortcut icon" type="image/x-icon" href="https://www.advancedvapesupply.com/cdn/shop/files/AVS_Molecule_5_180x180.png">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESP Web Install Button</title>
     <script type="module" src="https://unpkg.com/esp-web-tools@9/dist/web/install-button.js?module"></script>
+    <style>
+        /* Position the button container over the canvas */
+        #install-button-container {
+            position: fixed; /* Or absolute, depending on your layout */
+            top: 10px; /* Adjust as needed */
+            right: 10px; /* Adjust as needed */
+            z-index: 100; /* Ensure it's above the Three.js canvas */
+        }
+        /* Optional: Additional styles for your Three.js canvas container */
+        #canvas-container {
+            position: relative;
+            z-index: 1; /* Lower than the button's container */
+        }
+    </style>
 </head>
 <body>
-    <esp-web-install-button
-      manifest="https://advancedvapesupply.github.io/MCC/manifest.json"
-    >
-      <button slot="activate">Install MCT Firmware</button>
-      <span slot="unsupported">Ah snap, your browser doesn't work!</span>
-      <span slot="not-allowed">Ah snap, you are not allowed to use this on HTTP!</span>
-    </esp-web-install-button>
-
-    <script type="module" src="js/main.js"></script></body>
+    <div id="install-button-container">
+        <esp-web-install-button
+          manifest="https://advancedvapesupply.github.io/MCC/manifest.json"
+        >
+          <button slot="activate">Install MCT Firmware</button>
+          <span slot="unsupported">Ah snap, your browser doesn't work!</span>
+          <span slot="not-allowed">Ah snap, you are not allowed to use this on HTTP!</span>
+        </esp-web-install-button>
+    </div>
+    <div id="canvas-container">
+        <!-- Your Three.js canvas will be appended here by your script -->
+    </div>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
