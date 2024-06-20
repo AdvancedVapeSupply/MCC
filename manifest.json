@@ -11,5 +11,14 @@
         }
       ]
     }
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        {
+          "path": "/MCC/merged-mct.bin",
+          "offset": 0
+        }
+      ]
+    }
   ]
 }
