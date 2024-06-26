@@ -15,7 +15,7 @@
       "chipFamily": "ESP32-S3",
       "parts": [
         {
-          "path": "/MCC/merged-mct.bin",
+          "path": "/MCC/lvgl_micropy_ESP32_GENERIC_S3-SPIRAM-SPIRAM-4.bin",
           "offset": 0
         }
       ]
