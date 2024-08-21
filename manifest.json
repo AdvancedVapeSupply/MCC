@@ -15,7 +15,7 @@
       "chipFamily": "ESP32-S3",
       "parts": [
         {
-          "path": "/MCC/lvgl_micropy_ESP32_GENERIC_S3-SPIRAM-SPIRAM-4.bin",
+          "path": "/MCC/flash_dump_16MB.bin",
           "offset": 0
         }
       ]
