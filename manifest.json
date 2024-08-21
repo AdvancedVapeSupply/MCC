@@ -1,17 +1,8 @@
 {
   "name": "AVS MCT",
-  "version": "0.1.309",
+  "version": "0.2.1",
   "builds": [
-    {
-      "chipFamily": "ESP32",
-      "parts": [
-        {
-          "path": "/MCC/merged-mct.bin",
-          "offset": 0
-        }
-      ]
-    },
-    {
+      {
       "chipFamily": "ESP32-S3",
       "parts": [
         {
