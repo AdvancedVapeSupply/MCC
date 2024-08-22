@@ -62,6 +62,11 @@ def get_vfs_size_from_partition_table(partitions):
         print(f"Name: {partition['name']}, Type: {partition['type']}, Size: {partition['size']}")
     raise ValueError("VFS partition not found in the partition table")
 
+def calculate_bootloader_size():
+    # Fixed bootloader size less than 0x8000
+    bootloader_size = 0x4000  # Example size (16KB)
+    return 0x0, bootloader_size  # Bootloader offset is always 0x0
+
 def should_include_file(file_path):
     file_name = os.path.basename(file_path)
     return not (file_name.startswith('.') or 
@@ -103,15 +108,24 @@ def create_vfs_image(vfs_img_path, vfs_size, source_dir):
                 except subprocess.CalledProcessError as e:
                     print(f"Error copying {src_path} to {dest_path}: {e}")
 
-def combine_firmware(partitions, vfs_image, firmware_path, output_bin):
-    print(f"Combining firmware components into {output_bin} using esptool...")
-    
-    # Start building the command to merge all partitions
-    cmd = ["esptool.py", "--chip", "esp32s3", "merge_bin", 
-           "--fill-flash-size", "16MB",
-           "-o", output_bin]
+def extract_bootloader(input_bin, output_bin, offset, size):
+    print(f"Extracting bootloader from {input_bin} to {output_bin}...")
+    try:
+        subprocess.run([
+            "dd", "if=" + input_bin, "of=" + output_bin, "bs=1", f"skip={offset}", f"count={size}"
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error extracting bootloader: {e}")
+        raise
 
-    # Add each partition with its offset
+def combine_firmware(partitions, vfs_image, firmware_path, bootloader_path, output_bin):
+    print(f"Combining firmware components into {output_bin} using esptool...")
+
+    # Create a command list for esptool.py
+    cmd = ["esptool.py", "--chip", "esp32s3", "merge_bin", 
+           "--fill-flash-size", "16MB", "-o", output_bin]
+
+    # Add partitions
     for partition in partitions:
         partition_path = f"{partition['name']}.img"
         if os.path.exists(partition_path):
@@ -121,10 +135,18 @@ def combine_firmware(partitions, vfs_image, firmware_path, output_bin):
         else:
             print(f"Partition file {partition_path} does not exist, skipping.")
     
-    # Print the command for debugging
-    print(f"Running command: {' '.join(cmd)}")
-    
+    # Add bootloader if it exists
+    if os.path.exists(bootloader_path):
+        bootloader_offset, bootloader_size = calculate_bootloader_size()
+        cmd.extend([hex(bootloader_offset), bootloader_path])
+
+    # Add the partition table if it exists
+    partition_table_path = "../lvgl_micropython/lib/micropython/ports/esp32/partitions-16MiB.bin"  # Adjust path as necessary
+    if os.path.exists(partition_table_path):
+        cmd.extend([hex(0x8000), partition_table_path])  # Typically the offset for the partition table is 0x8000 (32KB)
+
     try:
+        print(f"Running command: {' '.join(cmd)}")  # Debug statement
         subprocess.run(cmd, check=True)
     except subprocess.CalledProcessError as e:
         print(f"Error during firmware combination: {e}")
@@ -141,6 +163,16 @@ def flash_firmware(combined_firmware_bin):
         "0x0", combined_firmware_bin
     ], check=True)
 
+def validate_firmware(combined_firmware_bin):
+    print(f"Validating combined firmware {combined_firmware_bin}...")
+
+    # Print the image information
+    cmd_info = [
+        "esptool.py", "--chip", "esp32s3", "image_info", combined_firmware_bin
+    ]
+    print(f"Running command: {' '.join(cmd_info)}")
+    subprocess.run(cmd_info, check=True)
+
 def main():
     parser = argparse.ArgumentParser(description="Modify firmware by combining partitions and VFS image.")
     parser.add_argument("--source_dir", type=str, default="../MCT", help="Source directory to copy files from (default: ../MCT)")
@@ -151,20 +183,23 @@ def main():
     
     partitions = get_partition_table_from_csv(partition_table_path)
     vfs_size = get_vfs_size_from_partition_table(partitions)
-
+    
     create_vfs_image(vfs_image, vfs_size, args.source_dir)
 
+    # Extract bootloader from firmware
+    extract_bootloader(firmware_path, "bootloader.bin", *calculate_bootloader_size())
+
     # Print partition details for debugging
-    print(f"Partition table for combining firmware: {partitions}")
-    
-    combine_firmware(partitions, vfs_image, firmware_path, output_combined_bin)
+    print(f"Partitions: {partitions}")
 
-    flash_firmware(output_combined_bin)
+    # Combine firmware components
+    combine_firmware(partitions, vfs_image, firmware_path, "bootloader.bin", output_combined_bin)
 
-    # Clean up temporary files
-    os.unlink(vfs_image)
+    # Validate the combined firmware
+    validate_firmware(output_combined_bin)
 
-    print("Firmware combination and flashing complete.")
+    # Flash the combined firmware
+    #flash_firmware(output_combined_bin)
 
 if __name__ == "__main__":
     main()
