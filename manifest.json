@@ -20,24 +20,6 @@
       ]
     },
     {
-      "version": "0.2.20240903_0914",
-      "builds": [
-        {
-          "chipFamily": "ESP32-S3",
-          "parts": [
-            {
-              "path": "../lvgl_micropython/build/lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin",
-              "offset": 0
-            },
-            {
-              "path": "mct.bin",
-              "offset": "vfs"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "version": "0.2.20240903_0912",
       "builds": [
         {
@@ -50,88 +32,6 @@
             {
               "path": "mct.bin",
               "offset": "vfs"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.2.20240903_0910",
-      "builds": [
-        {
-          "chipFamily": "ESP32-S3",
-          "parts": [
-            {
-              "path": "../lvgl_micropython/build/lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin",
-              "offset": 0
-            },
-            {
-              "path": "mct.bin",
-              "offset": "vfs"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.2.20240903_0907",
-      "builds": [
-        {
-          "chipFamily": "ESP32-S3",
-          "parts": [
-            {
-              "path": "../lvgl_micropython/build/lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin",
-              "offset": 0
-            },
-            {
-              "path": "mct.bin",
-              "offset": "vfs"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.2.20240903_0905",
-      "builds": [
-        {
-          "chipFamily": "ESP32-S3",
-          "parts": [
-            {
-              "path": "../lvgl_micropython/build/lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin",
-              "offset": 0
-            },
-            {
-              "path": "mct.img",
-              "offset": "vfs"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.2.12",
-      "builds": [
-        {
-          "chipFamily": "ESP32-S3",
-          "parts": [
-            {
-              "path": "/MCC/flash_dump_16MB.bin",
-              "offset": 0
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.2.13",
-      "builds": [
-        {
-          "chipFamily": "ESP32-S3",
-          "parts": [
-            {
-              "path": "/MCC/flash_dump_16MB_v0.2.13.bin",
-              "offset": 0
             }
           ]
         }
