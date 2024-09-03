@@ -2,6 +2,24 @@
   "name": "AVS MCT",
   "versions": [
     {
+      "version": "0.2.20240903_0914",
+      "builds": [
+        {
+          "chipFamily": "ESP32-S3",
+          "parts": [
+            {
+              "path": "../lvgl_micropython/build/lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin",
+              "offset": 0
+            },
+            {
+              "path": "mct.bin",
+              "offset": "vfs"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.2.20240903_0912",
       "builds": [
         {
