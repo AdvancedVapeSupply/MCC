@@ -11,6 +11,8 @@ import sys
 import time
 import serial
 import argparse
+import struct
+import tempfile
 
 def print_step(step_number, description):
     print(f"\n{'='*80}")
@@ -27,31 +29,84 @@ def run_command(command, cwd=None):
         print(f"Error: {e.stderr}")
         return None
 
-def list_files_to_commit(repo_path):
-    print("Files to be committed:")
-    result = run_command(["git", "status", "--porcelain"], cwd=repo_path)
-    if result:
-        for line in result.splitlines():
-            status, filename = line.split(maxsplit=1)
-            file_path = os.path.join(repo_path, filename.strip())
-            if os.path.exists(file_path):
-                size = os.path.getsize(file_path)
-                print(f"{filename.strip()}: {size} bytes")
-            else:
-                print(f"{filename.strip()}: Not found")
-    else:
-        print("No changes to commit")
-
 def update_version_file(repo_path, version):
     version_path = os.path.join(repo_path, "version.py")
-    with open(version_path, 'w') as f:
-        f.write(f'__version__ = "{version}"\n')
-    print(f"Updated {version_path} with version {version}")
+    if os.path.exists(version_path):
+        with open(version_path, 'w') as f:
+            f.write(f'__version__ = "{version}"\n')
+        print(f"Updated {version_path} with version {version}")
+        return True
+    return False
 
-def commit_and_push(repo_path, commit_message):
-    print(f"\nCommitting and pushing changes in {repo_path}")
-    run_command(["git", "commit", "-am", commit_message], cwd=repo_path)
-    run_command(["git", "push", "origin", "HEAD:main"], cwd=repo_path)
+def update_manifest(repo_path, version):
+    manifest_path = os.path.join(repo_path, "manifest.json")
+    if os.path.exists(manifest_path):
+        with open(manifest_path, 'r') as f:
+            manifest = json.load(f)
+        
+        manifest['version'] = version
+        
+        with open(manifest_path, 'w') as f:
+            json.dump(manifest, f, indent=2)
+        print(f"Updated {manifest_path} with version {version}")
+        return True
+    return False
+
+def commit_and_push(repo_path, commit_message, add_new_files=False):
+    print(f"\nCommitting changes in {repo_path}")
+    
+    # Ensure we're on the main branch
+    ensure_on_main_branch(repo_path)
+    
+    if add_new_files:
+        print("Adding all files to staging...")
+        add_result = run_command(["git", "add", "-A"], cwd=repo_path)
+        if add_result is None:
+            print("Failed to add files to staging")
+            return False
+    
+    # Check if there are changes to commit
+    status = run_command(["git", "status", "--porcelain"], cwd=repo_path)
+    if status is None:
+        print("Failed to get Git status")
+        return False
+    
+    if status.strip():
+        try:
+            print("Committing changes...")
+            commit_result = run_command(["git", "commit", "-m", commit_message], cwd=repo_path)
+            if commit_result is None:
+                print(f"Failed to commit changes in {repo_path}")
+                return False
+            
+            print("Pushing changes...")
+            push_result = run_command(["git", "push", "origin", "main"], cwd=repo_path)
+            if push_result is None:
+                print(f"Failed to push changes to remote repository")
+                return False
+            
+            print(f"Successfully committed and pushed changes in {repo_path}")
+            return True
+        except Exception as e:
+            print(f"Error during Git operations: {str(e)}")
+            return False
+    else:
+        print(f"No changes detected in {repo_path}")
+        return True
+
+def run_command(command, cwd=None, timeout=300):
+    try:
+        print(f"Running command: {' '.join(command)}")
+        result = subprocess.run(command, check=True, cwd=cwd, capture_output=True, text=True, timeout=timeout)
+        print(result.stdout)
+        return result.stdout
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed: {' '.join(command)}")
+        print(f"Error: {e.stderr}")
+        return None
+    except subprocess.TimeoutExpired:
+        print(f"Command timed out after {timeout} seconds: {' '.join(command)}")
+        return None
 
 # Define the paths
 mct_repo_url = "https://github.com/AdvancedVapeSupply/MCT"
@@ -158,6 +213,44 @@ def print_directory_with_sizes(startpath):
             file_size = os.path.getsize(file_path)
             print(f'{subindent}{f} ({file_size} bytes)')
 
+def print_directory_with_details(startpath):
+    for root, dirs, files in os.walk(startpath):
+        level = root.replace(startpath, '').count(os.sep)
+        indent = ' ' * 4 * (level)
+        print(f'{indent}{os.path.basename(root)}/')
+        subindent = ' ' * 4 * (level + 1)
+        for f in files:
+            file_path = os.path.join(root, f)
+            file_size = os.path.getsize(file_path)
+            print(f'{subindent}{f} ({file_size} bytes)')
+
+def ensure_on_main_branch(repo_path):
+    print(f"\nEnsuring we're on the main branch in {repo_path}")
+    
+    # Check current branch
+    current_branch = run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_path)
+    if current_branch is None:
+        print("Failed to get current branch")
+        sys.exit(1)
+    
+    if current_branch == "HEAD":
+        print("Currently in detached HEAD state. Attempting to switch to main branch.")
+        if run_command(["git", "checkout", "main"], cwd=repo_path) is None:
+            print("Failed to switch to main branch")
+            sys.exit(1)
+    elif current_branch != "main":
+        print(f"Currently on branch {current_branch}. Switching to main branch.")
+        if run_command(["git", "checkout", "main"], cwd=repo_path) is None:
+            print("Failed to switch to main branch")
+            sys.exit(1)
+    
+    # Ensure we're up to date with origin/main
+    if run_command(["git", "pull", "origin", "main"], cwd=repo_path) is None:
+        print("Failed to pull latest changes from origin/main")
+        sys.exit(1)
+    
+    print("Successfully ensured we're on the up-to-date main branch")
+
 # Copy the MicroPython firmware to the current working directory
 shutil.copy2(micropython_firmware_source, micropython_firmware_dest)
 
@@ -203,40 +296,17 @@ mct_version_content = f'__version__ = "{logical_version}"\n'  # Define mct_versi
 
 # Update version file in ../MCT
 mct_path = "../MCT"
-io_path = os.path.join(mct_path, "lib/io")
-ui_path = os.path.join(mct_path, "lib/ui")
-
-print_step(1, "Update version files in submodules")
-update_version_file(io_path, logical_version)
-update_version_file(ui_path, logical_version)
-
-print_step(2, "Commit and push submodules")
-commit_and_push(io_path, f"Update version to {logical_version}")
-commit_and_push(ui_path, f"Update version to {logical_version}")
-
-print("Updating submodule references in MCT")
-run_command(["git", "submodule", "update", "--remote", "--merge"], cwd=mct_path)
-run_command(["git", "add", "lib/io", "lib/ui"], cwd=mct_path)
-run_command(["git", "commit", "-m", f"Update submodule references to {logical_version}"], cwd=mct_path)
-run_command(["git", "push", "origin", "main"], cwd=mct_path)
-
-print_step(4, "Update version file in MCT")
 update_version_file(mct_path, logical_version)
 
-print_step(5, "Commit and push MCT")
-commit_and_push(mct_path, f"Update version to {logical_version}")
+print_step(2, "Commit and push MCT")
+if commit_and_push("../MCT", logical_version, add_new_files=True):
+    print("Successfully committed and pushed changes in MCT")
+else:
+    print("Failed to commit and push changes in MCT")
+    sys.exit(1)
 
-print_step(6, "Clone MCT to a temporary directory")
-temp_directory = "/tmp/mct_temp"
-run_command(["git", "clone", "--recursive", mct_path, temp_directory])
-
-print_step(7, "Checkout the latest commit in the main repo and submodules")
-run_command(["git", "checkout", "main"], cwd=temp_directory)
-run_command(["git", "submodule", "update", "--init", "--recursive", "--remote"], cwd=temp_directory)
-
-print("\n" + "="*80)
-print("MCT and submodules updated, committed, pushed, and checked out successfully.")
-print("="*80 + "\n")
+# If we've reached this point, all Git operations were successful
+print("All Git operations completed successfully")
 
 def validate_version_files(base_path):
     """Check for the presence of version.py in specified directories."""
@@ -255,21 +325,81 @@ def validate_version_files(base_path):
         return False
     return True
 
-print_step(8, "Create FAT filesystem image")
+def read_fat_image(image_path):
+    with open(image_path, 'rb') as f:
+        # Read the boot sector
+        boot_sector = f.read(512)
+        
+        # Extract some basic information
+        bytes_per_sector = struct.unpack('<H', boot_sector[11:13])[0]
+        sectors_per_cluster = struct.unpack('<B', boot_sector[13:14])[0]
+        reserved_sectors = struct.unpack('<H', boot_sector[14:16])[0]
+        number_of_fats = struct.unpack('<B', boot_sector[16:17])[0]
+        root_entries = struct.unpack('<H', boot_sector[17:19])[0]
+        total_sectors = struct.unpack('<H', boot_sector[19:21])[0]
+        if total_sectors == 0:
+            total_sectors = struct.unpack('<I', boot_sector[32:36])[0]
+        fat_size = struct.unpack('<H', boot_sector[22:24])[0]
+        
+        print(f"Bytes per sector: {bytes_per_sector}")
+        print(f"Sectors per cluster: {sectors_per_cluster}")
+        print(f"Reserved sectors: {reserved_sectors}")
+        print(f"Number of FATs: {number_of_fats}")
+        print(f"Root entries: {root_entries}")
+        print(f"Total sectors: {total_sectors}")
+        print(f"FAT size (sectors): {fat_size}")
+        
+        # Read the root directory
+        root_dir_sectors = ((root_entries * 32) + (bytes_per_sector - 1)) // bytes_per_sector
+        root_dir_offset = (reserved_sectors + number_of_fats * fat_size) * bytes_per_sector
+        f.seek(root_dir_offset)
+        
+        print("\nRoot directory structure:")
+        # Simplify the root directory reading to just show structure
+        for i in range(root_entries):
+            entry = f.read(32)
+            if entry[0] == 0:  # End of directory
+                break
+            if entry[0] != 0xE5:  # Not a deleted entry
+                filename = decode_short_filename(entry[:8])
+                extension = decode_short_filename(entry[8:11])
+                attributes = entry[11]
+                if filename:
+                    if extension:
+                        print(f"  {filename}.{extension}", end='')
+                    else:
+                        print(f"  {filename}", end='')
+                    if attributes & 0x10:  # Directory
+                        print("/ (Directory)")
+                    else:
+                        print()
+
+def decode_long_filename(entry):
+    name_bytes = entry[1:11] + entry[14:26] + entry[28:32]
+    return name_bytes.decode('utf-16le', errors='ignore').rstrip('\x00')
+
+def decode_short_filename(name_bytes):
+    return ''.join(chr(b) if b != 0xFF else '_' for b in name_bytes).strip()
+
+print_step(6, "Create FAT filesystem image")
+
+# Define temp_directory
+temp_directory = tempfile.mkdtemp()
+print(f"Created temporary directory: {temp_directory}")
 
 # Explicitly call clean_directory
 clean_directory(temp_directory)
 
 # Print the directory structure after cleaning
-print("Directory structure with file sizes after cleaning:")
-print_directory_with_sizes(temp_directory)
+print("Directory structure with file details after cleaning:")
+print_directory_with_details(temp_directory)
 
 # Calculate the size of the MCT content after cleaning
 mct_size = get_directory_size(temp_directory)
 print(f"Size of MCT content after cleaning: {mct_size} bytes")
 
-# Set a fixed partition size of 1MB
-partition_size = 1024 * 1024  # 1MB in bytes
+# Set a fixed partition size of 4MB
+partition_size = 4 * 1024 * 1024  # 4MB in bytes
 print(f"Fixed partition size: {partition_size} bytes")
 
 # Create the FAT filesystem image
@@ -279,9 +409,10 @@ fatfs_cmd = [
     temp_directory,
     "--output_file", fatfs_image,
     "--partition_size", str(partition_size),
+    "--sector_size", "4096",
     "--long_name_support",
-    "--use_default_datetime",
-    "--fat_type", "12"
+    "--use_default_datetime"
+    # Removed the --fat_type option to let the script decide
 ]
 
 print(f"Executing command: {' '.join(fatfs_cmd)}")
@@ -289,6 +420,9 @@ result = run_command(fatfs_cmd)
 
 if result is not None:
     print("Successfully created FAT filesystem image.")
+    
+    print("\nVerifying the contents of the created image:")
+    read_fat_image(fatfs_image)
     
     # Create and write the manifest file with the correct format
     manifest_data = {
@@ -313,10 +447,13 @@ if result is not None:
     print(f"Created manifest file: {manifest_file}")
 
     # Add this new section
-    print_step(9, "Commit and push changes in current working directory")
+    print_step(7, "Commit and push changes in current working directory")
     cwd = os.getcwd()
-    list_files_to_commit(cwd)
-    commit_and_push(cwd, f"Update manifest for version {logical_version}")
+    if commit_and_push(cwd, logical_version, add_new_files=False):
+        print("Successfully committed and pushed changes in current directory")
+    else:
+        print("Failed to commit and push changes in current directory")
+        sys.exit(1)
 else:
     print("Failed to create FAT filesystem image.")
     sys.exit(1)
@@ -427,3 +564,7 @@ else:
     print("Skipping flash process. Use --flash to erase and flash the ESP32-S3.")
 
 print("Flashing completed. Please manually reset the device if necessary.")
+
+# Add this at the end of your script
+shutil.rmtree(temp_directory)
+print(f"Removed temporary directory: {temp_directory}")
