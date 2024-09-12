@@ -52,18 +52,23 @@ def update_manifest(repo_path, version):
         return True
     return False
 
-def commit_and_push(repo_path, commit_message, add_new_files=False):
+def commit_and_push(repo_path, version, add_new_files=False):
     print(f"\nCommitting changes in {repo_path}")
     
     # Ensure we're on the main branch
     ensure_on_main_branch(repo_path)
     
+    # Always stage changes
+    print("Staging changes...")
     if add_new_files:
-        print("Adding all files to staging...")
-        add_result = run_command(["git", "add", "-A"], cwd=repo_path)
-        if add_result is None:
-            print("Failed to add files to staging")
-            return False
+        stage_command = ["git", "add", "-A"]
+    else:
+        stage_command = ["git", "add", "-u"]
+    
+    stage_result = run_command(stage_command, cwd=repo_path)
+    if stage_result is None:
+        print("Failed to stage changes")
+        return False
     
     # Check if there are changes to commit
     status = run_command(["git", "status", "--porcelain"], cwd=repo_path)
@@ -74,6 +79,7 @@ def commit_and_push(repo_path, commit_message, add_new_files=False):
     if status.strip():
         try:
             print("Committing changes...")
+            commit_message = f"v{version}"
             commit_result = run_command(["git", "commit", "-m", commit_message], cwd=repo_path)
             if commit_result is None:
                 print(f"Failed to commit changes in {repo_path}")
