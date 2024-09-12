@@ -1,5 +1,5 @@
 {
-  "version": "0.2.20240912_1147",
+  "version": "0.2.20240912_1301",
   "builds": [
     {
       "chipFamily": "ESP32-S3",
