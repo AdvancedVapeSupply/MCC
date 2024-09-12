@@ -261,8 +261,8 @@ print_step(8, "Create FAT filesystem image")
 clean_directory(temp_directory)
 
 # Print the directory structure after cleaning
-print("Directory structure after cleaning:")
-print_directory_structure(temp_directory)
+print("Directory structure with file sizes after cleaning:")
+print_directory_with_sizes(temp_directory)
 
 # Calculate the size of the MCT content after cleaning
 mct_size = get_directory_size(temp_directory)
@@ -279,7 +279,9 @@ fatfs_cmd = [
     temp_directory,
     "--output_file", fatfs_image,
     "--partition_size", str(partition_size),
-    "--long_name_support"
+    "--long_name_support",
+    "--use_default_datetime",
+    "--fat_type", "12"
 ]
 
 print(f"Executing command: {' '.join(fatfs_cmd)}")
