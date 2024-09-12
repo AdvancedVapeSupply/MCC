@@ -290,6 +290,7 @@ if result is not None:
     
     # Create and write the manifest file with the correct format
     manifest_data = {
+        "name": "AVS MCT",  # Add this line
         "version": logical_version,
         "builds": [
             {
