@@ -288,11 +288,20 @@ result = run_command(fatfs_cmd)
 if result is not None:
     print("Successfully created FAT filesystem image.")
     
-    # Create and write the manifest file
+    # Create and write the manifest file with the correct format
     manifest_data = {
         "version": logical_version,
-        "date": datetime.now(timezone.utc).isoformat(),
-        "md5": calculate_md5(fatfs_image)
+        "builds": [
+            {
+                "chipFamily": "ESP32-S3",
+                "parts": [
+                    {
+                        "path": "mct.bin",
+                        "offset": vfs_offset
+                    }
+                ]
+            }
+        ]
     }
     
     with open(manifest_file, 'w') as f:
