@@ -1,3 +1,33 @@
+#!/usr/bin/env python3
+
+"""
+MCT Binary Creation and Flashing Script
+
+This script automates the process of creating and optionally flashing a binary image
+for the MCT (MicroPython Control Tool) project. It performs the following steps:
+
+1. Update version files: Updates version.py in the MCT repository and manifest.json
+   in the current directory with a new version number.
+2. Commit and push MCT: Commits the version changes to the MCT repository and pushes them.
+3. Clone MCT repository: Clones or updates the MCT repository.
+4. Checkout specific commit or tag: Checks out a specified commit or tag in the MCT repository.
+5. Validate version files: Ensures all necessary version files are present and valid.
+6. Create FAT filesystem image: Generates a FAT filesystem image containing MCT files.
+7. Commit and push changes in current working directory: Commits and pushes changes made
+   in the script's working directory.
+8. Flash ESP32-S3 (optional): If the --flash flag is used, erases and flashes the
+   ESP32-S3 device with the created image.
+
+Usage:
+    python3 create_MCT_bin.py [--flash]
+
+Options:
+    --flash     Erase and flash the ESP32-S3 device after creating the image
+
+Note: This script requires various dependencies and assumes a specific project structure.
+Ensure all prerequisites are met before running.
+"""
+
 import os
 import subprocess
 import shutil
@@ -38,8 +68,8 @@ def update_version_file(repo_path, version):
         return True
     return False
 
-def update_manifest(repo_path, version):
-    manifest_path = os.path.join(repo_path, "manifest.json")
+def update_manifest(directory, version):
+    manifest_path = os.path.join(directory, "manifest.json")
     if os.path.exists(manifest_path):
         with open(manifest_path, 'r') as f:
             manifest = json.load(f)
@@ -50,7 +80,9 @@ def update_manifest(repo_path, version):
             json.dump(manifest, f, indent=2)
         print(f"Updated {manifest_path} with version {version}")
         return True
-    return False
+    else:
+        print(f"Manifest file not found in {directory}")
+        return False
 
 def commit_and_push(repo_path, version, add_new_files=False):
     print(f"\nCommitting changes in {repo_path}")
@@ -173,8 +205,11 @@ def get_directory_size(path):
                 total_size += os.path.getsize(fp)
     return total_size
 
-def clean_directory(directory):
-    for root, dirs, files in os.walk(directory, topdown=False):
+def clean_directory(temp_directory, mct_repo_path):
+    print(f"Copying files from {mct_repo_path} to {temp_directory}")
+    shutil.copytree(mct_repo_path, temp_directory, dirs_exist_ok=True)
+    
+    for root, dirs, files in os.walk(temp_directory, topdown=False):
         # Remove unwanted directories
         for d in dirs:
             if d.startswith('.') or d in ['__pycache__', '.vscode', '.idea', '.git']:
@@ -192,7 +227,7 @@ def clean_directory(directory):
                 os.remove(file_path)
 
     # Remove empty directories
-    for root, dirs, files in os.walk(directory, topdown=False):
+    for root, dirs, files in os.walk(temp_directory, topdown=False):
         for d in dirs:
             dir_path = os.path.join(root, d)
             if not os.listdir(dir_path):
@@ -257,6 +292,77 @@ def ensure_on_main_branch(repo_path):
     
     print("Successfully ensured we're on the up-to-date main branch")
 
+def validate_version_file(repo_path):
+    version_file = os.path.join(repo_path, "version.py")
+    
+    if not os.path.exists(version_file):
+        print(f"Error: version.py not found in {repo_path}")
+        return False
+    
+    return True
+
+def validate_manifest_file(current_dir):
+    manifest_file = os.path.join(current_dir, "manifest.json")
+    
+    if not os.path.exists(manifest_file):
+        print(f"Error: manifest.json not found in {current_dir}")
+        return False
+    
+    return True
+
+def read_fat_image(image_path):
+    with open(image_path, 'rb') as f:
+        # Read the boot sector
+        boot_sector = f.read(512)
+        
+        # Extract some basic information
+        bytes_per_sector = struct.unpack('<H', boot_sector[11:13])[0]
+        sectors_per_cluster = struct.unpack('<B', boot_sector[13:14])[0]
+        reserved_sectors = struct.unpack('<H', boot_sector[14:16])[0]
+        number_of_fats = struct.unpack('<B', boot_sector[16:17])[0]
+        root_entries = struct.unpack('<H', boot_sector[17:19])[0]
+        total_sectors = struct.unpack('<H', boot_sector[19:21])[0]
+        if total_sectors == 0:
+            total_sectors = struct.unpack('<I', boot_sector[32:36])[0]
+        fat_size = struct.unpack('<H', boot_sector[22:24])[0]
+        
+        print(f"Bytes per sector: {bytes_per_sector}")
+        print(f"Sectors per cluster: {sectors_per_cluster}")
+        print(f"Reserved sectors: {reserved_sectors}")
+        print(f"Number of FATs: {number_of_fats}")
+        print(f"Root entries: {root_entries}")
+        print(f"Total sectors: {total_sectors}")
+        print(f"FAT size (sectors): {fat_size}")
+        
+        # Read the root directory
+        root_dir_sectors = ((root_entries * 32) + (bytes_per_sector - 1)) // bytes_per_sector
+        root_dir_offset = (reserved_sectors + number_of_fats * fat_size) * bytes_per_sector
+        f.seek(root_dir_offset)
+        
+        print("\nRoot directory structure:")
+        for i in range(root_entries):
+            entry = f.read(32)
+            if entry[0] == 0:  # End of directory
+                break
+            if entry[0] != 0xE5:  # Not a deleted entry
+                if entry[11] == 0x0F:  # Long filename entry
+                    continue  # Skip long filename entries for now
+                filename = decode_short_filename(entry[:8])
+                extension = decode_short_filename(entry[8:11])
+                attributes = entry[11]
+                if filename:
+                    if extension:
+                        print(f"  {filename}.{extension}", end='')
+                    else:
+                        print(f"  {filename}", end='')
+                    if attributes & 0x10:  # Directory
+                        print("/ (Directory)")
+                    else:
+                        print()
+
+def decode_short_filename(name_bytes):
+    return ''.join(chr(b) if b != 0xFF else '_' for b in name_bytes).strip()
+
 # Copy the MicroPython firmware to the current working directory
 shutil.copy2(micropython_firmware_source, micropython_firmware_dest)
 
@@ -297,12 +403,22 @@ output_size = (output_size // SECTOR_SIZE) * SECTOR_SIZE
 current_datetime = datetime.now().strftime("%Y%m%d_%H%M")
 logical_version = f"0.2.{current_datetime}"  # Define logical version here
 
-# Create version content for MCT
-mct_version_content = f'__version__ = "{logical_version}"\n'  # Define mct_version_content here
-
+print_step(1, "Update version files")
 # Update version file in ../MCT
 mct_path = "../MCT"
-update_version_file(mct_path, logical_version)
+if update_version_file(mct_path, logical_version):
+    print(f"Updated version file in {mct_path}")
+else:
+    print(f"Failed to update version file in {mct_path}")
+    sys.exit(1)
+
+# Update manifest file in the current directory
+current_dir = "."
+if update_manifest(current_dir, logical_version):
+    print(f"Updated manifest file in {current_dir}")
+else:
+    print(f"Failed to update manifest file in {current_dir}")
+    sys.exit(1)
 
 print_step(2, "Commit and push MCT")
 if commit_and_push("../MCT", logical_version, add_new_files=True):
@@ -311,81 +427,37 @@ else:
     print("Failed to commit and push changes in MCT")
     sys.exit(1)
 
-# If we've reached this point, all Git operations were successful
-print("All Git operations completed successfully")
+print_step(3, "Clone MCT repository")
+if os.path.exists(mct_path):
+    print(f"MCT repository already exists at {mct_path}")
+    # Pull the latest changes
+    if run_command(["git", "pull", "origin", "main"], cwd=mct_path) is None:
+        print("Failed to pull latest changes from MCT repository")
+        sys.exit(1)
+else:
+    # Clone the repository
+    if run_command(["git", "clone", mct_repo_url, mct_path]) is None:
+        print("Failed to clone MCT repository")
+        sys.exit(1)
 
-def validate_version_files(base_path):
-    """Check for the presence of version.py in specified directories."""
-    required_files = [
-        os.path.join(base_path, "version.py"),  # Root directory
-        os.path.join(base_path, "lib/io/version.py"),  # IO submodule
-        os.path.join(base_path, "lib/ui/version.py")   # UI submodule
-    ]
-    
-    missing_files = [file for file in required_files if not os.path.isfile(file)]
-    
-    if missing_files:
-        print("Missing version.py files in the following locations:")
-        for file in missing_files:
-            print(f" - {file}")
-        return False
-    return True
+print_step(4, "Checkout specific commit or tag")
+if run_command(["git", "checkout", mct_commit_id], cwd=mct_path) is None:
+    print(f"Failed to checkout commit/tag: {mct_commit_id}")
+    sys.exit(1)
 
-def read_fat_image(image_path):
-    with open(image_path, 'rb') as f:
-        # Read the boot sector
-        boot_sector = f.read(512)
-        
-        # Extract some basic information
-        bytes_per_sector = struct.unpack('<H', boot_sector[11:13])[0]
-        sectors_per_cluster = struct.unpack('<B', boot_sector[13:14])[0]
-        reserved_sectors = struct.unpack('<H', boot_sector[14:16])[0]
-        number_of_fats = struct.unpack('<B', boot_sector[16:17])[0]
-        root_entries = struct.unpack('<H', boot_sector[17:19])[0]
-        total_sectors = struct.unpack('<H', boot_sector[19:21])[0]
-        if total_sectors == 0:
-            total_sectors = struct.unpack('<I', boot_sector[32:36])[0]
-        fat_size = struct.unpack('<H', boot_sector[22:24])[0]
-        
-        print(f"Bytes per sector: {bytes_per_sector}")
-        print(f"Sectors per cluster: {sectors_per_cluster}")
-        print(f"Reserved sectors: {reserved_sectors}")
-        print(f"Number of FATs: {number_of_fats}")
-        print(f"Root entries: {root_entries}")
-        print(f"Total sectors: {total_sectors}")
-        print(f"FAT size (sectors): {fat_size}")
-        
-        # Read the root directory
-        root_dir_sectors = ((root_entries * 32) + (bytes_per_sector - 1)) // bytes_per_sector
-        root_dir_offset = (reserved_sectors + number_of_fats * fat_size) * bytes_per_sector
-        f.seek(root_dir_offset)
-        
-        print("\nRoot directory structure:")
-        # Simplify the root directory reading to just show structure
-        for i in range(root_entries):
-            entry = f.read(32)
-            if entry[0] == 0:  # End of directory
-                break
-            if entry[0] != 0xE5:  # Not a deleted entry
-                filename = decode_short_filename(entry[:8])
-                extension = decode_short_filename(entry[8:11])
-                attributes = entry[11]
-                if filename:
-                    if extension:
-                        print(f"  {filename}.{extension}", end='')
-                    else:
-                        print(f"  {filename}", end='')
-                    if attributes & 0x10:  # Directory
-                        print("/ (Directory)")
-                    else:
-                        print()
+print_step(5, "Validate version files")
+mct_path = "../MCT"
+current_dir = "."
 
-def decode_long_filename(entry):
-    name_bytes = entry[1:11] + entry[14:26] + entry[28:32]
-    return name_bytes.decode('utf-16le', errors='ignore').rstrip('\x00')
+if not validate_version_file(mct_path):
+    print("Version file validation failed in MCT repository")
+    sys.exit(1)
 
-def decode_short_filename(name_bytes):
-    return ''.join(chr(b) if b != 0xFF else '_' for b in name_bytes).strip()
+if not validate_manifest_file(current_dir):
+    print("Manifest file validation failed in current directory")
+    sys.exit(1)
+
+print("Version files validation successful")
 
 print_step(6, "Create FAT filesystem image")
 
@@ -393,11 +465,11 @@ print_step(6, "Create FAT filesystem image")
 temp_directory = tempfile.mkdtemp()
 print(f"Created temporary directory: {temp_directory}")
 
-# Explicitly call clean_directory
-clean_directory(temp_directory)
+# Explicitly call clean_directory with MCT repo path
+clean_directory(temp_directory, mct_path)
 
 # Print the directory structure after cleaning
-print("Directory structure with file details after cleaning:")
+print("Contents of temporary directory after cleaning:")
 print_directory_with_details(temp_directory)
 
 # Calculate the size of the MCT content after cleaning
@@ -432,7 +504,7 @@ if result is not None:
     
     # Create and write the manifest file with the correct format
     manifest_data = {
-        "name": "AVS MCT",  # Add this line
+        "name": "AVS MCT",
         "version": logical_version,
         "builds": [
             {
@@ -467,6 +539,10 @@ else:
 # Print the contents of the directory with file sizes after cleaning
 print("Directory structure with file sizes after cleaning:")
 print_directory_with_sizes(temp_directory)
+
+# Add this at the end of your script
+shutil.rmtree(temp_directory)
+print(f"Removed temporary directory: {temp_directory}")
 
 # Add this near the top of the file, after imports
 def parse_arguments():
@@ -549,7 +625,3 @@ else:
     print("Skipping flash process. Use --flash to erase and flash the ESP32-S3.")
 
 print("Script execution completed.")
-
-# Add this at the end of your script
-shutil.rmtree(temp_directory)
-print(f"Removed temporary directory: {temp_directory}")
