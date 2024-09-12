@@ -1,64 +1,68 @@
 #!/bin/bash
 
-# Identify the serial device
+# Define the path to the manifest file
+MANIFEST_FILE="manifest.json"
+
+# Get the current date and time
+CURRENT_DATETIME=$(date +"%Y%m%d_%H%M")
+
+# Extract the base version (e.g., "v0.2") from the latest version in the manifest
+BASE_VERSION=$(jq -r '.versions[0].version' "$MANIFEST_FILE" | cut -d. -f1-2)
+
+# Create the new version string using date and time
+NEW_VERSION="${BASE_VERSION}.${CURRENT_DATETIME}"
+
+# Look up the serial device (e.g., for macOS)
 SERIAL_DEVICE=$(ls /dev/tty.usb* | head -n 1)
 
-# Check if the serial device was found
+# If no serial device is found, exit with an error
 if [ -z "$SERIAL_DEVICE" ]; then
-  echo "No ESP32 device found at /dev/tty.usb*"
+  echo "Error: No serial device found. Please connect your ESP32-S3."
   exit 1
 fi
 
-# Set the baud rate (optional, can be adjusted)
-BAUD_RATE=115200
-
-# Set the size of the flash (in bytes, 16MB = 0x1000000)
-FLASH_SIZE=0x1000000
-
-# Specify the output file
-OUTPUT_FILE="flash_dump_16MB.bin"
-
-# Run esptool.py to read the flash
-esptool.py --port "$SERIAL_DEVICE" --baud $BAUD_RATE read_flash 0x0 $FLASH_SIZE "$OUTPUT_FILE"
+# Create the flash dump with the new version name
+FLASH_DUMP_PATH="MCC/flash_dump_16MB_v${NEW_VERSION}.bin"
+esptool.py --chip esp32s3 --port "$SERIAL_DEVICE" --baud 460800 read_flash 0 0x1000000 "$FLASH_DUMP_PATH"
 
 # Check if the esptool command was successful
-if [ $? -eq 0 ]; then
-  echo "Firmware successfully downloaded to $OUTPUT_FILE"
-
-  # Increment the version in manifest.json
-  MANIFEST_FILE="manifest.json"
-  
-  if [ -f "$MANIFEST_FILE" ]; then
-    # Extract the current version
-    CURRENT_VERSION=$(jq -r '.version' "$MANIFEST_FILE")
-
-    # Split the version into its components
-    IFS='.' read -r -a VERSION_PARTS <<< "$CURRENT_VERSION"
-
-    # Increment the last part of the version
-    VERSION_PARTS[2]=$((VERSION_PARTS[2] + 1))
-
-    # Reconstruct the new version
-    NEW_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.${VERSION_PARTS[2]}"
-
-    # Update the manifest.json file with the new version
-    jq ".version = \"$NEW_VERSION\"" "$MANIFEST_FILE" > tmp_manifest.json && mv tmp_manifest.json "$MANIFEST_FILE"
-
-    echo "Version updated to $NEW_VERSION in $MANIFEST_FILE"
-
-    # Add changes to git
-    git add "$OUTPUT_FILE" "$MANIFEST_FILE"
-
-    # Commit the changes with a message
-    git commit -m "Downloaded firmware and updated manifest.json to version $NEW_VERSION"
-
-    # Push the changes to the remote repository
-    git push
-
-    echo "Changes committed and pushed to the remote repository."
-  else
-    echo "manifest.json not found, skipping version increment."
-  fi
-else
-  echo "Failed to download firmware."
+if [ $? -ne 0 ]; then
+  echo "Error: Flash dump failed. Exiting."
+  exit 1
 fi
+
+# Prepare the new version entry
+NEW_VERSION_ENTRY=$(jq -n \
+  --arg version "$NEW_VERSION" \
+  --arg path "$FLASH_DUMP_PATH" \
+  '{
+    "version": $version,
+    "builds": [
+      {
+        "chipFamily": "ESP32-S3",
+        "parts": [
+          {
+            "path": $path,
+            "offset": 0
+          }
+        ]
+      }
+    ]
+  }'
+)
+
+# Insert the new version entry at the top of the versions array in the manifest
+jq --argjson newVersion "$NEW_VERSION_ENTRY" \
+   '.versions |= [$newVersion] + .' \
+   "$MANIFEST_FILE" > tmp_manifest.json && mv tmp_manifest.json "$MANIFEST_FILE"
+
+# Add changes to git
+git add "$MANIFEST_FILE" "$FLASH_DUMP_PATH"
+
+# Commit the changes with a message that includes the new version
+git commit -m "Update manifest with new version $NEW_VERSION"
+
+# Optional: push the changes to the remote repository (uncomment if needed)
+# git push origin main
+
+echo "New flash dump created, manifest updated with version $NEW_VERSION, and changes committed to Git."
