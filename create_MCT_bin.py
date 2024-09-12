@@ -508,68 +508,47 @@ if args.flash:
 
     print(f"Using ESP32-S3 port: {esp32_port}")
 
-    # Check if the port is in DFU mode
-    if not esp32_port.endswith(('101', '1101', '2101')):  # Adjust the suffixes as needed
-        print("The device is not in DFU mode. Skipping all esptool operations.")
-        print("Flashing process skipped. Please ensure the device is in DFU mode and try again.")
-    else:
-        # Erase flash
-        erase_command = [
-            "esptool.py",
-            "--chip", "esp32s3",
-            "--port", esp32_port,
-            "--baud", "115200",
-            "erase_flash"
-        ]
+    # Erase flash
+    erase_command = [
+        "esptool.py",
+        "--chip", "esp32s3",
+        "--port", esp32_port,
+        "--baud", "115200",
+        "erase_flash"
+    ]
 
-        print("Erasing flash...")
-        print(f"Erase command: {' '.join(erase_command)}")
-        try:
-            result = subprocess.run(erase_command, check=True, capture_output=True, text=True, timeout=60)
-            print("Flash erased successfully.")
-            print("Erase output:", result.stdout)
-        except subprocess.CalledProcessError as e:
-            print("Failed to erase flash.")
-            print("Error output:", e.stderr)
-            sys.exit(1)
-        except subprocess.TimeoutExpired:
-            print("Erase operation timed out. Please check the connection and try again.")
-            sys.exit(1)
+    print("Erasing flash...")
+    result = run_command(erase_command)
+    if result is None:
+        print("Failed to erase flash. Aborting.")
+        sys.exit(1)
 
-        # Wait a moment after erasing
-        time.sleep(2)
+    # Wait a moment after erasing
+    time.sleep(2)
 
-        # Flash firmware and MCT image
-        flash_command = [
-            "esptool.py",
-            "--chip", "esp32s3",
-            "--port", esp32_port,
-            "--baud", "115200",
-            "write_flash",
-            "-z",
-            "0x0", micropython_firmware_dest,
-            f"0x{vfs_offset:x}", output_image
-        ]
+    # Flash firmware and MCT image
+    flash_command = [
+        "esptool.py",
+        "--chip", "esp32s3",
+        "--port", esp32_port,
+        "--baud", "115200",
+        "write_flash",
+        "-z",
+        "0x0", micropython_firmware_dest,
+        f"0x{vfs_offset:x}", fatfs_image
+    ]
 
-        print("Flashing firmware and MCT image...")
-        print(f"Flash command: {' '.join(flash_command)}")
-        try:
-            result = subprocess.run(flash_command, check=True, capture_output=True, text=True, timeout=300)
-            print("Flashing completed successfully.")
-            print("Flash output:", result.stdout)
-        except subprocess.CalledProcessError as e:
-            print("Failed to flash the device.")
-            print("Error output:", e.stderr)
-            sys.exit(1)
-        except subprocess.TimeoutExpired:
-            print("Flash operation timed out. Please check the connection and try again.")
-            sys.exit(1)
+    print("Flashing firmware and MCT image...")
+    result = run_command(flash_command)
+    if result is None:
+        print("Failed to flash the device. Aborting.")
+        sys.exit(1)
 
-        print("ESP32-S3 flashing process completed.")
+    print("ESP32-S3 flashing process completed.")
 else:
     print("Skipping flash process. Use --flash to erase and flash the ESP32-S3.")
 
-print("Flashing completed. Please manually reset the device if necessary.")
+print("Script execution completed.")
 
 # Add this at the end of your script
 shutil.rmtree(temp_directory)
