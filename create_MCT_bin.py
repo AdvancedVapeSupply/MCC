@@ -43,6 +43,7 @@ import serial
 import argparse
 import struct
 import tempfile
+import requests
 
 def print_step(step_number, description):
     print(f"\n{'='*80}")
@@ -59,6 +60,18 @@ def run_command(command, cwd=None):
         print(f"Error: {e.stderr}")
         return None
 
+def create_tinyurl(url):
+    try:
+        response = requests.get(f"http://tinyurl.com/api-create.php?url={url}")
+        if response.status_code == 200:
+            return response.text.strip()
+        else:
+            print(f"Failed to create TinyURL. Status code: {response.status_code}")
+            return url
+    except Exception as e:
+        print(f"Error creating TinyURL: {str(e)}")
+        return url
+
 def update_version_file(repo_path, version):
     version_path = os.path.join(repo_path, "version.py")
     if os.path.exists(version_path):
@@ -68,10 +81,13 @@ def update_version_file(repo_path, version):
         # Construct the URL
         commit_url = f"https://github.com/AdvancedVapeSupply/MCT/commit/{commit_hash}"
         
+        # Create TinyURL
+        tiny_url = create_tinyurl(commit_url)
+        
         with open(version_path, 'w') as f:
             f.write(f'__version__ = "{version}"\n')
-            f.write(f'__commit_url__ = "{commit_url}"\n')
-        print(f"Updated {version_path} with version {version} and commit URL")
+            f.write(f'__commit_url__ = "{tiny_url}"\n')
+        print(f"Updated {version_path} with version {version} and TinyURL")
         return True
     return False
 
