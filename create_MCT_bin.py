@@ -62,9 +62,16 @@ def run_command(command, cwd=None):
 def update_version_file(repo_path, version):
     version_path = os.path.join(repo_path, "version.py")
     if os.path.exists(version_path):
+        # Get the current commit hash
+        commit_hash = run_command(["git", "rev-parse", "HEAD"], cwd=repo_path).strip()
+        
+        # Construct the URL
+        commit_url = f"https://github.com/AdvancedVapeSupply/MCT/commit/{commit_hash}"
+        
         with open(version_path, 'w') as f:
             f.write(f'__version__ = "{version}"\n')
-        print(f"Updated {version_path} with version {version}")
+            f.write(f'__commit_url__ = "{commit_url}"\n')
+        print(f"Updated {version_path} with version {version} and commit URL")
         return True
     return False
 
@@ -297,6 +304,13 @@ def validate_version_file(repo_path):
     
     if not os.path.exists(version_file):
         print(f"Error: version.py not found in {repo_path}")
+        return False
+    
+    with open(version_file, 'r') as f:
+        content = f.read()
+    
+    if '__version__' not in content or '__commit_url__' not in content:
+        print(f"Error: version.py in {repo_path} is missing required variables")
         return False
     
     return True
