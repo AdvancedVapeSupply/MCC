@@ -393,6 +393,16 @@ def read_fat_image(image_path):
 def decode_short_filename(name_bytes):
     return ''.join(chr(b) if b != 0xFF else '_' for b in name_bytes).strip()
 
+def get_mct_version(repo_path):
+    try:
+        with open(os.path.join(repo_path, "version.py"), 'r') as f:
+            content = f.read()
+        exec(content, globals())
+        return globals()['__version__']
+    except Exception as e:
+        print(f"Error reading MCT version: {str(e)}")
+        return None
+
 # Copy the MicroPython firmware to the current working directory
 shutil.copy2(micropython_firmware_source, micropython_firmware_dest)
 
@@ -429,13 +439,17 @@ print(f"MCT partition size: 0x{output_size:x}")
 SECTOR_SIZE = 4096
 output_size = (output_size // SECTOR_SIZE) * SECTOR_SIZE
 
-# Define logical version before using it
-current_datetime = datetime.now().strftime("%Y%m%d_%H%M")
-logical_version = f"0.2.{current_datetime}"  # Define logical version here
-
 print_step(1, "Update version files")
-# Update version file in ../MCT
+# Get the version from MCT repository
 mct_path = "../MCT"
+mct_version = get_mct_version(mct_path)
+if mct_version is None:
+    print("Failed to get MCT version")
+    sys.exit(1)
+
+logical_version = mct_version  # Use MCT version instead of generating a new one
+
+# Update version file in ../MCT
 if update_version_file(mct_path, logical_version):
     print(f"Updated version file in {mct_path}")
 else:
