@@ -541,6 +541,10 @@ if result is not None:
                 "chipFamily": "ESP32-S3",
                 "parts": [
                     {
+                        "path": micropython_firmware_dest,
+                        "offset": 0
+                    },
+                    {
                         "path": "mct.bin",
                         "offset": vfs_offset
                     }
