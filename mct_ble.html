@@ -9,6 +9,7 @@
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-streaming@2.0.0/dist/chartjs-plugin-streaming.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.0/dist/chartjs-plugin-zoom.min.js"></script>
 </head>
 <body>
     <h1>MCT BLE Interface</h1>
@@ -16,18 +17,39 @@
     <div id="deviceList"></div>
     <div id="status"></div>
 
-    <h2>BLE Endpoints</h2>
-    <table id="endpointsTable">
-        <tr>
-            <th>Characteristic</th>
-            <th>UUID</th>
-            <th>Current Value</th>
-        </tr>
-    </table>
+    <h2 id="endpointsToggle">BLE Endpoints <span class="toggle-icon">▼</span></h2>
+    <div id="endpointsSection" class="collapsible">
+        <table id="endpointsTable">
+            <tr>
+                <th>Characteristic</th>
+                <th>UUID</th>
+                <th>Current Value</th>
+            </tr>
+        </table>
+    </div>
 
-    <div id="chartContainer" style="height: 500px; width: 100%;">
+    <div id="chartContainer">
         <canvas id="dataChart"></canvas>
     </div>
+    <div id="chartControls">
+        <button id="zoomInBtn">Zoom In</button>
+        <button id="zoomOutBtn">Zoom Out</button>
+        <button id="resetZoomBtn">Reset Zoom</button>
+    </div>
+
+    <style>
+        .collapsible {
+            display: none;
+        }
+        .toggle-icon {
+            font-size: 0.8em;
+            cursor: pointer;
+        }
+        #chartContainer {
+            height: 70vh;
+            width: 100%;
+        }
+    </style>
 
     <script>
         const scanBtn = document.getElementById('scanBtn');
@@ -44,8 +66,9 @@
             'buttons': '00000005-0000-1000-8000-00805f9b34fb',
             'Tescc': '00000006-0000-1000-8000-00805f9b34fb',
             'Tkmeter': '00000007-0000-1000-8000-00805f9b34fb',
-            'ms_timestamp': '00000008-0000-1000-8000-00805f9b34fb',
-            'omega': '00000009-0000-1000-8000-00805f9b34fb'
+            'omega': '00000009-0000-1000-8000-00805f9b34fb',
+            'i': '0000000a-0000-1000-8000-00805f9b34fb',
+            'Pout': '0000000b-0000-1000-8000-00805f9b34fb'  // Add this line
         };
 
         // Populate the endpoints table
@@ -61,14 +84,15 @@
         let chart;
         let chartData = {};
         let chartInitialized = false;
+        let allData = {}; // Store all fetched data
 
         scanBtn.addEventListener('click', scanForDevices);
 
         async function scanForDevices() {
             try {
-                statusDiv.textContent = 'Scanning for Bluetooth devices...';
+                statusDiv.textContent = 'Scanning for AVS MCT devices...';
                 const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
+                    filters: [{ name: 'AVS MCT' }],
                     optionalServices: [VAPE_SERVICE_UUID]
                 });
                 
@@ -152,10 +176,16 @@
             let displayValue;
             
             try {
-                if (value.byteLength === 4) {
+                if (key === 'i' || key === 'buttons') {
+                    if (value.byteLength === 4) {
+                        displayValue = new DataView(value.buffer).getUint32(0, true);
+                    } else if (value.byteLength === 8) {
+                        displayValue = Number(new DataView(value.buffer).getBigUint64(0, true));
+                    } else {
+                        throw new Error(`Unexpected byte length for ${key}: ${value.byteLength}`);
+                    }
+                } else if (value.byteLength === 4) {
                     displayValue = new DataView(value.buffer).getFloat32(0, true);
-                } else if (value.byteLength === 8) {
-                    displayValue = Number(new DataView(value.buffer).getBigUint64(0, true));
                 } else {
                     displayValue = new TextDecoder().decode(value);
                     if (!isNaN(Number(displayValue))) {
@@ -173,7 +203,8 @@
                 chartData[key] = [];
             }
 
-            if (typeof displayValue === 'number' && !isNaN(displayValue)) {
+            if (typeof displayValue === 'number' && !isNaN(displayValue) && 
+                !['alpha', 'omega', 'i'].includes(key)) {
                 const now = Date.now();
                 chartData[key].push({x: now, y: displayValue});
                 if (chartData[key].length > 50) {
@@ -209,28 +240,53 @@
             }
         }
 
+        function updateChartSize() {
+            const chartContainer = document.getElementById('chartContainer');
+            chartContainer.style.height = '70vh';
+            if (chart) {
+                chart.resize();
+            }
+        }
+
+        window.addEventListener('resize', updateChartSize);
+
         function initializeChart() {
             return new Promise((resolve) => {
                 const ctx = document.getElementById('dataChart').getContext('2d');
-                const parameters = Object.keys(CHAR_UUID_MAP);
-                const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF', '#7CFC00'];
-                const units = {
-                    'alpha': '°', 'Tset': '°C', 'Pset': 'W', 'tFset_s': 's',
-                    'buttons': '', 'Tescc': '°C', 'Tkmeter': '°C',
-                    'ms_timestamp': 'ms', 'omega': 'rad/s'
-                };
+                
+                if (chart) {
+                    chart.destroy();
+                }
+
+                const temperatureParams = ['Tescc', 'Tkmeter', 'Tset'];
+                const otherParams = Object.keys(CHAR_UUID_MAP).filter(param => 
+                    !['alpha', 'omega', 'i'].includes(param) && !temperatureParams.includes(param)
+                );
+                const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#00CC99'];
 
                 chart = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        datasets: parameters.map((param, index) => ({
-                            label: param,
-                            data: [],
-                            borderColor: colors[index],
-                            backgroundColor: colors[index],
-                            fill: false,
-                            tension: 0.4
-                        }))
+                        datasets: [
+                            ...temperatureParams.map((param, index) => ({
+                                label: param,
+                                data: [],
+                                borderColor: colors[index],
+                                backgroundColor: colors[index],
+                                fill: false,
+                                tension: 0.4,
+                                yAxisID: 'y-temperature'
+                            })),
+                            ...otherParams.map((param, index) => ({
+                                label: param,
+                                data: [],
+                                borderColor: colors[index + temperatureParams.length],
+                                backgroundColor: colors[index + temperatureParams.length],
+                                fill: false,
+                                tension: 0.4,
+                                yAxisID: 'y-other'
+                            }))
+                        ]
                     },
                     options: {
                         responsive: true,
@@ -244,30 +300,113 @@
                                 },
                                 title: {
                                     display: true,
-                                    text: 'Time'
+                                    text: 'Time',
+                                    font: {
+                                        size: 14  // Increased font size for x-axis title
+                                    }
+                                },
+                                ticks: {
+                                    font: {
+                                        size: 12  // Increased font size for x-axis ticks
+                                    }
                                 }
                             },
-                            y: {
+                            'y-temperature': {
+                                type: 'linear',
+                                position: 'left',
                                 beginAtZero: true,
+                                min: 0,
                                 title: {
                                     display: true,
-                                    text: 'Value'
+                                    text: 'Temperature (°C)',
+                                    font: {
+                                        size: 14  // Increased font size for y-axis title
+                                    }
+                                },
+                                ticks: {
+                                    font: {
+                                        size: 12  // Increased font size for y-axis ticks
+                                    }
                                 }
+                            },
+                            'y-other': {
+                                type: 'linear',
+                                position: 'right',
+                                beginAtZero: true,
+                                min: 0,
+                                title: {
+                                    display: true,
+                                    text: 'Other Values',
+                                    font: {
+                                        size: 14  // Increased font size for y-axis title
+                                    }
+                                },
+                                ticks: {
+                                    font: {
+                                        size: 12  // Increased font size for y-axis ticks
+                                    }
+                                },
+                                grid: {
+                                    drawOnChartArea: false,
+                                },
                             }
                         },
                         plugins: {
+                            zoom: {
+                                zoom: {
+                                    wheel: {
+                                        enabled: true,
+                                    },
+                                    pinch: {
+                                        enabled: true
+                                    },
+                                    mode: 'xy',
+                                },
+                                pan: {
+                                    enabled: true,
+                                    mode: 'xy',
+                                },
+                            },
                             legend: {
-                                position: 'left',
+                                position: 'top',
                                 labels: {
                                     usePointStyle: true,
-                                    pointStyle: 'line'
+                                    pointStyle: 'line',
+                                    font: {
+                                        size: 14  // Increased font size for legend labels
+                                    }
                                 }
                             }
                         }
-                    }
+                    },
+                    plugins: [ChartZoom],
                 });
 
-                // Use a timeout to ensure the chart is rendered
+                updateChartSize();
+
+                // Add event listeners for zoom buttons
+                document.getElementById('zoomInBtn').addEventListener('click', () => {
+                    chart.zoom(1.1);
+                });
+                document.getElementById('zoomOutBtn').addEventListener('click', () => {
+                    const currentMin = chart.options.scales.x.min;
+                    const currentMax = chart.options.scales.x.max;
+                    
+                    if (currentMin !== undefined && currentMax !== undefined) {
+                        const range = currentMax - currentMin;
+                        const newMin = Math.max(0, currentMin - range / 2);
+                        const newMax = currentMax + range / 2;
+                        
+                        updateChartView(newMin, newMax);
+                    } else {
+                        // If no zoom is set, show all data
+                        updateChartView();
+                    }
+                });
+                document.getElementById('resetZoomBtn').addEventListener('click', () => {
+                    chart.resetZoom();
+                });
+
                 setTimeout(() => {
                     chartInitialized = true;
                     resolve(chart);
@@ -290,6 +429,53 @@
                 console.error('Error updating chart legend:', error);
             }
         }
+
+        function updateChartView(min = null, max = null) {
+            const allTimestamps = Object.keys(chartData[Object.keys(chartData)[0]] || {}).map(Number).sort((a, b) => a - b);
+            
+            if (allTimestamps.length === 0) return;
+
+            if (min === null) min = allTimestamps[0];
+            if (max === null) max = allTimestamps[allTimestamps.length - 1];
+
+            // Ensure min is not less than the first timestamp
+            min = Math.max(min, allTimestamps[0]);
+
+            chart.options.scales.x.min = min;
+            chart.options.scales.x.max = max;
+
+            Object.keys(chartData).forEach(key => {
+                const dataset = chart.data.datasets.find(ds => ds.label === key);
+                if (dataset) {
+                    dataset.data = chartData[key].filter(point => point.x >= min && point.x <= max);
+                }
+            });
+
+            chart.update();
+        }
+
+        // Modify your data receiving function
+        function receiveData(newData) {
+            // Assuming newData is an object with timestamp as key and array of values as value
+            Object.assign(allData, newData);
+            
+            // Update the chart view with all data
+            updateChartView();
+        }
+
+        const endpointsToggle = document.getElementById('endpointsToggle');
+        const endpointsSection = document.getElementById('endpointsSection');
+        const toggleIcon = endpointsToggle.querySelector('.toggle-icon');
+
+        endpointsToggle.addEventListener('click', () => {
+            if (endpointsSection.style.display === 'none' || endpointsSection.style.display === '') {
+                endpointsSection.style.display = 'block';
+                toggleIcon.textContent = '▼';
+            } else {
+                endpointsSection.style.display = 'none';
+                toggleIcon.textContent = '▶';
+            }
+        });
     </script>
 </body>
 </html>
