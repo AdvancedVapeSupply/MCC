@@ -613,36 +613,46 @@ def parse_arguments():
 # Replace the flashing process with this:
 args = parse_arguments()
 
+def find_esp32_port(attempts=10, delay=1):
+    dfu_pattern = '/dev/cu.usbmodem*'
+    normal_pattern = '/dev/tty.usbmodem*'
+    
+    for attempt in range(attempts):
+        dfu_ports = glob.glob(dfu_pattern)
+        normal_ports = glob.glob(normal_pattern)
+        
+        if dfu_ports:
+            print(f"Found ESP32-S3 in DFU mode: {dfu_ports[0]}")
+            return dfu_ports[0], True
+        elif normal_ports:
+            print(f"Found ESP32-S3 in normal mode: {normal_ports[0]}")
+            return normal_ports[0], False
+        
+        if attempt < attempts - 1:
+            print(f"No ESP32-S3 device found. Waiting {delay} seconds before next attempt...")
+            time.sleep(delay)
+    
+    print(f"No ESP32-S3 device found after {attempts} attempts.")
+    return None, False
+
 if args.flash:
     print("Attempting to flash the ESP32-S3...")
 
-    def find_esp32_port(pattern='/dev/tty.usbmodem*', attempts=10, delay=1):
-        for attempt in range(attempts):
-            potential_ports = glob.glob(pattern)
-            print(f"Attempt {attempt + 1}: Potential ports found: {potential_ports}")
-            
-            for port in potential_ports:
-                try:
-                    with serial.Serial(port, 115200, timeout=1) as ser:
-                        ser.close()
-                    print(f"Successfully opened and closed port: {port}")
-                    return port
-                except serial.SerialException as e:
-                    print(f"Failed to open port {port}: {str(e)}")
-            
-            if attempt < attempts - 1:
-                print(f"No valid ports found. Waiting {delay} seconds before next attempt...")
-                time.sleep(delay)
-        
-        print(f"No valid ports found after {attempts} attempts.")
-        return None
-
-    esp32_port = find_esp32_port()
+    esp32_port, is_dfu = find_esp32_port()
     if esp32_port is None:
         print("Error: No ESP32-S3 device found. Please check the connection.")
         sys.exit(1)
 
-    print(f"Using ESP32-S3 port: {esp32_port}")
+    if not is_dfu:
+        print("Error: ESP32-S3 is not in DFU mode. Please follow these steps:")
+        print("1. Unplug the USB cable")
+        print("2. Hold down the BOOT button")
+        print("3. Plug in the USB cable while holding the BOOT button")
+        print("4. Release the BOOT button")
+        print("5. Run this script again with the --flash option")
+        sys.exit(1)
+
+    print(f"Using ESP32-S3 port in DFU mode: {esp32_port}")
 
     # Erase flash
     erase_command = [
