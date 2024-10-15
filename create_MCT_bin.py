@@ -447,7 +447,9 @@ if mct_version is None:
     print("Failed to get MCT version")
     sys.exit(1)
 
-logical_version = mct_version  # Use MCT version instead of generating a new one
+# Generate a new version number based on the current date and time
+current_datetime = datetime.now()
+logical_version = f"{mct_version}.{current_datetime.strftime('%Y%m%d_%H%M')}"
 
 # Update version file in ../MCT
 if update_version_file(mct_path, logical_version):
