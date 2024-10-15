@@ -674,4 +674,15 @@ if args.flash:
 else:
     print("Skipping flash process. Use --flash to erase and flash the ESP32-S3.")
 
+# Add this new section at the very end of the script
+print_step("Final", "Version Information")
+print(f"MCT Version: {logical_version}")
+print(f"Manifest file: {manifest_file}")
+try:
+    with open(manifest_file, 'r') as f:
+        manifest_content = json.load(f)
+    print(f"Manifest version: {manifest_content.get('version', 'Not found')}")
+except Exception as e:
+    print(f"Error reading manifest file: {str(e)}")
+
 print("Script execution completed.")
