@@ -403,6 +403,17 @@ def get_mct_version(repo_path):
         print(f"Error reading MCT version: {str(e)}")
         return None
 
+# Near the top of the file, after imports
+def get_mct_base_version(repo_path):
+    try:
+        with open(os.path.join(repo_path, "version.py"), 'r') as f:
+            content = f.read()
+        exec(content, globals())
+        return globals()['__version__'].split('.')[0:2]  # Get only major.minor
+    except Exception as e:
+        print(f"Error reading MCT version: {str(e)}")
+        return None
+
 # Copy the MicroPython firmware to the current working directory
 shutil.copy2(micropython_firmware_source, micropython_firmware_dest)
 
@@ -440,16 +451,15 @@ SECTOR_SIZE = 4096
 output_size = (output_size // SECTOR_SIZE) * SECTOR_SIZE
 
 print_step(1, "Update version files")
-# Get the version from MCT repository
 mct_path = "../MCT"
-mct_version = get_mct_version(mct_path)
-if mct_version is None:
-    print("Failed to get MCT version")
+base_version = get_mct_base_version(mct_path)
+if base_version is None:
+    print("Failed to get MCT base version")
     sys.exit(1)
 
 # Generate a new version number based on the current date and time
 current_datetime = datetime.now()
-logical_version = f"{mct_version}.{current_datetime.strftime('%Y%m%d_%H%M')}"
+logical_version = f"{'.'.join(base_version)}.{current_datetime.strftime('%Y%m%d_%H%M')}"
 
 # Update version file in ../MCT
 if update_version_file(mct_path, logical_version):
