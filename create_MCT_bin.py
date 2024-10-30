@@ -190,28 +190,56 @@ def calculate_md5(filename):
 
 def parse_partition_table(firmware_file):
     try:
+        print("\nAttempting to read partition table from firmware...")
+        
+        # Read the partition table from offset 0x8000
+        with open(firmware_file, 'rb') as f:
+            f.seek(0x8000)
+            partition_data = f.read(0x1000)  # Read 4KB partition table
+            
+        # Print raw partition data in hex
+        print("\nPartition Table Raw Data (first 64 bytes):")
+        print(' '.join(f'{b:02x}' for b in partition_data[:64]))
+        
         result = subprocess.run(
             ["esptool.py", "image_info", firmware_file],
             capture_output=True,
             text=True,
             check=True
         )
-        lines = result.stdout.splitlines()
-        for i, line in enumerate(lines):
-            if "Partition Table:" in line:
-                for j in range(i+1, len(lines)):
-                    if "vfs" in lines[j].lower():
-                        parts = lines[j].split()
-                        for k, part in enumerate(parts):
-                            if part.lower() == "vfs":
-                                # The offset should be the first item in the line
-                                return int(parts[0], 16)
+        print("\nFirmware Image Info:")
+        print(result.stdout)
+        
+        # Try to parse partition entries
+        print("\nAttempting to parse partition entries:")
+        offset = 0
+        while offset < len(partition_data):
+            entry = partition_data[offset:offset + 32]  # Each partition entry is 32 bytes
+            if all(b == 0xFF for b in entry):  # Check if entry is empty
+                break
+                
+            name = entry[0:16].split(b'\x00')[0].decode('utf-8')
+            type_val = int.from_bytes(entry[16:17], 'little')
+            subtype = int.from_bytes(entry[17:18], 'little')
+            offset_val = int.from_bytes(entry[18:22], 'little')
+            size = int.from_bytes(entry[22:26], 'little')
+            
+            print(f"Partition: {name}")
+            print(f"  Type: {type_val}")
+            print(f"  Subtype: {subtype}")
+            print(f"  Offset: 0x{offset_val:x}")
+            print(f"  Size: 0x{size:x}")
+            print()
+            
+            if name.lower() == "vfs":
+                return offset_val
+                
+            offset += 32
+            
         print("Warning: 'vfs' partition not found in the partition table.")
         return None
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         print(f"Error parsing partition table: {e}")
-        print(f"esptool.py output: {e.stdout}")
-        print(f"esptool.py error: {e.stderr}")
         return None
 
 def get_next_aligned_address(address, alignment=0x1000):
