@@ -373,7 +373,7 @@ def read_fat_image(image_path):
         # Read the boot sector
         boot_sector = f.read(512)
         
-        # Extract some basic information
+        # Extract basic information
         bytes_per_sector = struct.unpack('<H', boot_sector[11:13])[0]
         sectors_per_cluster = struct.unpack('<B', boot_sector[13:14])[0]
         reserved_sectors = struct.unpack('<H', boot_sector[14:16])[0]
@@ -384,6 +384,7 @@ def read_fat_image(image_path):
             total_sectors = struct.unpack('<I', boot_sector[32:36])[0]
         fat_size = struct.unpack('<H', boot_sector[22:24])[0]
         
+        print("\nFAT Filesystem Information:")
         print(f"Bytes per sector: {bytes_per_sector}")
         print(f"Sectors per cluster: {sectors_per_cluster}")
         print(f"Reserved sectors: {reserved_sectors}")
@@ -398,28 +399,95 @@ def read_fat_image(image_path):
         f.seek(root_dir_offset)
         
         print("\nRoot directory structure:")
+        print("Format: [Filename] (Length) <Attributes> {LFN Status}")
+        
+        # Keep track of long filename parts
+        lfn_parts = []
+        total_files = 0
+        max_filename_length = 0
+        has_lowercase = False
+        has_special_chars = False
+        
         for i in range(root_entries):
             entry = f.read(32)
             if entry[0] == 0:  # End of directory
                 break
-            if entry[0] != 0xE5:  # Not a deleted entry
-                if entry[11] == 0x0F:  # Long filename entry
-                    continue  # Skip long filename entries for now
-                filename = decode_short_filename(entry[:8])
-                extension = decode_short_filename(entry[8:11])
-                attributes = entry[11]
-                if filename:
-                    if extension:
-                        print(f"  {filename}.{extension}", end='')
+                
+            if entry[0] == 0xE5:  # Deleted entry
+                continue
+                
+            attributes = entry[11]
+            if attributes == 0x0F:  # Long filename entry
+                # Extract LFN part
+                lfn_order = entry[0] & 0x3F
+                lfn_part = entry[1:11].decode('utf-16le', errors='replace') + \
+                          entry[14:26].decode('utf-16le', errors='replace') + \
+                          entry[28:32].decode('utf-16le', errors='replace')
+                lfn_parts.insert(0, lfn_part.rstrip('\x00'))
+            else:
+                # Regular entry
+                short_name = decode_short_filename(entry[:8])
+                short_ext = decode_short_filename(entry[8:11])
+                
+                # Check for lowercase flags
+                case_flag = entry[12]
+                name_is_lowercase = case_flag & 0x08
+                ext_is_lowercase = case_flag & 0x10
+                
+                if name_is_lowercase or ext_is_lowercase:
+                    has_lowercase = True
+                
+                # Construct filename
+                if lfn_parts:
+                    filename = ''.join(lfn_parts)
+                    lfn_status = "Using LFN"
+                else:
+                    if short_ext:
+                        filename = f"{short_name}.{short_ext}"
                     else:
-                        print(f"  {filename}", end='')
-                    if attributes & 0x10:  # Directory
-                        print("/ (Directory)")
-                    else:
-                        print()
+                        filename = short_name
+                    lfn_status = "Short name only"
+                
+                # Check for special characters
+                if any(c in filename for c in ' -_@#$%^&()[]{}'):
+                    has_special_chars = True
+                
+                # Update statistics
+                total_files += 1
+                max_filename_length = max(max_filename_length, len(filename))
+                
+                # Print entry details
+                attr_str = []
+                if attributes & 0x01: attr_str.append("RO")
+                if attributes & 0x02: attr_str.append("HID")
+                if attributes & 0x04: attr_str.append("SYS")
+                if attributes & 0x08: attr_str.append("VOL")
+                if attributes & 0x10: attr_str.append("DIR")
+                if attributes & 0x20: attr_str.append("ARC")
+                
+                print(f"  [{filename}] ({len(filename)}) <{','.join(attr_str)}> {{{lfn_status}}}")
+                
+                # Clear LFN parts for next entry
+                lfn_parts = []
+        
+        print("\nFilesystem Analysis:")
+        print(f"Total files/directories: {total_files}")
+        print(f"Maximum filename length: {max_filename_length}")
+        print(f"Lowercase support: {'Yes' if has_lowercase else 'No'}")
+        print(f"Special characters: {'Yes' if has_special_chars else 'No'}")
+        
+        # Add warnings if needed
+        if max_filename_length > 8:
+            print("\nWarning: Some filenames exceed 8.3 format length")
+        if has_lowercase:
+            print("Warning: Lowercase characters detected - verify case preservation")
+        if has_special_chars:
+            print("Warning: Special characters detected - verify character support")
 
 def decode_short_filename(name_bytes):
-    return ''.join(chr(b) if b != 0xFF else '_' for b in name_bytes).strip()
+    # Decode the short filename, preserving case and handling special characters
+    name = ''.join(chr(b) if 32 <= b <= 126 else '_' for b in name_bytes)
+    return name.rstrip(' ')
 
 def get_mct_version(repo_path):
     try:
