@@ -44,6 +44,7 @@ import argparse
 import struct
 import tempfile
 import requests
+from typing import Optional
 
 def print_step(step_number, description):
     print(f"\n{'='*80}")
@@ -515,8 +516,43 @@ if source_md5 != dest_md5:
 print("MicroPython firmware copied successfully and verified.")
 
 # Parse the partition table to get the VFS offset
-micropython_size = os.path.getsize(micropython_firmware_dest)
-vfs_offset = get_next_aligned_address(micropython_size)
+def get_vfs_offset(firmware_path: str) -> Optional[int]:
+    """Get the offset of the VFS partition."""
+    try:
+        with open(firmware_path, 'rb') as f:
+            f.seek(0x8000)  # Partition table offset
+            partition_data = f.read(0x1000)  # Read 4KB partition table
+            
+            offset = 0
+            while offset < 0x1000 - 32:  # 32 bytes per entry
+                entry_data = partition_data[offset:offset + 32]
+                if entry_data[0:2] != b'\xaa\x50':  # Check magic number
+                    break
+                    
+                # Parse entry fields
+                type_val = entry_data[2]
+                subtype = entry_data[3]
+                part_offset = int.from_bytes(entry_data[4:8], 'little')
+                name = entry_data[12:28].split(b'\x00')[0].decode('ascii')
+                
+                # Check if this is the VFS partition
+                if name == "vfs":
+                    return part_offset
+                    
+                offset += 32
+        
+        return None
+    except Exception as e:
+        print(f"Error reading partition table: {e}")
+        return None
+
+# Replace the current VFS offset calculation with:
+vfs_offset = get_vfs_offset(micropython_firmware_dest)
+if vfs_offset is None:
+    print("Failed to find VFS partition offset")
+    sys.exit(1)
+
+print(f"Found VFS partition offset: 0x{vfs_offset:x}")
 
 # Define the total flash size (16MB)
 TOTAL_FLASH_SIZE = 16 * 1024 * 1024  # 16MB
@@ -526,10 +562,6 @@ MCT_PARTITION_SIZE = TOTAL_FLASH_SIZE - vfs_offset
 
 # Set the output size to our calculated MCT partition size
 output_size = MCT_PARTITION_SIZE
-
-print(f"MicroPython firmware size: 0x{micropython_size:x}")
-print(f"Calculated VFS offset: 0x{vfs_offset:x}")
-print(f"MCT partition size: 0x{output_size:x}")
 
 # Ensure the output size is a multiple of the sector size
 SECTOR_SIZE = 4096
