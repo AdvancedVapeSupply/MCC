@@ -46,19 +46,109 @@ import tempfile
 import requests
 from typing import Optional
 
+# Filesystem functions
+def create_littlefs_image(image_path, source_dir, size_mb=2):
+    """Create a LittleFS image from the source directory."""
+    # Get absolute path to mklittlefs binary
+    mklittlefs_path = os.path.abspath("./mklittlefs/mklittlefs")
+    if not os.path.exists(mklittlefs_path):
+        print(f"\nError: mklittlefs binary not found at {mklittlefs_path}!")
+        print("Please ensure you've built mklittlefs in the ./mklittlefs directory")
+        return False
+        
+    print(f"\nCreating LittleFS image: {image_path}")
+    print(f"Size: {size_mb}MB")
+    print(f"Source directory: {source_dir}")
+    
+    # Calculate size in bytes
+    size_bytes = size_mb * 1024 * 1024
+    
+    # Use absolute path to mklittlefs binary
+    mklfs_cmd = [
+        mklittlefs_path,  # Use full path to binary
+        "-c", source_dir,      # source directory
+        "-d", "5",             # debug level
+        "-b", "4096",          # block size
+        "-p", "256",           # page size
+        "-s", str(size_bytes), # filesystem size
+        image_path             # output file
+    ]
+    
+    print(f"\nCreating image with command: {' '.join(mklfs_cmd)}")
+    result = run_command(mklfs_cmd)
+    if result is None:
+        print("Failed to create LittleFS image")
+        return False
+    
+    # Verify the image was created
+    if not os.path.exists(image_path):
+        print(f"Error: {image_path} was not created")
+        return False
+    
+    print(f"Created LittleFS image: {image_path}")
+    print(f"Size: {os.path.getsize(image_path):,} bytes")
+    return True
+
+def create_fat_image(image_path, source_dir, size_mb=2):
+    """Create a FAT filesystem image as a fallback."""
+    print(f"\nCreating FAT image: {image_path}")
+    print(f"Size: {size_mb}MB")
+    print(f"Source directory: {source_dir}")
+    
+    # Calculate size in bytes
+    size_bytes = size_mb * 1024 * 1024
+    
+    # Use fatfsgen.py script
+    fatfsgen_path = os.path.abspath("./fatfs/fatfsgen.py")
+    if not os.path.exists(fatfsgen_path):
+        print(f"Error: fatfsgen.py not found at {fatfsgen_path}")
+        return False
+    
+    fatfs_cmd = [
+        "python3",
+        fatfsgen_path,
+        "--sector-size", "4096",
+        "--partition-size", str(size_bytes),
+        "--output", image_path,
+        source_dir
+    ]
+    
+    print(f"\nCreating image with command: {' '.join(fatfs_cmd)}")
+    result = run_command(fatfs_cmd)
+    if result is None:
+        print("Failed to create FAT image")
+        return False
+    
+    return True
+
+def create_filesystem_image(image_path, source_dir, size_mb=2):
+    """Try to create filesystem image, falling back to FAT if LittleFS fails."""
+    # Try LittleFS first
+    if create_littlefs_image(image_path, source_dir, size_mb):
+        return True
+        
+    print("\nLittleFS creation failed, falling back to FAT filesystem...")
+    # Fall back to FAT
+    return create_fat_image(image_path, source_dir, size_mb)
+
+# Utility functions
 def print_step(step_number, description):
     print(f"\n{'='*80}")
     print(f"Step {step_number}: {description}")
     print(f"{'='*80}\n")
 
-def run_command(command, cwd=None):
+def run_command(command, cwd=None, timeout=300):
     try:
-        result = subprocess.run(command, check=True, cwd=cwd, capture_output=True, text=True)
+        print(f"Running command: {' '.join(command)}")
+        result = subprocess.run(command, check=True, cwd=cwd, capture_output=True, text=True, timeout=timeout)
         print(result.stdout)
         return result.stdout
     except subprocess.CalledProcessError as e:
         print(f"Command failed: {' '.join(command)}")
         print(f"Error: {e.stderr}")
+        return None
+    except subprocess.TimeoutExpired:
+        print(f"Command timed out after {timeout} seconds: {' '.join(command)}")
         return None
 
 def create_tinyurl(url):
@@ -714,281 +804,89 @@ if not validate_manifest_file(current_dir):
 
 print("Version files validation successful")
 
-print_step(6, "Create FAT filesystem image")
+print_step(6, "Create filesystem image")
+fatfs_image = "mct.bin"
 
-# Define temp_directory
+# Create temporary directory
 temp_directory = tempfile.mkdtemp()
 print(f"Created temporary directory: {temp_directory}")
 
-# Explicitly call clean_directory with MCT repo path
-clean_directory(temp_directory, mct_path)
+try:
+    # Clean the temporary directory
+    clean_directory(temp_directory, mct_path)
 
-# Print the directory structure after cleaning
-print("Contents of temporary directory after cleaning:")
-print_directory_with_details(temp_directory)
-
-# Calculate the size of the MCT content after cleaning
-mct_size = get_directory_size(temp_directory)
-print(f"Size of MCT content after cleaning: {mct_size} bytes")
-
-# Set a fixed partition size of 2MB (instead of 16MB)
-partition_size = 2 * 1024 * 1024  # 2MB in bytes
-print(f"Fixed partition size: {partition_size} bytes")
-
-# Define the output image name - ensure it's always mct.bin
-fatfs_image = "mct.bin"  # This should be the only place defining the output filename
-
-print(f"\nCreating FAT filesystem image: {fatfs_image}")
-print(f"Partition size: {partition_size:,} bytes")
-print(f"Sector size: {SECTOR_SIZE:,} bytes")
-print(f"Number of sectors: {partition_size // SECTOR_SIZE}")
-
-# Create FAT filesystem
-print("\nCreating FAT filesystem...")
-
-# Define image size and parameters
-image_size = 2 * 1024 * 1024  # 2MB
-sector_size = 4096
-
-# Create empty image file
-with open(fatfs_image, 'wb') as f:
-    f.write(b'\x00' * image_size)
-
-# Create mtools configuration file
-mtools_conf = f"""
-drive m:
-    file="{fatfs_image}"
-    partition=1
-    offset=0
-    mformat_only
-    sectors={sector_size}
-    fat_bits=16
-"""
-
-with open(".mtoolsrc", "w") as f:
-    f.write(mtools_conf)
-
-# Format the image
-format_cmd = [
-    "mformat",
-    "-i", fatfs_image,
-    "-F",           # FAT16
-    "-h", "1",     # heads
-    "-s", "8",     # sectors per track
-    "-S", str(sector_size),  # sector size
-    "-M", "512",   # media descriptor
-    "::"
-]
-run_command(format_cmd)
-
-# Create directories first
-print("\nCreating directories...")
-for root, dirs, _ in os.walk(temp_directory):
-    for d in dirs:
-        src_dir = os.path.join(root, d)
-        rel_dir = os.path.relpath(src_dir, temp_directory)
-        rel_dir = rel_dir.replace(os.sep, '/')  # Ensure forward slashes
-        mmd_cmd = ["mmd", "-i", fatfs_image, f"::{rel_dir}"]
-        run_command(mmd_cmd)
-
-
-# Verify the filesystem
-print("\nVerifying filesystem...")
-run_command(["mdir", "-i", fatfs_image, "-/", "::"])
-
-# Initialize MTOOLS configuration
-mtools_conf = """
-drive m:
-    file="mct.bin"
-    partition=1
-    offset=0
-"""
-with open(".mtoolsrc", "w") as f:
-    f.write(mtools_conf)
-
-# Create and write the manifest file with the correct format
-manifest_data = {
-    "name": "AVS MCT",
-    "version": logical_version,
-    "builds": [
-        {
-            "chipFamily": "ESP32-S3",
-            "parts": [
-                {
-                    "path": micropython_firmware_dest,
-                    "offset": 0
-                },
-                {
-                    "path": "mct.bin",
-                    "offset": vfs_offset
-                }
-            ]
-        }
-    ]
-}
-
-with open(manifest_file, 'w') as f:
-    json.dump(manifest_data, f, indent=2)
-
-print(f"Created manifest file: {manifest_file}")
-
-# Add this new section
-print_step(7, "Commit and push changes in current working directory")
-cwd = os.getcwd()
-if commit_and_push(cwd, logical_version, add_new_files=False):
-    print("Successfully committed and pushed changes in current directory")
-else:
-    print("Failed to commit and push changes in current directory")
-    sys.exit(1)
-
-# Print the contents of the directory with file sizes after cleaning
-print("Directory structure with file sizes after cleaning:")
-print_directory_with_sizes(temp_directory)
-
-# Add this at the end of your script
-shutil.rmtree(temp_directory)
-print(f"Removed temporary directory: {temp_directory}")
-
-# Add this near the top of the file, after imports
-def parse_arguments():
-    parser = argparse.ArgumentParser(description="Create and optionally flash MCT image")
-    parser.add_argument("--flash", action="store_true", help="Erase and flash the ESP32-S3")
-    return parser.parse_args()
-
-# Replace the flashing process with this:
-args = parse_arguments()
-
-if args.flash:
-    print("Attempting to flash the ESP32-S3...")
-
-    def find_esp32_port(pattern='/dev/tty.usbmodem*', attempts=10, delay=1):
-        for attempt in range(attempts):
-            potential_ports = glob.glob(pattern)
-            print(f"Attempt {attempt + 1}: Potential ports found: {potential_ports}")
-            
-            for port in potential_ports:
-                try:
-                    with serial.Serial(port, 115200, timeout=1) as ser:
-                        ser.close()
-                    print(f"Successfully opened and closed port: {port}")
-                    return port
-                except serial.SerialException as e:
-                    print(f"Failed to open port {port}: {str(e)}")
-            
-            if attempt < attempts - 1:
-                print(f"No valid ports found. Waiting {delay} seconds before next attempt...")
-                time.sleep(delay)
-        
-        print(f"No valid ports found after {attempts} attempts.")
-        return None
-
-    esp32_port = find_esp32_port()
-    if esp32_port is None:
-        print("Error: No ESP32-S3 device found. Please check the connection.")
+    # Create the filesystem image
+    if not create_filesystem_image(fatfs_image, temp_directory):
+        print("Failed to create filesystem image")
         sys.exit(1)
 
-    print(f"Using ESP32-S3 port: {esp32_port}")
+    print(f"Successfully created filesystem image: {fatfs_image}")
 
-    # Erase flash
-    erase_command = [
-        "esptool.py",
-        "--chip", "esp32s3",
-        "--port", esp32_port,
-        "--baud", "115200",
-        "erase_flash"
-    ]
-
-    print("Erasing flash...")
-    result = run_command(erase_command)
-    if result is None:
-        print("Failed to erase flash. Aborting.")
+    # Add this new section
+    print_step(7, "Commit and push changes in current working directory")
+    cwd = os.getcwd()
+    if commit_and_push(cwd, logical_version, add_new_files=False):
+        print("Successfully committed and pushed changes in current directory")
+    else:
+        print("Failed to commit and push changes in current directory")
         sys.exit(1)
 
-    # Wait a moment after erasing
-    time.sleep(2)
+    # Flash the device if requested (Step 8)
+    args = parse_arguments()
+    if args.flash:
+        print_step(8, "Flash ESP32-S3")
+        print("Attempting to flash the ESP32-S3...")
 
-    # Flash firmware and MCT image
-    flash_command = [
-        "esptool.py",
-        "--chip", "esp32s3",
-        "--port", esp32_port,
-        "--baud", "115200",
-        "write_flash",
-        "-z",
-        "0x0", micropython_firmware_dest,
-        f"0x{vfs_offset:x}", fatfs_image
-    ]
+        esp32_port = find_esp32_port()
+        if esp32_port is None:
+            print("Error: No ESP32-S3 device found. Please check the connection.")
+            sys.exit(1)
 
-    print("Flashing firmware and MCT image...")
-    result = run_command(flash_command)
-    if result is None:
-        print("Failed to flash the device. Aborting.")
-        sys.exit(1)
+        print(f"Using ESP32-S3 port: {esp32_port}")
 
-    print("ESP32-S3 flashing process completed.")
-else:
-    print("Skipping flash process. Use --flash to erase and flash the ESP32-S3.")
+        # Erase flash
+        erase_command = [
+            "esptool.py",
+            "--chip", "esp32s3",
+            "--port", esp32_port,
+            "--baud", "115200",
+            "erase_flash"
+        ]
+
+        print("Erasing flash...")
+        result = run_command(erase_command)
+        if result is None:
+            print("Failed to erase flash. Aborting.")
+            sys.exit(1)
+
+        # Wait a moment after erasing
+        time.sleep(2)
+
+        # Flash firmware and MCT image
+        flash_command = [
+            "esptool.py",
+            "--chip", "esp32s3",
+            "--port", esp32_port,
+            "--baud", "115200",
+            "write_flash",
+            "-z",
+            "0x0", micropython_firmware_dest,
+            f"0x{vfs_offset:x}", fatfs_image
+        ]
+
+        print("Flashing firmware and MCT image...")
+        result = run_command(flash_command)
+        if result is None:
+            print("Failed to flash the device. Aborting.")
+            sys.exit(1)
+
+        print("ESP32-S3 flashing process completed successfully.")
+    else:
+        print("Skipping flash process. Use --flash to erase and flash the ESP32-S3.")
+
+finally:
+    # Clean up
+    shutil.rmtree(temp_directory)
+    print(f"Removed temporary directory: {temp_directory}")
 
 print("Script execution completed.")
-
-def check_mklittlefs_installation():
-    """Check if mklittlefs is available locally."""
-    mklittlefs_path = "./mklittlefs/mklittlefs"
-    if not os.path.exists(mklittlefs_path):
-        print("\nError: mklittlefs binary not found!")
-        print("Please ensure you've built mklittlefs in the ./mklittlefs directory")
-        return False
-    return mklittlefs_path
-
-def create_littlefs_image(image_path, source_dir, size_mb=2):
-    """Create a LittleFS image from the source directory."""
-    # Get absolute path to mklittlefs binary
-    mklittlefs_path = os.path.abspath("./mklittlefs/mklittlefs")
-    if not os.path.exists(mklittlefs_path):
-        print(f"\nError: mklittlefs binary not found at {mklittlefs_path}!")
-        print("Please ensure you've built mklittlefs in the ./mklittlefs directory")
-        return False
-        
-    print(f"\nCreating LittleFS image: {image_path}")
-    print(f"Size: {size_mb}MB")
-    print(f"Source directory: {source_dir}")
-    
-    # Calculate size in bytes
-    size_bytes = size_mb * 1024 * 1024
-    
-    # Use absolute path to mklittlefs binary
-    mklfs_cmd = [
-        mklittlefs_path,  # Use full path to binary
-        "-c", source_dir,      # source directory
-        "-d", "5",             # debug level
-        "-b", "4096",          # block size
-        "-p", "256",           # page size
-        "-s", str(size_bytes), # filesystem size
-        image_path             # output file
-    ]
-    
-    print(f"\nCreating image with command: {' '.join(mklfs_cmd)}")
-    result = run_command(mklfs_cmd)
-    if result is None:
-        print("Failed to create LittleFS image")
-        return False
-    
-    # Verify the image was created
-    if not os.path.exists(image_path):
-        print(f"Error: {image_path} was not created")
-        return False
-    
-    print(f"Created LittleFS image: {image_path}")
-    print(f"Size: {os.path.getsize(image_path):,} bytes")
-    return True
-
-# Main flow
-fatfs_image = "mct.bin"
-
-# Clean the temporary directory
-clean_directory(temp_directory, mct_path)
-
-# Create the LittleFS image
-if not create_littlefs_image(fatfs_image, temp_directory):
-    print("Failed to create LittleFS image")
-    sys.exit(1)
