@@ -92,15 +92,14 @@ def create_littlefs_image(image_path, source_dir, size_mb=2):
     # Calculate size in bytes
     size_bytes = size_mb * 1024 * 1024
     
-    # Use absolute path to mklittlefs binary
+    # Use parameters from Makefile
     mklfs_cmd = [
-        mklittlefs_path,  # Use full path to binary
-        "-c", source_dir,      # source directory
-        "-d", "5",             # debug level
-        "-b", "4096",          # block size
-        "-p", "256",           # page size
+        mklittlefs_path,     # Use full path to binary
+        "-c", source_dir,    # source directory
+        "-p", "256",         # page size (from Makefile)
+        "-b", "4096",        # block size (from Makefile)
         "-s", str(size_bytes), # filesystem size
-        image_path             # output file
+        image_path           # output file
     ]
     
     print(f"\nCreating image with command: {' '.join(mklfs_cmd)}")
