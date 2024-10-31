@@ -852,20 +852,19 @@ try:
 
         # Construct flash command using manifest information
         flash_command = [
-            "esptool.py",
+            "python", "-m", "esptool",
             "--chip", "esp32s3",
-            "--port", esp32_port,
-            "--baud", "115200",
+            "-p", esp32_port,
+            "-b", "460800",
             "--before", "default_reset",
             "--after", "hard_reset",
             "write_flash",
             "--flash_mode", "dio",
+            "--flash_size", "16MB",
             "--flash_freq", "80m",
-            "--flash-size", "16",
-            "--verify",
-            "--compress",
-            "0x0", firmware_dest,  # First file pair
-            f"0x{vfs_offset:x}", fatfs_image  # Second file pair
+            "--erase-all",
+            "0x0", firmware_dest,
+            f"0x{vfs_offset:x}", fatfs_image
         ]
 
         # Print the exact command that will be executed
