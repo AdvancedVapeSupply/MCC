@@ -232,6 +232,7 @@ micropython_firmware_dest = "lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin"
 fatfsgen_script = "fatfs/fatfsgen.py"
 
 def calculate_md5(filename):
+    """Calculate MD5 hash of a file."""
     hash_md5 = hashlib.md5()
     with open(filename, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
@@ -1011,7 +1012,19 @@ def read_manifest():
         print("\nManifest information:")
         print(f"Name: {manifest.get('name')}")
         print(f"Version: {manifest.get('version')}")
+        
+        # Print parts information
+        print("\nFlash parts:")
+        for part in manifest['builds'][0]['parts']:
+            print(f"  {part['path']} at offset 0x{part['offset']:x}")
+            
         return manifest
+    except FileNotFoundError:
+        print("Error: manifest.json not found")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON in manifest.json: {e}")
+        return None
     except Exception as e:
         print(f"Error reading manifest.json: {e}")
         return None
