@@ -958,13 +958,15 @@ try:
             "python", "-m", "esptool",
             "--chip", "esp32s3",
             "-p", esp32_port,
-            "-b", "460800",
+            "-b", "115200",
             "--before", "default_reset",
             "--after", "hard_reset",
+            "--no-stub",
+            "--no-verify",    # Added to skip verification
             "write_flash",
             "--flash_mode", "dio",
             "--flash_size", "16MB",
-            "--flash_freq", "80m",
+            "--flash_freq", "40m",
             "--erase-all",
             "0x0", firmware_dest,
             f"0x{vfs_offset:x}", fatfs_image
