@@ -965,7 +965,7 @@ try:
             "write_flash",
             "--flash_mode", "dio",
             "--flash_size", "16MB",
-            "--flash_freq", "40m",
+            "--flash_freq", "80m",
             "0x0", firmware_dest,
             f"0x{vfs_offset:x}", fatfs_image
         ]
