@@ -890,22 +890,27 @@ def create_littlefs_image(image_path, source_dir, size_mb=2):
     print(f"Size: {size_mb}MB")
     print(f"Source directory: {source_dir}")
     
+    # Print directory contents before copying
+    print("\nFiles to be copied:")
+    print_directory_with_sizes(source_dir)
+    
     # Calculate size in bytes
     size_bytes = size_mb * 1024 * 1024
     
-    # Use mklittlefs tool
+    # Use mklittlefs tool to create image and copy files
     mklfs_cmd = [
         "mklittlefs",
-        "-c", source_dir,      # source directory
-        "-d", "5",             # debug level
+        "-c", source_dir,      # source directory (automatically copies all files)
+        "-d", "5",             # debug level (verbose output)
         "-b", "4096",          # block size
         "-p", "256",           # page size
         "-s", str(size_bytes), # filesystem size
         image_path             # output file
     ]
     
-    print(f"Running command: {' '.join(mklfs_cmd)}")
-    if run_command(mklfs_cmd) is None:
+    print(f"\nCreating image with command: {' '.join(mklfs_cmd)}")
+    result = run_command(mklfs_cmd)
+    if result is None:
         print("Failed to create LittleFS image")
         return False
     
@@ -914,26 +919,57 @@ def create_littlefs_image(image_path, source_dir, size_mb=2):
         print(f"Error: {image_path} was not created")
         return False
     
-    print(f"Created LittleFS image: {image_path}")
-    print(f"Size: {os.path.getsize(image_path):,} bytes")
+    # Verify image size
+    image_size = os.path.getsize(image_path)
+    print(f"\nCreated LittleFS image: {image_path}")
+    print(f"Image size: {image_size:,} bytes")
+    
+    if image_size > size_bytes:
+        print(f"Warning: Image size ({image_size:,} bytes) exceeds specified size ({size_bytes:,} bytes)")
+        return False
+    
+    # Optional: List contents of the image if lfs-tool is available
+    try:
+        list_cmd = ["lfs-tool", "ls", image_path]
+        print("\nVerifying image contents:")
+        run_command(list_cmd)
+    except:
+        print("Note: lfs-tool not available for content verification")
+    
     return True
 
 def ensure_littlefs_tools():
-    """Ensure mklittlefs tool is available."""
-    # Check if mklittlefs is in PATH
+    """Ensure required tools are available."""
+    missing_tools = []
+    
+    # Check for mklittlefs
     if shutil.which("mklittlefs") is None:
-        print("mklittlefs not found. Please install it:")
-        print("brew install mklittlefs")  # for macOS
-        # print("apt-get install mklittlefs")  # for Ubuntu/Debian
+        missing_tools.append("mklittlefs")
+    
+    if missing_tools:
+        print("Required tools not found. Please install:")
+        print("\nFor macOS:")
+        print("brew install mklittlefs")
+        print("\nFor Ubuntu/Debian:")
+        print("sudo apt-get install mklittlefs")
         sys.exit(1)
 
-# Use these functions in your main flow:
+# Replace the FAT creation code with:
 fatfs_image = "mct.bin"  # keep the same name for compatibility
 
 # Ensure tools are available
 ensure_littlefs_tools()
 
-# Create the LittleFS image
+# Clean the temporary directory
+clean_directory(temp_directory, mct_path)
+
+# Print contents after cleaning
+print("\nContents to be copied to LittleFS image:")
+print_directory_with_sizes(temp_directory)
+
+# Create the LittleFS image (this also copies all files)
 if not create_littlefs_image(fatfs_image, temp_directory):
     print("Failed to create LittleFS image")
     sys.exit(1)
+
+print("\nLittleFS image created successfully")
