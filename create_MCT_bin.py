@@ -923,22 +923,6 @@ def create_littlefs_image(image_path, source_dir, size_mb=2):
     print(f"Size: {os.path.getsize(image_path):,} bytes")
     return True
 
-def ensure_littlefs_tools():
-    """Ensure required tools are available."""
-    missing_tools = []
-    
-    # Check for mklittlefs
-    if shutil.which("mklittlefs") is None:
-        missing_tools.append("mklittlefs")
-    
-    if missing_tools:
-        print("Required tools not found. Please install:")
-        print("\nFor macOS:")
-        print("brew install mklittlefs")
-        print("\nFor Ubuntu/Debian:")
-        print("sudo apt-get install mklittlefs")
-        sys.exit(1)
-
 # Main flow
 fatfs_image = "mct.bin"
 
