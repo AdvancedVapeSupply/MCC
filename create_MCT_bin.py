@@ -724,23 +724,38 @@ def run_command(command, cwd=None):
         print(f"Error running command: {str(e)}")
         return None
 
-def update_manifest(directory, version):
-    """Update manifest.json with new version information."""
+def update_manifest(directory, version, vfs_offset):
+    """Update manifest.json with new version information and build details."""
     manifest_path = os.path.join(directory, "manifest.json")
     
     try:
-        # Create manifest data
+        # Create manifest data with the required structure
         manifest_data = {
+            "name": "AVS MCT",
             "version": version,
-            "date": datetime.now(timezone.utc).isoformat(),
-            "files": []
+            "builds": [
+                {
+                    "chipFamily": "ESP32-S3",
+                    "parts": [
+                        {
+                            "path": "lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin",
+                            "offset": 0
+                        },
+                        {
+                            "path": "mct.bin",
+                            "offset": vfs_offset
+                        }
+                    ]
+                }
+            ]
         }
         
-        # Write manifest file
+        # Write manifest file with proper formatting
         with open(manifest_path, 'w') as f:
-            json.dump(manifest_data, f, indent=4)
+            json.dump(manifest_data, f, indent=2)
             
         print(f"Updated manifest.json with version {version}")
+        print(f"VFS offset: {vfs_offset} (0x{vfs_offset:x})")
         return True
         
     except Exception as e:
@@ -802,7 +817,7 @@ else:
 
 # Update manifest file in the current directory
 current_dir = "."
-if update_manifest(current_dir, logical_version):
+if update_manifest(current_dir, logical_version, vfs_offset):
     print(f"Updated manifest file in {current_dir}")
 else:
     print(f"Failed to update manifest file in {current_dir}")
