@@ -76,7 +76,7 @@ def find_esp32_port():
     return None
 
 # Filesystem functions
-def create_littlefs_image(image_path, source_dir, size_mb=2):
+def create_littlefs_image(image_path, source_dir, partition_size):
     """Create a LittleFS image from the source directory."""
     # Get absolute path to mklittlefs binary
     mklittlefs_path = os.path.abspath("./mklittlefs/mklittlefs")
@@ -86,11 +86,17 @@ def create_littlefs_image(image_path, source_dir, size_mb=2):
         return False
         
     print(f"\nCreating LittleFS image: {image_path}")
-    print(f"Size: {size_mb}MB")
+    print(f"Partition size: {partition_size:,} bytes")
     print(f"Source directory: {source_dir}")
     
-    # Calculate size in bytes
-    size_bytes = size_mb * 1024 * 1024
+    # Check if source directory contents will fit
+    total_size = get_directory_size(source_dir)
+    if total_size > partition_size:
+        print(f"Error: Source directory ({total_size:,} bytes) is larger than partition size ({partition_size:,} bytes)")
+        return False
+    
+    print(f"Source directory size: {total_size:,} bytes")
+    print(f"Available space: {partition_size - total_size:,} bytes")
     
     # Use parameters from Makefile
     mklfs_cmd = [
@@ -98,7 +104,7 @@ def create_littlefs_image(image_path, source_dir, size_mb=2):
         "-c", source_dir,    # source directory
         "-p", "256",         # page size (from Makefile)
         "-b", "4096",        # block size (from Makefile)
-        "-s", str(size_bytes), # filesystem size
+        "-s", str(partition_size), # filesystem size from partition table
         image_path           # output file
     ]
     
@@ -108,13 +114,18 @@ def create_littlefs_image(image_path, source_dir, size_mb=2):
         print("Failed to create LittleFS image")
         return False
     
-    # Verify the image was created
+    # Verify the image was created and size is correct
     if not os.path.exists(image_path):
         print(f"Error: {image_path} was not created")
         return False
     
+    created_size = os.path.getsize(image_path)
+    if created_size != partition_size:
+        print(f"Warning: Created image size ({created_size:,} bytes) doesn't match partition size ({partition_size:,} bytes)")
+        return False
+    
     print(f"Created LittleFS image: {image_path}")
-    print(f"Size: {os.path.getsize(image_path):,} bytes")
+    print(f"Size: {created_size:,} bytes")
     return True
 
 def create_fat_image(image_path, source_dir, size_mb=2):
@@ -637,8 +648,8 @@ if source_md5 != dest_md5:
 print("MicroPython firmware copied successfully and verified.")
 
 # Parse the partition table to get the VFS offset
-def get_vfs_offset(firmware_path: str) -> Optional[int]:
-    """Get the offset of the VFS partition."""
+def get_partition_info(firmware_path: str) -> Optional[tuple]:
+    """Get the offset and size of the VFS partition from the partition table."""
     try:
         with open(firmware_path, 'rb') as f:
             f.seek(0x8000)  # Partition table offset
@@ -654,11 +665,15 @@ def get_vfs_offset(firmware_path: str) -> Optional[int]:
                 type_val = entry_data[2]
                 subtype = entry_data[3]
                 part_offset = int.from_bytes(entry_data[4:8], 'little')
+                part_size = int.from_bytes(entry_data[8:12], 'little')
                 name = entry_data[12:28].split(b'\x00')[0].decode('ascii')
                 
                 # Check if this is the VFS partition
                 if name == "vfs":
-                    return part_offset
+                    print(f"Found VFS partition:")
+                    print(f"  Offset: 0x{part_offset:x}")
+                    print(f"  Size: {part_size:,} bytes ({part_size / 1024 / 1024:.2f}MB)")
+                    return (part_offset, part_size)
                     
                 offset += 32
         
@@ -668,12 +683,14 @@ def get_vfs_offset(firmware_path: str) -> Optional[int]:
         return None
 
 # Replace the current VFS offset calculation with:
-vfs_offset = get_vfs_offset(micropython_firmware_dest)
-if vfs_offset is None:
-    print("Failed to find VFS partition offset")
+partition_info = get_partition_info(micropython_firmware_dest)
+if partition_info is None:
+    print("Failed to find VFS partition information")
     sys.exit(1)
 
-print(f"Found VFS partition offset: 0x{vfs_offset:x}")
+vfs_offset, vfs_size = partition_info
+print(f"Using VFS partition offset: 0x{vfs_offset:x}")
+print(f"Using VFS partition size: {vfs_size:,} bytes")
 
 # Define the total flash size (16MB)
 TOTAL_FLASH_SIZE = 16 * 1024 * 1024  # 16MB
@@ -842,7 +859,7 @@ try:
     clean_directory(temp_directory, mct_path)
 
     # Create the filesystem image
-    if not create_filesystem_image(fatfs_image, temp_directory):
+    if not create_littlefs_image(fatfs_image, temp_directory, vfs_size):
         print("Failed to create filesystem image")
         sys.exit(1)
 
