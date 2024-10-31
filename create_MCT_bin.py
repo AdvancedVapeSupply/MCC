@@ -53,6 +53,28 @@ def parse_arguments():
     parser.add_argument('--flash', action='store_true', help='Flash the device after creating the image')
     return parser.parse_args()
 
+# Serial port functions
+def find_esp32_port():
+    """Find the ESP32-S3 serial port."""
+    if sys.platform.startswith('win'):
+        ports = ['COM%s' % (i + 1) for i in range(256)]
+    elif sys.platform.startswith('linux') or sys.platform.startswith('cygwin'):
+        ports = glob.glob('/dev/ttyACM[0-9]*')
+    elif sys.platform.startswith('darwin'):
+        ports = glob.glob('/dev/tty.usbmodem*')
+    else:
+        raise EnvironmentError('Unsupported platform')
+
+    for port in ports:
+        try:
+            s = serial.Serial(port)
+            s.close()
+            return port
+        except (OSError, serial.SerialException):
+            continue
+    
+    return None
+
 # Filesystem functions
 def create_littlefs_image(image_path, source_dir, size_mb=2):
     """Create a LittleFS image from the source directory."""
@@ -138,73 +160,7 @@ def create_filesystem_image(image_path, source_dir, size_mb=2):
     # Fall back to FAT
     return create_fat_image(image_path, source_dir, size_mb)
 
-# Utility functions
-def print_step(step_number, description):
-    print(f"\n{'='*80}")
-    print(f"Step {step_number}: {description}")
-    print(f"{'='*80}\n")
-
-def run_command(command, cwd=None, timeout=300):
-    try:
-        print(f"Running command: {' '.join(command)}")
-        result = subprocess.run(command, check=True, cwd=cwd, capture_output=True, text=True, timeout=timeout)
-        print(result.stdout)
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed: {' '.join(command)}")
-        print(f"Error: {e.stderr}")
-        return None
-    except subprocess.TimeoutExpired:
-        print(f"Command timed out after {timeout} seconds: {' '.join(command)}")
-        return None
-
-def create_tinyurl(url):
-    try:
-        response = requests.get(f"http://tinyurl.com/api-create.php?url={url}")
-        if response.status_code == 200:
-            return response.text.strip()
-        else:
-            print(f"Failed to create TinyURL. Status code: {response.status_code}")
-            return url
-    except Exception as e:
-        print(f"Error creating TinyURL: {str(e)}")
-        return url
-
-def update_version_file(repo_path, version):
-    version_path = os.path.join(repo_path, "version.py")
-    if os.path.exists(version_path):
-        # Get the current commit hash
-        commit_hash = run_command(["git", "rev-parse", "HEAD"], cwd=repo_path).strip()
-        
-        # Construct the URL
-        commit_url = f"https://github.com/AdvancedVapeSupply/MCT/commit/{commit_hash}"
-        
-        # Create TinyURL
-        tiny_url = create_tinyurl(commit_url)
-        
-        with open(version_path, 'w') as f:
-            f.write(f'__version__ = "{version}"\n')
-            f.write(f'__commit_url__ = "{tiny_url}"\n')
-        print(f"Updated {version_path} with version {version} and TinyURL")
-        return True
-    return False
-
-def update_manifest(directory, version):
-    manifest_path = os.path.join(directory, "manifest.json")
-    if os.path.exists(manifest_path):
-        with open(manifest_path, 'r') as f:
-            manifest = json.load(f)
-        
-        manifest['version'] = version
-        
-        with open(manifest_path, 'w') as f:
-            json.dump(manifest, f, indent=2)
-        print(f"Updated {manifest_path} with version {version}")
-        return True
-    else:
-        print(f"Manifest file not found in {directory}")
-        return False
-
+# Git functions
 def commit_and_push(repo_path, version, add_new_files=False):
     print(f"\nCommitting changes in {repo_path}")
     
@@ -252,20 +208,6 @@ def commit_and_push(repo_path, version, add_new_files=False):
     else:
         print(f"No changes detected in {repo_path}")
         return True
-
-def run_command(command, cwd=None, timeout=300):
-    try:
-        print(f"Running command: {' '.join(command)}")
-        result = subprocess.run(command, check=True, cwd=cwd, capture_output=True, text=True, timeout=timeout)
-        print(result.stdout)
-        return result.stdout
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed: {' '.join(command)}")
-        print(f"Error: {e.stderr}")
-        return None
-    except subprocess.TimeoutExpired:
-        print(f"Command timed out after {timeout} seconds: {' '.join(command)}")
-        return None
 
 # Define the paths
 mct_repo_url = "https://github.com/AdvancedVapeSupply/MCT"
@@ -746,6 +688,84 @@ output_size = MCT_PARTITION_SIZE
 # Ensure the output size is a multiple of the sector size
 SECTOR_SIZE = 4096
 output_size = (output_size // SECTOR_SIZE) * SECTOR_SIZE
+
+def run_command(command, cwd=None):
+    """Run a command and return its output."""
+    try:
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        print(f"Command failed with error: {e}")
+        print(f"Error output: {e.stderr}")
+        return None
+    except Exception as e:
+        print(f"Error running command: {str(e)}")
+        return None
+
+def update_manifest(directory, version):
+    """Update manifest.json with new version information."""
+    manifest_path = os.path.join(directory, "manifest.json")
+    
+    try:
+        # Create manifest data
+        manifest_data = {
+            "version": version,
+            "date": datetime.now(timezone.utc).isoformat(),
+            "files": []
+        }
+        
+        # Write manifest file
+        with open(manifest_path, 'w') as f:
+            json.dump(manifest_data, f, indent=4)
+            
+        print(f"Updated manifest.json with version {version}")
+        return True
+        
+    except Exception as e:
+        print(f"Error updating manifest file: {str(e)}")
+        return False
+
+def update_version_file(repo_path, version):
+    """Update version.py in the MCT repository."""
+    version_file = os.path.join(repo_path, "version.py")
+    
+    try:
+        # Get the current commit hash
+        commit_hash = run_command(["git", "rev-parse", "HEAD"], cwd=repo_path)
+        if commit_hash is None:
+            print("Failed to get current commit hash")
+            return False
+            
+        commit_hash = commit_hash.strip()
+        
+        # Create the version file content
+        content = f'''# MCT Version Information
+__version__ = "{version}"
+__commit_hash__ = "{commit_hash}"
+__commit_url__ = "https://github.com/AdvancedVapeSupply/MCT/commit/{commit_hash}"
+'''
+        
+        # Write the version file
+        with open(version_file, 'w') as f:
+            f.write(content)
+            
+        print(f"Updated version.py with version {version}")
+        return True
+        
+    except Exception as e:
+        print(f"Error updating version file: {str(e)}")
+        return False
+
+def print_step(step_number, step_description):
+    """Print a formatted step header."""
+    print(f"\nStep {step_number}: {step_description}")
+    print("=" * (len(step_description) + 8))
 
 print_step(1, "Update version files")
 # Get the version from MCT repository
