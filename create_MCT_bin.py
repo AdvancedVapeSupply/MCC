@@ -883,3 +883,57 @@ else:
     print("Skipping flash process. Use --flash to erase and flash the ESP32-S3.")
 
 print("Script execution completed.")
+
+def create_littlefs_image(image_path, source_dir, size_mb=2):
+    """Create a LittleFS image from the source directory."""
+    print(f"\nCreating LittleFS image: {image_path}")
+    print(f"Size: {size_mb}MB")
+    print(f"Source directory: {source_dir}")
+    
+    # Calculate size in bytes
+    size_bytes = size_mb * 1024 * 1024
+    
+    # Use mklittlefs tool
+    mklfs_cmd = [
+        "mklittlefs",
+        "-c", source_dir,      # source directory
+        "-d", "5",             # debug level
+        "-b", "4096",          # block size
+        "-p", "256",           # page size
+        "-s", str(size_bytes), # filesystem size
+        image_path             # output file
+    ]
+    
+    print(f"Running command: {' '.join(mklfs_cmd)}")
+    if run_command(mklfs_cmd) is None:
+        print("Failed to create LittleFS image")
+        return False
+    
+    # Verify the image was created
+    if not os.path.exists(image_path):
+        print(f"Error: {image_path} was not created")
+        return False
+    
+    print(f"Created LittleFS image: {image_path}")
+    print(f"Size: {os.path.getsize(image_path):,} bytes")
+    return True
+
+def ensure_littlefs_tools():
+    """Ensure mklittlefs tool is available."""
+    # Check if mklittlefs is in PATH
+    if shutil.which("mklittlefs") is None:
+        print("mklittlefs not found. Please install it:")
+        print("brew install mklittlefs")  # for macOS
+        # print("apt-get install mklittlefs")  # for Ubuntu/Debian
+        sys.exit(1)
+
+# Use these functions in your main flow:
+fatfs_image = "mct.bin"  # keep the same name for compatibility
+
+# Ensure tools are available
+ensure_littlefs_tools()
+
+# Create the LittleFS image
+if not create_littlefs_image(fatfs_image, temp_directory):
+    print("Failed to create LittleFS image")
+    sys.exit(1)
