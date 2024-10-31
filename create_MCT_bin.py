@@ -690,26 +690,40 @@ print(f"Number of sectors: {partition_size // SECTOR_SIZE}")
 # Create FAT filesystem
 print("\nCreating FAT filesystem...")
 
-# First create an empty file of the right size
-fatfs_cmd = [
-    "dd",
-    "if=/dev/zero",
-    f"of={fatfs_image}",
-    "bs=1M",
-    "count=2"  # 2MB size
-]
-run_command(fatfs_cmd)
+# Define image size and parameters
+image_size = 2 * 1024 * 1024  # 2MB
+sector_size = 4096
 
-# Then format it as FAT16
-fatfs_cmd = [
-    "mkfs.vfat",  # Use mkfs.vfat instead of mkfs.fat
-    "-F", "16",   # FAT16
-    "-n", "MCT",  # Volume label
-    "-S", "4096", # Sector size
-    "-s", "1",    # Sectors per cluster
-    fatfs_image
+# Create empty image file
+with open(fatfs_image, 'wb') as f:
+    f.write(b'\x00' * image_size)
+
+# Create mtools configuration file
+mtools_conf = f"""
+drive m:
+    file="{fatfs_image}"
+    partition=1
+    offset=0
+    mformat_only
+    sectors={sector_size}
+    fat_bits=16
+"""
+
+with open(".mtoolsrc", "w") as f:
+    f.write(mtools_conf)
+
+# Format the image
+format_cmd = [
+    "mformat",
+    "-i", fatfs_image,
+    "-F",           # FAT16
+    "-h", "1",     # heads
+    "-s", "8",     # sectors per track
+    "-S", str(sector_size),  # sector size
+    "-M", "512",   # media descriptor
+    "::"
 ]
-run_command(fatfs_cmd)
+run_command(format_cmd)
 
 # Create directories first
 print("\nCreating directories...")
@@ -717,6 +731,7 @@ for root, dirs, _ in os.walk(temp_directory):
     for d in dirs:
         src_dir = os.path.join(root, d)
         rel_dir = os.path.relpath(src_dir, temp_directory)
+        rel_dir = rel_dir.replace(os.sep, '/')  # Ensure forward slashes
         mmd_cmd = ["mmd", "-i", fatfs_image, f"::{rel_dir}"]
         run_command(mmd_cmd)
 
@@ -726,12 +741,13 @@ for root, _, files in os.walk(temp_directory):
     for f in files:
         src_file = os.path.join(root, f)
         rel_file = os.path.relpath(src_file, temp_directory)
-        mcopy_cmd = ["mcopy", "-i", fatfs_image, src_file, f"::{rel_file}"]
+        rel_file = rel_file.replace(os.sep, '/')  # Ensure forward slashes
+        mcopy_cmd = ["mcopy", "-i", fatfs_image, "-s", src_file, f"::{rel_file}"]
         run_command(mcopy_cmd)
 
 # Verify the filesystem
 print("\nVerifying filesystem...")
-run_command(["fsck.vfat", "-v", fatfs_image])
+run_command(["mdir", "-i", fatfs_image, "-/", "::"])
 
 # Initialize MTOOLS configuration
 mtools_conf = """
