@@ -932,32 +932,22 @@ else:
 print("Script execution completed.")
 
 def check_mklittlefs_installation():
-    """Check if mklittlefs is installed and available."""
-    try:
-        result = subprocess.run(['mklittlefs', '--version'], 
-                              capture_output=True, 
-                              text=True)
-        return True
-    except FileNotFoundError:
-        print("\nError: mklittlefs tool not found!")
-        print("\nTo install mklittlefs:")
-        print("\n1. For Linux/macOS:")
-        print("   git clone https://github.com/earlephilhower/mklittlefs")
-        print("   cd mklittlefs")
-        print("   make")
-        print("   sudo make install")
-        print("\n2. For Windows:")
-        print("   Download pre-built binary from: https://github.com/earlephilhower/mklittlefs/releases")
-        print("   Add the binary location to your system's PATH")
+    """Check if mklittlefs is available locally."""
+    mklittlefs_path = "./mklittlefs/mklittlefs"
+    if not os.path.exists(mklittlefs_path):
+        print("\nError: mklittlefs binary not found!")
+        print("Please ensure you've built mklittlefs in the ./mklittlefs directory")
         return False
+    return mklittlefs_path
 
 def create_littlefs_image(image_path, source_dir, size_mb=2):
     """Create a LittleFS image from the source directory."""
-    # Check for mklittlefs installation first
-    if not check_mklittlefs_installation():
-        print("\nPlease install mklittlefs and try again.")
+    # Check for mklittlefs binary
+    mklittlefs_path = check_mklittlefs_installation()
+    if not mklittlefs_path:
+        print("\nPlease build mklittlefs and try again.")
         return False
-        
+
     print(f"\nCreating LittleFS image: {image_path}")
     print(f"Size: {size_mb}MB")
     print(f"Source directory: {source_dir}")
