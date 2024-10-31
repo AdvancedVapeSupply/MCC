@@ -514,7 +514,14 @@ def get_mct_version(repo_path):
         print(f"Error reading MCT version: {str(e)}")
         return None
 
+# Verify firmware source exists
+if not os.path.exists(micropython_firmware_source):
+    print(f"Error: MicroPython firmware not found at: {micropython_firmware_source}")
+    sys.exit(1)
+
 # Copy the MicroPython firmware to the current working directory
+print(f"Copying firmware from: {micropython_firmware_source}")
+print(f"Copying firmware to: {micropython_firmware_dest}")
 shutil.copy2(micropython_firmware_source, micropython_firmware_dest)
 
 # Verify the integrity of the copied file
