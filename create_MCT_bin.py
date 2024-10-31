@@ -936,10 +936,10 @@ try:
             "esptool.py",
             "--chip", "esp32s3",
             "--port", esp32_port,
-            "--baud", "115200",
+            "--baud", "460800",  # Updated to higher baud rate
             "--before", "default_reset",
             "--after", "hard_reset",
-            "erase_flash"
+            "erase_region", "0x0", "0x1000000"  # Erase first 16MB
         ]
 
         print("\nErasing flash with command:")
@@ -953,20 +953,19 @@ try:
         print("Waiting for device to stabilize after erase...")
         time.sleep(5)
 
-        # Construct flash command using manifest information
+        # Flash command (no need for --erase-all since we just erased)
         flash_command = [
             "python", "-m", "esptool",
             "--chip", "esp32s3",
             "-p", esp32_port,
-            "-b", "115200",
+            "-b", "460800",  # Updated to higher baud rate
             "--before", "default_reset",
             "--after", "hard_reset",
-            "--no-stub",    # Helps with communication issues
+            "--no-stub",
             "write_flash",
             "--flash_mode", "dio",
             "--flash_size", "16MB",
             "--flash_freq", "40m",
-            "--erase-all",
             "0x0", firmware_dest,
             f"0x{vfs_offset:x}", fatfs_image
         ]
