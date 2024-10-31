@@ -858,10 +858,9 @@ try:
             "--baud", "115200",
             "--before", "default_reset",
             "--after", "hard_reset",
+            "write_flash",  # Operation comes before the flash parameters
             "--flash_mode", "dio",
             "--flash_freq", "80m",
-            "--flash_size", "16MB",
-            "write_flash",
             "--flash-size", "16MB",
             "--verify",
             "-z"  # Compress data
