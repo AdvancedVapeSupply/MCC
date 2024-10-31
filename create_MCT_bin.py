@@ -515,7 +515,7 @@ def get_mct_version(repo_path):
         return None
 
 # Define the firmware paths
-LVGL_MICROPYTHON_DIR = "../lvgl_micropython/build"
+LVGL_MICROPYTHON_DIR = "../lvgl_micropython"
 FIRMWARE_FILENAME = "lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin"
 firmware_source = os.path.join(LVGL_MICROPYTHON_DIR, "build", FIRMWARE_FILENAME)
 firmware_dest = FIRMWARE_FILENAME
