@@ -895,52 +895,100 @@ try:
         print_step(8, "Flash ESP32-S3")
         print("Attempting to flash the ESP32-S3...")
 
+        # Read manifest.json
+        manifest = read_manifest()
+        if not manifest:
+            print("Failed to read manifest.json")
+            sys.exit(1)
+
+        # Get flash parts from manifest
+        flash_parts = manifest['builds'][0]['parts']
+        
         esp32_port = find_esp32_port()
         if esp32_port is None:
             print("Error: No ESP32-S3 device found. Please check the connection.")
             sys.exit(1)
 
-        print(f"Using ESP32-S3 port: {esp32_port}")
+        print(f"Found ESP32-S3 port: {esp32_port}")
+        
+        # Verify all files exist before starting
+        print("\nVerifying files from manifest:")
+        for part in flash_parts:
+            file_path = part['path']
+            if not os.path.exists(file_path):
+                print(f"Error: File not found: {file_path}")
+                sys.exit(1)
+            print(f"Found {file_path} ({os.path.getsize(file_path):,} bytes)")
+            print(f"Flash offset: 0x{part['offset']:x}")
 
-        # Erase flash
+        # Erase flash with verbose output
         erase_command = [
             "esptool.py",
             "--chip", "esp32s3",
             "--port", esp32_port,
             "--baud", "115200",
+            "--before", "default_reset",
+            "--after", "hard_reset",
             "erase_flash"
         ]
 
-        print("Erasing flash...")
+        print("\nErasing flash with command:")
+        print(" ".join(erase_command))
         result = run_command(erase_command)
         if result is None:
             print("Failed to erase flash. Aborting.")
             sys.exit(1)
 
-        # Wait a moment after erasing
-        time.sleep(2)
+        # Wait longer after erasing
+        print("Waiting for device to stabilize after erase...")
+        time.sleep(5)
 
-        # Flash firmware and MCT image
+        # Construct flash command using manifest information
         flash_command = [
             "esptool.py",
             "--chip", "esp32s3",
             "--port", esp32_port,
             "--baud", "115200",
+            "--before", "default_reset",
+            "--after", "hard_reset",
+            "--flash_mode", "dio",
+            "--flash_freq", "80m",
+            "--flash_size", "16MB",
             "write_flash",
-            "-z",
-            "0x0", micropython_firmware_dest,
-            f"0x{vfs_offset:x}", fatfs_image
+            "--flash-size", "16MB",
+            "--verify",
+            "-z"  # Compress data
         ]
+        
+        # Add each part from manifest to flash command
+        for part in flash_parts:
+            flash_command.extend([f"0x{part['offset']:x}", part['path']])
 
-        print("Flashing firmware and MCT image...")
+        print("\nFlashing files with command:")
+        print(" ".join(flash_command))
+        
+        # Calculate and display MD5 hashes
+        print("\nFile checksums:")
+        for part in flash_parts:
+            file_md5 = calculate_md5(part['path'])
+            print(f"{part['path']}: {file_md5}")
+
+        print("\nStarting flash process...")
         result = run_command(flash_command)
         if result is None:
             print("Failed to flash the device. Aborting.")
             sys.exit(1)
 
-        print("ESP32-S3 flashing process completed successfully.")
-    else:
-        print("Skipping flash process. Use --flash to erase and flash the ESP32-S3.")
+        print("\nWaiting for device to reset...")
+        time.sleep(3)
+
+        print("\nFlash completed successfully!")
+        print("Please check the device for proper operation.")
+        print("\nIf you still get filesystem errors, try these troubleshooting steps:")
+        print("1. Use a shorter/better quality USB cable")
+        print("2. Try a different USB port")
+        print("3. Reduce the baud rate to 115200")
+        print("4. Manually power cycle the device after flashing")
 
 finally:
     # Clean up
@@ -948,3 +996,22 @@ finally:
     print(f"Removed temporary directory: {temp_directory}")
 
 print("Script execution completed.")
+
+def read_manifest():
+    """Read and parse the manifest.json file."""
+    try:
+        with open('manifest.json', 'r') as f:
+            manifest = json.load(f)
+            
+        # Validate manifest structure
+        if not manifest.get('builds') or not manifest['builds'][0].get('parts'):
+            print("Error: Invalid manifest.json structure")
+            return None
+            
+        print("\nManifest information:")
+        print(f"Name: {manifest.get('name')}")
+        print(f"Version: {manifest.get('version')}")
+        return manifest
+    except Exception as e:
+        print(f"Error reading manifest.json: {e}")
+        return None
