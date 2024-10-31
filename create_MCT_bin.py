@@ -514,6 +514,23 @@ def get_mct_version(repo_path):
         print(f"Error reading MCT version: {str(e)}")
         return None
 
+# Define the firmware paths
+LVGL_MICROPYTHON_DIR = "../lvgl_micropython"
+FIRMWARE_FILENAME = "lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin"
+firmware_path = os.path.join(LVGL_MICROPYTHON_DIR, "build", FIRMWARE_FILENAME)
+
+def verify_firmware():
+    """Verify the firmware file exists."""
+    if not os.path.exists(firmware_path):
+        print(f"Error: Firmware not found at: {firmware_path}")
+        print(f"Please ensure firmware exists in: {os.path.dirname(firmware_path)}")
+        print(f"Current directory: {os.getcwd()}")
+        return False
+    
+    print(f"Found firmware: {firmware_path}")
+    print(f"Size: {os.path.getsize(firmware_path):,} bytes")
+    return True
+
 # Verify firmware source exists
 if not os.path.exists(micropython_firmware_source):
     print(f"Error: MicroPython firmware not found at: {micropython_firmware_source}")
