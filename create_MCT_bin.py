@@ -687,29 +687,51 @@ print(f"Partition size: {partition_size:,} bytes")
 print(f"Sector size: {SECTOR_SIZE:,} bytes")
 print(f"Number of sectors: {partition_size // SECTOR_SIZE}")
 
-# Create empty image file
+# Create FAT filesystem
+print("\nCreating FAT filesystem...")
+
+# First create an empty file of the right size
 fatfs_cmd = [
-    "dd", 
-    f"if=/dev/zero", 
-    f"of={fatfs_image}", 
-    f"bs={SECTOR_SIZE}", 
-    f"count={partition_size // SECTOR_SIZE}"
+    "dd",
+    "if=/dev/zero",
+    f"of={fatfs_image}",
+    "bs=1M",
+    "count=2"  # 2MB size
 ]
-print(f"Running command: {' '.join(fatfs_cmd)}")
 run_command(fatfs_cmd)
 
-# Format as FAT16 with specific parameters for ESP32
+# Then format it as FAT16
 fatfs_cmd = [
-    "mkfs.fat",
-    "-F", "16",            # FAT16
-    "-S", str(SECTOR_SIZE),  # Sector size
-    "-s", "1",             # Sectors per cluster
-    "-R", "512",           # Reserved sectors
-    "-n", "MCT",           # Volume name
+    "mkfs.vfat",  # Use mkfs.vfat instead of mkfs.fat
+    "-F", "16",   # FAT16
+    "-n", "MCT",  # Volume label
+    "-S", "4096", # Sector size
+    "-s", "1",    # Sectors per cluster
     fatfs_image
 ]
-print(f"Running command: {' '.join(fatfs_cmd)}")
 run_command(fatfs_cmd)
+
+# Create directories first
+print("\nCreating directories...")
+for root, dirs, _ in os.walk(temp_directory):
+    for d in dirs:
+        src_dir = os.path.join(root, d)
+        rel_dir = os.path.relpath(src_dir, temp_directory)
+        mmd_cmd = ["mmd", "-i", fatfs_image, f"::{rel_dir}"]
+        run_command(mmd_cmd)
+
+# Then copy files
+print("\nCopying files...")
+for root, _, files in os.walk(temp_directory):
+    for f in files:
+        src_file = os.path.join(root, f)
+        rel_file = os.path.relpath(src_file, temp_directory)
+        mcopy_cmd = ["mcopy", "-i", fatfs_image, src_file, f"::{rel_file}"]
+        run_command(mcopy_cmd)
+
+# Verify the filesystem
+print("\nVerifying filesystem...")
+run_command(["fsck.vfat", "-v", fatfs_image])
 
 # Initialize MTOOLS configuration
 mtools_conf = """
@@ -720,29 +742,6 @@ drive m:
 """
 with open(".mtoolsrc", "w") as f:
     f.write(mtools_conf)
-
-# Copy files using mcopy with verbose output
-print("\nCopying files to FAT image:")
-for root, dirs, files in os.walk(temp_directory):
-    for dir in dirs:
-        rel_path = os.path.relpath(os.path.join(root, dir), temp_directory)
-        print(f"Creating directory: {rel_path}")
-        run_command(["mmd", "-i", fatfs_image, f"::{rel_path}"])
-    for file in files:
-        src_path = os.path.join(root, file)
-        rel_path = os.path.relpath(src_path, temp_directory)
-        print(f"Copying file: {rel_path}")
-        run_command(["mcopy", "-i", fatfs_image, "-s", src_path, f"::{rel_path}"])
-
-# Verify the filesystem
-print("\nVerifying filesystem:")
-verify_cmd = ["fsck.fat", "-v", fatfs_image]
-run_command(verify_cmd)
-
-# Print filesystem info
-print("\nFilesystem information:")
-info_cmd = ["file", fatfs_image]
-run_command(info_cmd)
 
 # Create and write the manifest file with the correct format
 manifest_data = {
