@@ -203,52 +203,85 @@ def ensure_on_main_branch(repo_path):
         return False
     
 def commit_and_push(repo_path, version, add_new_files=False):
+    """Commit and push changes to the repository."""
     print(f"\nCommitting changes in {repo_path}")
     
-    # Ensure we're on the main branch
-    ensure_on_main_branch(repo_path)
-    
-    # Always stage changes
-    print("Staging changes...")
-    if add_new_files:
-        stage_command = ["git", "add", "-A"]
-    else:
-        stage_command = ["git", "add", "-u"]
-    
-    stage_result = run_command(stage_command, cwd=repo_path)
-    if stage_result is None:
-        print("Failed to stage changes")
-        return False
-    
-    # Check if there are changes to commit
-    status = run_command(["git", "status", "--porcelain"], cwd=repo_path)
-    if status is None:
-        print("Failed to get Git status")
-        return False
-    
-    if status.strip():
-        try:
+    try:
+        # Get current branch
+        current = subprocess.run(
+            ["git", "branch", "--show-current"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=True
+        ).stdout.strip()
+        
+        if current != "main":
+            print(f"Switching to main branch from {current}")
+            subprocess.run(
+                ["git", "checkout", "main"],
+                cwd=repo_path,
+                check=True
+            )
+            
+        # Pull latest changes
+        subprocess.run(
+            ["git", "pull", "origin", "main"],
+            cwd=repo_path,
+            check=True
+        )
+        
+        # Stage changes
+        print("Staging changes...")
+        if add_new_files:
+            stage_command = ["git", "add", "-A"]
+        else:
+            stage_command = ["git", "add", "-u"]
+            
+        subprocess.run(stage_command, cwd=repo_path, check=True)
+        
+        # Check if there are changes to commit
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=True
+        ).stdout.strip()
+        
+        if status:
+            print("Changes detected:")
+            print(status)
+            
+            # Commit changes
             print("Committing changes...")
             commit_message = f"v{version}"
-            commit_result = run_command(["git", "commit", "-m", commit_message], cwd=repo_path)
-            if commit_result is None:
-                print(f"Failed to commit changes in {repo_path}")
-                return False
+            subprocess.run(
+                ["git", "commit", "-m", commit_message],
+                cwd=repo_path,
+                check=True
+            )
             
+            # Push changes
             print("Pushing changes...")
-            push_result = run_command(["git", "push", "origin", "main"], cwd=repo_path)
-            if push_result is None:
-                print(f"Failed to push changes to remote repository")
-                return False
+            subprocess.run(
+                ["git", "push", "origin", "main"],
+                cwd=repo_path,
+                check=True
+            )
             
             print(f"Successfully committed and pushed changes in {repo_path}")
             return True
-        except Exception as e:
-            print(f"Error during Git operations: {str(e)}")
-            return False
-    else:
-        print(f"No changes detected in {repo_path}")
-        return True
+        else:
+            print(f"No changes detected in {repo_path}")
+            return True
+            
+    except subprocess.CalledProcessError as e:
+        print(f"Git command failed: {e}")
+        return False
+    except Exception as e:
+        print(f"Error during Git operations: {str(e)}")
+        return False
 
 # Define the paths
 mct_repo_url = "https://github.com/AdvancedVapeSupply/MCT"
@@ -445,18 +478,29 @@ output_size = (output_size // SECTOR_SIZE) * SECTOR_SIZE
 def run_command(command, cwd=None):
     """Run a command and return its output."""
     try:
-        result = subprocess.run(
+        # Execute command and capture output
+        process = subprocess.run(
             command,
             cwd=cwd,
-            check=True,
-            capture_output=True,
-            text=True
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False  # Don't raise exception on non-zero exit
         )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed with error: {e}")
-        print(f"Error output: {e.stderr}")
-        return None
+        
+        # Print output in real-time
+        if process.stdout:
+            print(process.stdout.strip())
+        if process.stderr:
+            print(process.stderr.strip())
+        
+        # Check return code
+        if process.returncode != 0:
+            print(f"Command failed with return code: {process.returncode}")
+            return None
+            
+        return process.stdout
+        
     except Exception as e:
         print(f"Error running command: {str(e)}")
         return None
@@ -540,12 +584,14 @@ def update_version_file(repo_path, version):
     
     try:
         # Get the current commit hash
-        commit_hash = run_command(["git", "rev-parse", "HEAD"], cwd=repo_path)
-        if commit_hash is None:
-            print("Failed to get current commit hash")
-            return False
-            
-        commit_hash = commit_hash.strip()
+        process = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        commit_hash = process.stdout.strip()
         
         # Create the version file content
         content = f'''# MCT Version Information
@@ -559,8 +605,12 @@ __commit_url__ = "https://github.com/AdvancedVapeSupply/MCT/commit/{commit_hash}
             f.write(content)
             
         print(f"Updated version.py with version {version}")
+        print(f"Commit hash: {commit_hash}")
         return True
         
+    except subprocess.CalledProcessError as e:
+        print(f"Error getting git commit hash: {e}")
+        return False
     except Exception as e:
         print(f"Error updating version file: {str(e)}")
         return False
