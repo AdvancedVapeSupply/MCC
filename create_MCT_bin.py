@@ -942,26 +942,23 @@ def check_mklittlefs_installation():
 
 def create_littlefs_image(image_path, source_dir, size_mb=2):
     """Create a LittleFS image from the source directory."""
-    # Check for mklittlefs binary
-    mklittlefs_path = check_mklittlefs_installation()
-    if not mklittlefs_path:
-        print("\nPlease build mklittlefs and try again.")
+    # Get absolute path to mklittlefs binary
+    mklittlefs_path = os.path.abspath("./mklittlefs/mklittlefs")
+    if not os.path.exists(mklittlefs_path):
+        print(f"\nError: mklittlefs binary not found at {mklittlefs_path}!")
+        print("Please ensure you've built mklittlefs in the ./mklittlefs directory")
         return False
-
+        
     print(f"\nCreating LittleFS image: {image_path}")
     print(f"Size: {size_mb}MB")
     print(f"Source directory: {source_dir}")
     
-    # Print directory contents before copying
-    print("\nFiles to be copied:")
-    print_directory_with_sizes(source_dir)
-    
     # Calculate size in bytes
     size_bytes = size_mb * 1024 * 1024
     
-    # Use mklittlefs tool to create image and copy files
+    # Use absolute path to mklittlefs binary
     mklfs_cmd = [
-        "mklittlefs",
+        mklittlefs_path,  # Use full path to binary
         "-c", source_dir,      # source directory
         "-d", "5",             # debug level
         "-b", "4096",          # block size
