@@ -861,7 +861,7 @@ try:
             "write_flash",
             "--flash_mode", "dio",
             "--flash_freq", "80m",
-            "--flash-size", "16MB",
+            "--flash-size", "16",
             "--verify",
             "--compress"
         ]
