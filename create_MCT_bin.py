@@ -46,6 +46,13 @@ import tempfile
 import requests
 from typing import Optional
 
+# Argument parsing
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='Create and flash MCT filesystem image')
+    parser.add_argument('--flash', action='store_true', help='Flash the device after creating the image')
+    return parser.parse_args()
+
 # Filesystem functions
 def create_littlefs_image(image_path, source_dir, size_mb=2):
     """Create a LittleFS image from the source directory."""
