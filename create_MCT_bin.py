@@ -46,6 +46,11 @@ import tempfile
 import requests
 from typing import Optional
 
+# Define paths
+MPY_DIR = os.path.abspath("../lvgl_micropython")
+MCT_DIR = os.path.abspath("../MCT")
+mct_path = MCT_DIR  # This is what was missing
+
 # Argument parsing
 def parse_arguments():
     """Parse command line arguments."""
@@ -171,6 +176,32 @@ def create_filesystem_image(image_path, source_dir, size_mb=2):
     return create_fat_image(image_path, source_dir, size_mb)
 
 # Git functions
+def ensure_on_main_branch(repo_path):
+    """Ensure we're on the main branch and it's up to date."""
+    try:
+        # Check current branch
+        current = run_command(["git", "branch", "--show-current"], cwd=repo_path)
+        if current is None:
+            print("Failed to get current branch")
+            return False
+            
+        if current.strip() != "main":
+            print(f"Switching to main branch from {current}")
+            if run_command(["git", "checkout", "main"], cwd=repo_path) is None:
+                print("Failed to switch to main branch")
+                return False
+                
+        # Pull latest changes
+        if run_command(["git", "pull", "origin", "main"], cwd=repo_path) is None:
+            print("Failed to pull latest changes")
+            return False
+            
+        return True
+        
+    except Exception as e:
+        print(f"Error ensuring main branch: {str(e)}")
+        return False
+    
 def commit_and_push(repo_path, version, add_new_files=False):
     print(f"\nCommitting changes in {repo_path}")
     
@@ -231,6 +262,37 @@ micropython_firmware_dest = "lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin"
 # Path to fatfsgen.py (now in fatfs directory)
 fatfsgen_script = "fatfs/fatfsgen.py"
 
+def read_manifest():
+    """Read and parse the manifest.json file."""
+    try:
+        with open('manifest.json', 'r') as f:
+            manifest = json.load(f)
+            
+        # Validate manifest structure
+        if not manifest.get('builds') or not manifest['builds'][0].get('parts'):
+            print("Error: Invalid manifest.json structure")
+            return None
+            
+        print("\nManifest information:")
+        print(f"Name: {manifest.get('name')}")
+        print(f"Version: {manifest.get('version')}")
+        
+        # Print parts information
+        print("\nFlash parts:")
+        for part in manifest['builds'][0]['parts']:
+            print(f"  {part['path']} at offset 0x{part['offset']:x}")
+            
+        return manifest
+    except FileNotFoundError:
+        print("Error: manifest.json not found")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON in manifest.json: {e}")
+        return None
+    except Exception as e:
+        print(f"Error reading manifest.json: {e}")
+        return None
+
 def calculate_md5(filename):
     """Calculate MD5 hash of a file."""
     hash_md5 = hashlib.md5()
@@ -239,329 +301,38 @@ def calculate_md5(filename):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
-def parse_partition_table(firmware_file):
+def get_partition_info(firmware_path: str) -> Optional[tuple]:
+    """Get the offset and size of the VFS partition from the partition table."""
     try:
-        print("\nAttempting to read partition table from firmware...")
-        
-        # Read the partition table from offset 0x8000
-        with open(firmware_file, 'rb') as f:
-            f.seek(0x8000)
+        with open(firmware_path, 'rb') as f:
+            f.seek(0x8000)  # Partition table offset
             partition_data = f.read(0x1000)  # Read 4KB partition table
             
-        # Print raw partition data in hex
-        print("\nPartition Table Raw Data (first 64 bytes):")
-        print(' '.join(f'{b:02x}' for b in partition_data[:64]))
-        
-        result = subprocess.run(
-            ["esptool.py", "image_info", firmware_file],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        print("\nFirmware Image Info:")
-        print(result.stdout)
-        
-        # Try to parse partition entries
-        print("\nAttempting to parse partition entries:")
-        offset = 0
-        while offset < len(partition_data):
-            entry = partition_data[offset:offset + 32]  # Each partition entry is 32 bytes
-            if all(b == 0xFF for b in entry):  # Check if entry is empty
-                break
+            offset = 0
+            while offset < 0x1000 - 32:  # 32 bytes per entry
+                entry_data = partition_data[offset:offset + 32]
+                if entry_data[0:2] != b'\xaa\x50':  # Check magic number
+                    break
+                    
+                # Parse entry fields
+                type_val = entry_data[2]
+                subtype = entry_data[3]
+                part_offset = int.from_bytes(entry_data[4:8], 'little')
+                part_size = int.from_bytes(entry_data[8:12], 'little')
+                name = entry_data[12:28].split(b'\x00')[0].decode('ascii')
                 
-            name = entry[0:16].split(b'\x00')[0].decode('utf-8')
-            type_val = int.from_bytes(entry[16:17], 'little')
-            subtype = int.from_bytes(entry[17:18], 'little')
-            offset_val = int.from_bytes(entry[18:22], 'little')
-            size = int.from_bytes(entry[22:26], 'little')
-            
-            print(f"Partition: {name}")
-            print(f"  Type: {type_val}")
-            print(f"  Subtype: {subtype}")
-            print(f"  Offset: 0x{offset_val:x}")
-            print(f"  Size: 0x{size:x}")
-            print()
-            
-            if name.lower() == "vfs":
-                return offset_val
-                
-            offset += 32
-            
-        print("Warning: 'vfs' partition not found in the partition table.")
+                # Check if this is the VFS partition
+                if name == "vfs":
+                    print(f"Found VFS partition:")
+                    print(f"  Offset: 0x{part_offset:x}")
+                    print(f"  Size: {part_size:,} bytes ({part_size / 1024 / 1024:.2f}MB)")
+                    return (part_offset, part_size)
+                    
+                offset += 32
+        
         return None
     except Exception as e:
-        print(f"Error parsing partition table: {e}")
-        return None
-
-def get_next_aligned_address(address, alignment=0x1000):
-    return math.ceil(address / alignment) * alignment
-
-def get_directory_size(path):
-    total_size = 0
-    for dirpath, dirnames, filenames in os.walk(path):
-        # Remove unwanted directories
-        dirnames[:] = [d for d in dirnames if not d.startswith('.') and '__' not in d]
-        for f in filenames:
-            if not f.startswith('.') and '__' not in f:
-                fp = os.path.join(dirpath, f)
-                total_size += os.path.getsize(fp)
-    return total_size
-
-def clean_directory(temp_directory, mct_repo_path):
-    print(f"Copying files from {mct_repo_path} to {temp_directory}")
-    shutil.copytree(mct_repo_path, temp_directory, dirs_exist_ok=True)
-    
-    for root, dirs, files in os.walk(temp_directory, topdown=False):
-        # Remove unwanted directories
-        for d in dirs:
-            if d.startswith('.') or d in ['__pycache__', '.vscode', '.idea', '.git']:
-                dir_path = os.path.join(root, d)
-                print(f"Removing directory: {dir_path}")
-                shutil.rmtree(dir_path, ignore_errors=True)
-        
-        # Remove unwanted files
-        for file in files:
-            if (file.startswith('.') or 
-                file.endswith('.pyc') or 
-                file in ['pymakr.conf', 'MCT.code-workspace', 'make_fonts.sh', 'README.md']):
-                file_path = os.path.join(root, file)
-                print(f"Removing file: {file_path}")
-                os.remove(file_path)
-
-    # Remove empty directories
-    for root, dirs, files in os.walk(temp_directory, topdown=False):
-        for d in dirs:
-            dir_path = os.path.join(root, d)
-            if not os.listdir(dir_path):
-                print(f"Removing empty directory: {dir_path}")
-                os.rmdir(dir_path)
-
-def print_directory_structure(startpath):
-    for root, dirs, files in os.walk(startpath):
-        level = root.replace(startpath, '').count(os.sep)
-        indent = ' ' * 4 * (level)
-        print(f'{indent}{os.path.basename(root)}/')
-        subindent = ' ' * 4 * (level + 1)
-        for f in files:
-            print(f'{subindent}{f}')
-
-def print_directory_with_sizes(startpath):
-    for root, dirs, files in os.walk(startpath):
-        level = root.replace(startpath, '').count(os.sep)
-        indent = ' ' * 4 * (level)
-        print(f'{indent}{os.path.basename(root)}/')
-        subindent = ' ' * 4 * (level + 1)
-        for f in files:
-            file_path = os.path.join(root, f)
-            file_size = os.path.getsize(file_path)
-            print(f'{subindent}{f} ({file_size} bytes)')
-
-def print_directory_with_details(startpath):
-    for root, dirs, files in os.walk(startpath):
-        level = root.replace(startpath, '').count(os.sep)
-        indent = ' ' * 4 * (level)
-        print(f'{indent}{os.path.basename(root)}/')
-        subindent = ' ' * 4 * (level + 1)
-        for f in files:
-            file_path = os.path.join(root, f)
-            file_size = os.path.getsize(file_path)
-            print(f'{subindent}{f} ({file_size} bytes)')
-
-def ensure_on_main_branch(repo_path):
-    print(f"\nEnsuring we're on the main branch in {repo_path}")
-    
-    # Check current branch
-    current_branch = run_command(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_path)
-    if current_branch is None:
-        print("Failed to get current branch")
-        sys.exit(1)
-    
-    if current_branch == "HEAD":
-        print("Currently in detached HEAD state. Attempting to switch to main branch.")
-        if run_command(["git", "checkout", "main"], cwd=repo_path) is None:
-            print("Failed to switch to main branch")
-            sys.exit(1)
-    elif current_branch != "main":
-        print(f"Currently on branch {current_branch}. Switching to main branch.")
-        if run_command(["git", "checkout", "main"], cwd=repo_path) is None:
-            print("Failed to switch to main branch")
-            sys.exit(1)
-    
-    # Ensure we're up to date with origin/main
-    if run_command(["git", "pull", "origin", "main"], cwd=repo_path) is None:
-        print("Failed to pull latest changes from origin/main")
-        sys.exit(1)
-    
-    print("Successfully ensured we're on the up-to-date main branch")
-
-def validate_version_file(repo_path):
-    version_file = os.path.join(repo_path, "version.py")
-    
-    if not os.path.exists(version_file):
-        print(f"Error: version.py not found in {repo_path}")
-        return False
-    
-    with open(version_file, 'r') as f:
-        content = f.read()
-    
-    if '__version__' not in content or '__commit_url__' not in content:
-        print(f"Error: version.py in {repo_path} is missing required variables")
-        return False
-    
-    return True
-
-def validate_manifest_file(current_dir):
-    manifest_file = os.path.join(current_dir, "manifest.json")
-    
-    if not os.path.exists(manifest_file):
-        print(f"Error: manifest.json not found in {current_dir}")
-        return False
-    
-    return True
-
-def read_fat_image(image_path):
-    validation_errors = []
-    problem_files = {
-        'length': [],
-        'special_chars': [],
-        'lowercase': []
-    }
-    
-    def clean_filename(raw_name):
-        """Clean the filename by removing null bytes and padding"""
-        # Remove common FAT padding and special characters
-        clean = raw_name.rstrip(b'\x00\xff\xe5\x05\x20'.decode('latin1'))
-        return ''.join(char for char in clean if char.isprintable())
-    
-    with open(image_path, 'rb') as f:
-        # Read the boot sector
-        boot_sector = f.read(512)
-        
-        # Extract basic information
-        bytes_per_sector = struct.unpack('<H', boot_sector[11:13])[0]
-        sectors_per_cluster = struct.unpack('<B', boot_sector[13:14])[0]
-        reserved_sectors = struct.unpack('<H', boot_sector[14:16])[0]
-        number_of_fats = struct.unpack('<B', boot_sector[16:17])[0]
-        root_entries = struct.unpack('<H', boot_sector[17:19])[0]
-        total_sectors = struct.unpack('<H', boot_sector[19:21])[0]
-        if total_sectors == 0:
-            total_sectors = struct.unpack('<I', boot_sector[32:36])[0]
-        fat_size = struct.unpack('<H', boot_sector[22:24])[0]
-        
-        print("\nFAT Filesystem Information:")
-        print(f"Bytes per sector: {bytes_per_sector}")
-        print(f"Sectors per cluster: {sectors_per_cluster}")
-        print(f"Reserved sectors: {reserved_sectors}")
-        print(f"Number of FATs: {number_of_fats}")
-        print(f"Root entries: {root_entries}")
-        print(f"Total sectors: {total_sectors}")
-        print(f"FAT size (sectors): {fat_size}")
-        
-        # Read the root directory
-        root_dir_sectors = ((root_entries * 32) + (bytes_per_sector - 1)) // bytes_per_sector
-        root_dir_offset = (reserved_sectors + number_of_fats * fat_size) * bytes_per_sector
-        f.seek(root_dir_offset)
-        
-        print("\nRoot directory structure:")
-        print("Format: [Filename] (Length) <Attributes> {LFN Status}")
-        
-        # Keep track of long filename parts
-        lfn_parts = []
-        total_files = 0
-        max_filename_length = 0
-        has_lowercase = False
-        has_special_chars = False
-        
-        for i in range(root_entries):
-            entry = f.read(32)
-            if entry[0] == 0:  # End of directory
-                break
-                
-            if entry[0] == 0xE5:  # Deleted entry
-                continue
-                
-            attributes = entry[11]
-            if attributes == 0x0F:  # Long filename entry
-                # Extract LFN part
-                lfn_order = entry[0] & 0x3F
-                lfn_part = entry[1:11].decode('utf-16le', errors='replace') + \
-                          entry[14:26].decode('utf-16le', errors='replace') + \
-                          entry[28:32].decode('utf-16le', errors='replace')
-                lfn_parts.insert(0, lfn_part.rstrip('\x00'))
-            else:
-                # Regular entry
-                short_name = decode_short_filename(entry[:8])
-                short_ext = decode_short_filename(entry[8:11])
-                
-                # Check for lowercase flags
-                case_flag = entry[12]
-                name_is_lowercase = case_flag & 0x08
-                ext_is_lowercase = case_flag & 0x10
-                
-                if name_is_lowercase or ext_is_lowercase:
-                    has_lowercase = True
-                
-                # Construct filename
-                if lfn_parts:
-                    filename = ''.join(lfn_parts)
-                    lfn_status = "Using LFN"
-                else:
-                    if short_ext:
-                        filename = f"{short_name}.{short_ext}"
-                    else:
-                        filename = short_name
-                    lfn_status = "Short name only"
-                
-                # Check for special characters
-                if any(c in filename for c in ' -_@#$%^&()[]{}'):
-                    has_special_chars = True
-                
-                # Update statistics
-                total_files += 1
-                max_filename_length = max(max_filename_length, len(filename))
-                
-                # Print entry details
-                attr_str = []
-                if attributes & 0x01: attr_str.append("RO")
-                if attributes & 0x02: attr_str.append("HID")
-                if attributes & 0x04: attr_str.append("SYS")
-                if attributes & 0x08: attr_str.append("VOL")
-                if attributes & 0x10: attr_str.append("DIR")
-                if attributes & 0x20: attr_str.append("ARC")
-                
-                print(f"  [{filename}] ({len(filename)}) <{','.join(attr_str)}> {{{lfn_status}}}")
-                
-                # Clear LFN parts for next entry
-                lfn_parts = []
-        
-        print("\nFilesystem Analysis:")
-        print(f"Total files/directories: {total_files}")
-        print(f"Maximum filename length: {max_filename_length}")
-        print(f"Lowercase support: {'Yes' if has_lowercase else 'No'}")
-        print(f"Special characters: {'Yes' if has_special_chars else 'No'}")
-        
-        # Convert warnings to errors
-        if max_filename_length > 8:
-            validation_errors.append("ERROR: Some filenames exceed 8.3 format length")
-        if has_lowercase and not has_special_chars:
-            validation_errors.append("ERROR: Lowercase characters detected but case preservation not enabled")
-        if has_special_chars:
-            validation_errors.append("ERROR: Special characters detected in filenames")
-        
-
-def decode_short_filename(name_bytes):
-    # Decode the short filename, preserving case and handling special characters
-    name = ''.join(chr(b) if 32 <= b <= 126 else '_' for b in name_bytes)
-    return name.rstrip(' ')
-
-def get_mct_version(repo_path):
-    try:
-        with open(os.path.join(repo_path, "version.py"), 'r') as f:
-            content = f.read()
-        exec(content, globals())
-        return globals()['__version__']
-    except Exception as e:
-        print(f"Error reading MCT version: {str(e)}")
+        print(f"Error reading partition table: {e}")
         return None
 
 # Define the firmware paths
@@ -649,41 +420,6 @@ if source_md5 != dest_md5:
 print("MicroPython firmware copied successfully and verified.")
 
 # Parse the partition table to get the VFS offset
-def get_partition_info(firmware_path: str) -> Optional[tuple]:
-    """Get the offset and size of the VFS partition from the partition table."""
-    try:
-        with open(firmware_path, 'rb') as f:
-            f.seek(0x8000)  # Partition table offset
-            partition_data = f.read(0x1000)  # Read 4KB partition table
-            
-            offset = 0
-            while offset < 0x1000 - 32:  # 32 bytes per entry
-                entry_data = partition_data[offset:offset + 32]
-                if entry_data[0:2] != b'\xaa\x50':  # Check magic number
-                    break
-                    
-                # Parse entry fields
-                type_val = entry_data[2]
-                subtype = entry_data[3]
-                part_offset = int.from_bytes(entry_data[4:8], 'little')
-                part_size = int.from_bytes(entry_data[8:12], 'little')
-                name = entry_data[12:28].split(b'\x00')[0].decode('ascii')
-                
-                # Check if this is the VFS partition
-                if name == "vfs":
-                    print(f"Found VFS partition:")
-                    print(f"  Offset: 0x{part_offset:x}")
-                    print(f"  Size: {part_size:,} bytes ({part_size / 1024 / 1024:.2f}MB)")
-                    return (part_offset, part_size)
-                    
-                offset += 32
-        
-        return None
-    except Exception as e:
-        print(f"Error reading partition table: {e}")
-        return None
-
-# Replace the current VFS offset calculation with:
 partition_info = get_partition_info(micropython_firmware_dest)
 if partition_info is None:
     print("Failed to find VFS partition information")
@@ -763,6 +499,41 @@ def update_manifest(directory, version, vfs_offset):
         print(f"Error updating manifest file: {str(e)}")
         return False
 
+def get_mct_version(mct_path):
+    """Get the version from MCT repository."""
+    try:
+        # First try to get version from version.py
+        version_file = os.path.join(mct_path, "frozen", "version.py")
+        if os.path.exists(version_file):
+            # Create a temporary module namespace
+            version_namespace = {}
+            with open(version_file, 'r') as f:
+                exec(f.read(), version_namespace)
+            if 'AVSMCT_VERSION' in version_namespace:
+                return version_namespace['AVSMCT_VERSION']
+
+        # If version.py doesn't exist or doesn't contain version,
+        # generate a timestamp-based version
+        now = datetime.now()
+        version = f"0.2.{now.strftime('%Y%m%d_%H%M')}"
+        print(f"Generated new version: {version}")
+        return version
+
+    except Exception as e:
+        print(f"Error getting MCT version: {str(e)}")
+        print("Falling back to timestamp-based version")
+        now = datetime.now()
+        version = f"0.2.{now.strftime('%Y%m%d_%H%M')}"
+        print(f"Generated new version: {version}")
+        return version
+
+# Add path validation
+if not os.path.exists(MCT_DIR):
+    print(f"Error: MCT directory not found at {MCT_DIR}")
+    print("Please ensure the MCT repository is cloned at the correct location")
+    sys.exit(1)
+
+print(f"Using MCT directory: {MCT_DIR}")
 def update_version_file(repo_path, version):
     """Update version.py in the MCT repository."""
     version_file = os.path.join(repo_path, "version.py")
@@ -793,19 +564,154 @@ __commit_url__ = "https://github.com/AdvancedVapeSupply/MCT/commit/{commit_hash}
     except Exception as e:
         print(f"Error updating version file: {str(e)}")
         return False
+    
+def validate_version_file(repo_path):
+    """Validate version.py exists and has required content."""
+    version_file = os.path.join(repo_path, "version.py")
+    
+    try:
+        if not os.path.exists(version_file):
+            print(f"Error: version.py not found in {repo_path}")
+            return False
+            
+        # Read and validate file content
+        with open(version_file, 'r') as f:
+            content = f.read()
+            
+        # Check for required variables
+        if '__version__' not in content:
+            print("Error: __version__ not found in version.py")
+            return False
+            
+        if '__commit_hash__' not in content:
+            print("Error: __commit_hash__ not found in version.py")
+            return False
+            
+        print(f"Version file validated: {version_file}")
+        return True
+        
+    except Exception as e:
+        print(f"Error validating version file: {str(e)}")
+        return False
+
+def validate_manifest_file(directory):
+    """Validate manifest.json exists and has required structure."""
+    manifest_path = os.path.join(directory, "manifest.json")
+    
+    try:
+        if not os.path.exists(manifest_path):
+            print(f"Error: manifest.json not found in {directory}")
+            return False
+            
+        # Read and parse manifest
+        with open(manifest_path, 'r') as f:
+            manifest = json.load(f)
+            
+        # Validate required fields
+        if 'name' not in manifest:
+            print("Error: 'name' field missing from manifest.json")
+            return False
+            
+        if 'version' not in manifest:
+            print("Error: 'version' field missing from manifest.json")
+            return False
+            
+        if 'builds' not in manifest or not isinstance(manifest['builds'], list):
+            print("Error: 'builds' array missing from manifest.json")
+            return False
+            
+        if not manifest['builds'] or 'parts' not in manifest['builds'][0]:
+            print("Error: 'parts' missing from first build in manifest.json")
+            return False
+            
+        print(f"Manifest file validated: {manifest_path}")
+        return True
+        
+    except json.JSONDecodeError as e:
+        print(f"Error parsing manifest.json: {e}")
+        return False
+    except Exception as e:
+        print(f"Error validating manifest file: {str(e)}")
+        return False
+
+def clean_directory(temp_dir, source_dir):
+    """Clean and prepare the temporary directory with MCT files."""
+    try:
+        # Clear any existing contents
+        for item in os.listdir(temp_dir):
+            item_path = os.path.join(temp_dir, item)
+            if os.path.isfile(item_path):
+                os.unlink(item_path)
+            elif os.path.isdir(item_path):
+                shutil.rmtree(item_path)
+                
+        # Copy MCT files to temp directory
+        mct_source = os.path.join(source_dir, "frozen")
+        if not os.path.exists(mct_source):
+            print(f"Error: MCT source directory not found at {mct_source}")
+            return False
+            
+        # Copy all files from frozen directory
+        for item in os.listdir(mct_source):
+            source_path = os.path.join(mct_source, item)
+            dest_path = os.path.join(temp_dir, item)
+            
+            if os.path.isfile(source_path):
+                shutil.copy2(source_path, dest_path)
+            elif os.path.isdir(source_path):
+                shutil.copytree(source_path, dest_path)
+                
+        print(f"Copied MCT files to temporary directory")
+        
+        # List contents of temp directory
+        print("\nTemporary directory contents:")
+        for item in os.listdir(temp_dir):
+            item_path = os.path.join(temp_dir, item)
+            if os.path.isfile(item_path):
+                print(f"  File: {item} ({os.path.getsize(item_path):,} bytes)")
+            elif os.path.isdir(item_path):
+                print(f"  Directory: {item}")
+                
+        return True
+        
+    except Exception as e:
+        print(f"Error cleaning directory: {str(e)}")
+        return False
+
+
+def get_directory_size(directory):
+    """Calculate the total size of a directory and its contents."""
+    total_size = 0
+    try:
+        # Walk through all files and subdirectories
+        for dirpath, dirnames, filenames in os.walk(directory):
+            # Add size of all files in current directory
+            for filename in filenames:
+                file_path = os.path.join(dirpath, filename)
+                if not os.path.islink(file_path):  # Skip symbolic links
+                    total_size += os.path.getsize(file_path)
+                    
+        return total_size
+        
+    except Exception as e:
+        print(f"Error calculating directory size: {str(e)}")
+        return 0
+
+
 
 def print_step(step_number, step_description):
     """Print a formatted step header."""
     print(f"\nStep {step_number}: {step_description}")
     print("=" * (len(step_description) + 8))
 
+
 print_step(1, "Update version files")
-# Get the version from MCT repository
-mct_path = "../MCT"
 mct_version = get_mct_version(mct_path)
 if mct_version is None:
     print("Failed to get MCT version")
     sys.exit(1)
+
+print(f"Using MCT version: {mct_version}")
 
 logical_version = mct_version  # Use MCT version instead of generating a new one
 
@@ -998,33 +904,3 @@ finally:
 
 print("Script execution completed.")
 
-def read_manifest():
-    """Read and parse the manifest.json file."""
-    try:
-        with open('manifest.json', 'r') as f:
-            manifest = json.load(f)
-            
-        # Validate manifest structure
-        if not manifest.get('builds') or not manifest['builds'][0].get('parts'):
-            print("Error: Invalid manifest.json structure")
-            return None
-            
-        print("\nManifest information:")
-        print(f"Name: {manifest.get('name')}")
-        print(f"Version: {manifest.get('version')}")
-        
-        # Print parts information
-        print("\nFlash parts:")
-        for part in manifest['builds'][0]['parts']:
-            print(f"  {part['path']} at offset 0x{part['offset']:x}")
-            
-        return manifest
-    except FileNotFoundError:
-        print("Error: manifest.json not found")
-        return None
-    except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in manifest.json: {e}")
-        return None
-    except Exception as e:
-        print(f"Error reading manifest.json: {e}")
-        return None
