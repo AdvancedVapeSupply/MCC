@@ -370,6 +370,19 @@ def validate_manifest_file(current_dir):
     return True
 
 def read_fat_image(image_path):
+    validation_errors = []
+    problem_files = {
+        'length': [],
+        'special_chars': [],
+        'lowercase': []
+    }
+    
+    def clean_filename(raw_name):
+        """Clean the filename by removing null bytes and padding"""
+        # Remove common FAT padding and special characters
+        clean = raw_name.rstrip(b'\x00\xff\xe5\x05\x20'.decode('latin1'))
+        return ''.join(char for char in clean if char.isprintable())
+    
     with open(image_path, 'rb') as f:
         # Read the boot sector
         boot_sector = f.read(512)
@@ -477,13 +490,14 @@ def read_fat_image(image_path):
         print(f"Lowercase support: {'Yes' if has_lowercase else 'No'}")
         print(f"Special characters: {'Yes' if has_special_chars else 'No'}")
         
-        # Add warnings if needed
+        # Convert warnings to errors
         if max_filename_length > 8:
-            print("\nWarning: Some filenames exceed 8.3 format length")
-        if has_lowercase:
-            print("Warning: Lowercase characters detected - verify case preservation")
+            validation_errors.append("ERROR: Some filenames exceed 8.3 format length")
+        if has_lowercase and not has_special_chars:
+            validation_errors.append("ERROR: Lowercase characters detected but case preservation not enabled")
         if has_special_chars:
-            print("Warning: Special characters detected - verify character support")
+            validation_errors.append("ERROR: Special characters detected in filenames")
+        
 
 def decode_short_filename(name_bytes):
     # Decode the short filename, preserving case and handling special characters
@@ -648,8 +662,8 @@ print_directory_with_details(temp_directory)
 mct_size = get_directory_size(temp_directory)
 print(f"Size of MCT content after cleaning: {mct_size} bytes")
 
-# Set a fixed partition size of 4MB
-partition_size = 4 * 1024 * 1024  # 4MB in bytes
+# Set a fixed partition size of 16MB (much larger than the minimum required for FAT16)
+partition_size = 16 * 1024 * 1024  # 16MB in bytes
 print(f"Fixed partition size: {partition_size} bytes")
 
 # Create the FAT filesystem image
@@ -661,8 +675,8 @@ fatfs_cmd = [
     "--partition_size", str(partition_size),
     "--sector_size", "4096",
     "--long_name_support",
-    "--use_default_datetime"
-    # Removed the --fat_type option to let the script decide
+    "--use_default_datetime",
+    "--fat_type", "16"
 ]
 
 print(f"Executing command: {' '.join(fatfs_cmd)}")
@@ -671,8 +685,14 @@ result = run_command(fatfs_cmd)
 if result is not None:
     print("Successfully created FAT filesystem image.")
     
-    print("\nVerifying the contents of the created image:")
-    read_fat_image(fatfs_image)
+    try:
+        print("\nVerifying the contents of the created image:")
+        read_fat_image(fatfs_image)
+    except ValueError as e:
+        print(f"\nFAT filesystem validation failed: {str(e)}")
+        # Clean up the temporary files
+        shutil.rmtree(temp_directory)
+        sys.exit(1)
     
     # Create and write the manifest file with the correct format
     manifest_data = {
