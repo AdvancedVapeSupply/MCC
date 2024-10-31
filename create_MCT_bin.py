@@ -666,37 +666,63 @@ print(f"Size of MCT content after cleaning: {mct_size} bytes")
 partition_size = 2 * 1024 * 1024  # 2MB in bytes
 print(f"Fixed partition size: {partition_size} bytes")
 
-# Define the output image name
+# Define the output image name and parameters
 fatfs_image = "mct.bin"
+SECTOR_SIZE = 4096  # ESP32-S3 flash sector size
+CLUSTER_SIZE = SECTOR_SIZE  # One sector per cluster for better space utilization
 
 # Create empty image file
 fatfs_cmd = [
     "dd", 
     f"if=/dev/zero", 
     f"of={fatfs_image}", 
-    f"bs={partition_size}", 
-    "count=1"
+    f"bs={SECTOR_SIZE}", 
+    f"count={partition_size // SECTOR_SIZE}"  # Calculate correct number of sectors
 ]
 run_command(fatfs_cmd)
 
-# Format as FAT32
+# Format as FAT with specific parameters for ESP32
 fatfs_cmd = [
     "mkfs.fat",
-    "-F", "32",
-    "-s", "1",  # sectors per cluster
+    "-F", "32",            # FAT32
+    "-S", str(SECTOR_SIZE),  # Sector size
+    "-s", "1",             # Sectors per cluster
+    "-R", "512",           # Reserved sectors
+    "-n", "MCT",           # Volume name
     fatfs_image
 ]
 run_command(fatfs_cmd)
 
-# Copy files using mcopy
+# Initialize MTOOLS configuration
+mtools_conf = """
+drive m:
+    file="mct.bin"
+    partition=1
+    offset=0
+    mformat_only
+"""
+with open(".mtoolsrc", "w") as f:
+    f.write(mtools_conf)
+
+# Copy files using mcopy with verbose output
 for root, dirs, files in os.walk(temp_directory):
     for dir in dirs:
         rel_path = os.path.relpath(os.path.join(root, dir), temp_directory)
-        run_command(["mmd", f"::/{rel_path}"])
+        print(f"Creating directory: {rel_path}")
+        run_command(["mmd", "-i", fatfs_image, f"::{rel_path}"])
     for file in files:
         src_path = os.path.join(root, file)
         rel_path = os.path.relpath(src_path, temp_directory)
-        run_command(["mcopy", "-s", src_path, f"::/{rel_path}"])
+        print(f"Copying file: {rel_path}")
+        run_command(["mcopy", "-i", fatfs_image, "-s", src_path, f"::{rel_path}"])
+
+# Verify the filesystem
+verify_cmd = ["fsck.fat", "-v", fatfs_image]
+run_command(verify_cmd)
+
+# Print filesystem info
+info_cmd = ["file", fatfs_image]
+run_command(info_cmd)
 
 # Create and write the manifest file with the correct format
 manifest_data = {
