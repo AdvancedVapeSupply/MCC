@@ -341,7 +341,14 @@ def get_partition_info(firmware_path: str) -> Optional[tuple]:
             f.seek(0x8000)  # Partition table offset
             partition_data = f.read(0x1000)  # Read 4KB partition table
             
+            print("\nPartition Table:")
+            print("=" * 80)
+            print(f"{'Name':<16} {'Type':<8} {'SubType':<8} {'Offset':<12} {'Size':<12} {'Flags'}")
+            print("-" * 80)
+            
             offset = 0
+            vfs_info = None
+            
             while offset < 0x1000 - 32:  # 32 bytes per entry
                 entry_data = partition_data[offset:offset + 32]
                 if entry_data[0:2] != b'\xaa\x50':  # Check magic number
@@ -353,17 +360,20 @@ def get_partition_info(firmware_path: str) -> Optional[tuple]:
                 part_offset = int.from_bytes(entry_data[4:8], 'little')
                 part_size = int.from_bytes(entry_data[8:12], 'little')
                 name = entry_data[12:28].split(b'\x00')[0].decode('ascii')
+                flags = entry_data[28]
                 
-                # Check if this is the VFS partition
+                # Print partition info
+                print(f"{name:<16} {type_val:<8d} {subtype:<8d} 0x{part_offset:08x} {part_size:<12,d} 0x{flags:02x}")
+                
+                # Store VFS partition info if found
                 if name == "vfs":
-                    print(f"Found VFS partition:")
-                    print(f"  Offset: 0x{part_offset:x}")
-                    print(f"  Size: {part_size:,} bytes ({part_size / 1024 / 1024:.2f}MB)")
-                    return (part_offset, part_size)
+                    vfs_info = (part_offset, part_size)
                     
                 offset += 32
-        
-        return None
+            
+            print("=" * 80)
+            return vfs_info
+            
     except Exception as e:
         print(f"Error reading partition table: {e}")
         return None
@@ -614,7 +624,7 @@ __commit_url__ = "https://github.com/AdvancedVapeSupply/MCT/commit/{commit_hash}
     except Exception as e:
         print(f"Error updating version file: {str(e)}")
         return False
-    
+
 def validate_version_file(repo_path):
     """Validate version.py exists and has required content."""
     version_file = os.path.join(repo_path, "version.py")
@@ -795,6 +805,76 @@ def run_flash_command(command):
         except Exception as e:
             print(f"Error executing flash command: {str(e)}")
             return False
+
+
+def print_partition_table(firmware_path: str):
+    """Print the partition table contents from the firmware."""
+    try:
+        with open(firmware_path, 'rb') as f:
+            f.seek(0x8000)  # Partition table offset
+            partition_data = f.read(0x1000)  # Read 4KB partition table
+            
+            print("\nPartition Table:")
+            print("=" * 80)
+            print(f"{'Name':<16} {'Type':<8} {'SubType':<8} {'Offset':<10} {'Size':<12} {'Flags'}")
+            print("-" * 80)
+            
+            offset = 0
+            while offset < 0x1000 - 32:  # 32 bytes per entry
+                entry_data = partition_data[offset:offset + 32]
+                if entry_data[0:2] != b'\xaa\x50':  # Check magic number
+                    break
+                    
+                # Parse entry fields
+                type_val = entry_data[2]
+                subtype = entry_data[3]
+                part_offset = int.from_bytes(entry_data[4:8], 'little')
+                part_size = int.from_bytes(entry_data[8:12], 'little')
+                name = entry_data[12:28].split(b'\x00')[0].decode('ascii')
+                flags = entry_data[28]
+                
+                print(f"{name:<16} {type_val:<8d} {subtype:<8d} 0x{part_offset:08x} {part_size:<12,d} 0x{flags:02x}")
+                
+                offset += 32
+                
+    except Exception as e:
+        print(f"Error reading partition table: {e}")
+
+def validate_mct_image(image_path: str, expected_size: int):
+    """Validate the MCT filesystem image."""
+    try:
+        if not os.path.exists(image_path):
+            print(f"Error: MCT image not found at {image_path}")
+            return False
+            
+        actual_size = os.path.getsize(image_path)
+        print("\nMCT Image Validation:")
+        print("=" * 40)
+        print(f"Path: {image_path}")
+        print(f"Expected size: {expected_size:,} bytes")
+        print(f"Actual size: {actual_size:,} bytes")
+        
+        if actual_size != expected_size:
+            print("Error: Size mismatch!")
+            return False
+            
+        # Read first few bytes to check if it looks like a valid filesystem
+        with open(image_path, 'rb') as f:
+            header = f.read(16)
+            
+        # Print first 16 bytes as hex
+        print("\nFirst 16 bytes:")
+        print(" ".join(f"{b:02x}" for b in header))
+        
+        # Calculate and print MD5 hash
+        md5_hash = calculate_md5(image_path)
+        print(f"\nMD5 Hash: {md5_hash}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error validating MCT image: {e}")
+        return False
 
 
 #######################################
