@@ -961,8 +961,7 @@ try:
             "-b", "115200",
             "--before", "default_reset",
             "--after", "hard_reset",
-            "--no-stub",
-            "--no-verify",    # Added to skip verification
+            "--no-stub",    # Helps with communication issues
             "write_flash",
             "--flash_mode", "dio",
             "--flash_size", "16MB",
