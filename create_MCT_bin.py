@@ -920,10 +920,9 @@ try:
         # Print the exact command that will be executed
         print("\nExecuting flash command:")
         print(" ".join(flash_command))
+        print("\nFlash output:")
 
-        # Execute the command
-        result = run_command(flash_command)
-        if result is None:
+        if not run_flash_command(flash_command):
             print("Failed to flash the device. Aborting.")
             sys.exit(1)
 
