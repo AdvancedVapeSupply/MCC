@@ -666,12 +666,16 @@ print(f"Size of MCT content after cleaning: {mct_size} bytes")
 partition_size = 2 * 1024 * 1024  # 2MB in bytes
 print(f"Fixed partition size: {partition_size} bytes")
 
-# Define the output image name and parameters
-fatfs_image = "mct.bin"
-SECTOR_SIZE = 4096  # ESP32-S3 flash sector size
-CLUSTER_SIZE = SECTOR_SIZE  # One sector per cluster
+# Define the output image name - ensure it's always mct.bin
+fatfs_image = "mct.bin"  # This should be the only place defining the output filename
 
-print(f"\nCreating FAT filesystem image...")
+# Verify no other .bin files exist in current directory
+for file in glob.glob("*.bin"):
+    if file != fatfs_image:
+        print(f"Removing old binary file: {file}")
+        os.remove(file)
+
+print(f"\nCreating FAT filesystem image: {fatfs_image}")
 print(f"Partition size: {partition_size:,} bytes")
 print(f"Sector size: {SECTOR_SIZE:,} bytes")
 print(f"Number of sectors: {partition_size // SECTOR_SIZE}")
