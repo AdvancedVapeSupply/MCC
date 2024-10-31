@@ -518,6 +518,43 @@ def get_mct_version(repo_path):
 LVGL_MICROPYTHON_DIR = "../lvgl_micropython"
 FIRMWARE_FILENAME = "lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin"
 firmware_path = os.path.join(LVGL_MICROPYTHON_DIR, "build", FIRMWARE_FILENAME)
+firmware_source = os.path.join(LVGL_MICROPYTHON_DIR, "build", FIRMWARE_FILENAME)
+firmware_dest = FIRMWARE_FILENAME
+
+def copy_firmware():
+    """Copy and verify the firmware file."""
+    print(f"\nCopying firmware:")
+    print(f"From: {firmware_source}")
+    print(f"To: {firmware_dest}")
+    
+    if not os.path.exists(firmware_source):
+        print(f"Error: Source firmware not found at: {firmware_source}")
+        return False
+    
+    try:
+        shutil.copy2(firmware_source, firmware_dest)
+        
+        # Verify the copy
+        if not os.path.exists(firmware_dest):
+            print("Error: Firmware copy failed")
+            return False
+            
+        source_size = os.path.getsize(firmware_source)
+        dest_size = os.path.getsize(firmware_dest)
+        
+        print(f"Source size: {source_size:,} bytes")
+        print(f"Copied size: {dest_size:,} bytes")
+        
+        if source_size != dest_size:
+            print("Error: Firmware file sizes don't match")
+            return False
+            
+        print("Firmware copied successfully")
+        return True
+        
+    except Exception as e:
+        print(f"Error copying firmware: {str(e)}")
+        return False
 
 def verify_firmware():
     """Verify the firmware file exists."""
