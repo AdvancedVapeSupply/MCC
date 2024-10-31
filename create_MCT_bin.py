@@ -735,15 +735,6 @@ for root, dirs, _ in os.walk(temp_directory):
         mmd_cmd = ["mmd", "-i", fatfs_image, f"::{rel_dir}"]
         run_command(mmd_cmd)
 
-# Then copy files
-print("\nCopying files...")
-for root, _, files in os.walk(temp_directory):
-    for f in files:
-        src_file = os.path.join(root, f)
-        rel_file = os.path.relpath(src_file, temp_directory)
-        rel_file = rel_file.replace(os.sep, '/')  # Ensure forward slashes
-        mcopy_cmd = ["mcopy", "-i", fatfs_image, "-s", src_file, f"::{rel_file}"]
-        run_command(mcopy_cmd)
 
 # Verify the filesystem
 print("\nVerifying filesystem...")
