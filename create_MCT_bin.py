@@ -662,8 +662,8 @@ print_directory_with_details(temp_directory)
 mct_size = get_directory_size(temp_directory)
 print(f"Size of MCT content after cleaning: {mct_size} bytes")
 
-# Set a fixed partition size of 16MB (much larger than the minimum required for FAT16)
-partition_size = 16 * 1024 * 1024  # 16MB in bytes
+# Set a fixed partition size of 2MB (instead of 16MB)
+partition_size = 2 * 1024 * 1024  # 2MB in bytes
 print(f"Fixed partition size: {partition_size} bytes")
 
 # Create the FAT filesystem image
@@ -674,62 +674,65 @@ fatfs_cmd = [
     "--output_file", fatfs_image,
     "--partition_size", str(partition_size),
     "--sector_size", "4096",
+    "--sectors_per_cluster", "1",
     "--long_name_support",
-    "--use_default_datetime",
-    "--fat_type", "16"
+    "--use_default_datetime"
 ]
 
+print("\nCreating FAT filesystem image...")
+print(f"Source directory size: {mct_size:,} bytes")
+print(f"Partition size: {partition_size:,} bytes")
 print(f"Executing command: {' '.join(fatfs_cmd)}")
+
 result = run_command(fatfs_cmd)
-
-if result is not None:
-    print("Successfully created FAT filesystem image.")
-    
-    try:
-        print("\nVerifying the contents of the created image:")
-        read_fat_image(fatfs_image)
-    except ValueError as e:
-        print(f"\nFAT filesystem validation failed: {str(e)}")
-        # Clean up the temporary files
-        shutil.rmtree(temp_directory)
-        sys.exit(1)
-    
-    # Create and write the manifest file with the correct format
-    manifest_data = {
-        "name": "AVS MCT",
-        "version": logical_version,
-        "builds": [
-            {
-                "chipFamily": "ESP32-S3",
-                "parts": [
-                    {
-                        "path": micropython_firmware_dest,
-                        "offset": 0
-                    },
-                    {
-                        "path": "mct.bin",
-                        "offset": vfs_offset
-                    }
-                ]
-            }
-        ]
-    }
-    
-    with open(manifest_file, 'w') as f:
-        json.dump(manifest_data, f, indent=2)
-    
-    print(f"Created manifest file: {manifest_file}")
-
-    # Add this new section
-    print_step(7, "Commit and push changes in current working directory")
-    cwd = os.getcwd()
-    if commit_and_push(cwd, logical_version, add_new_files=False):
-        print("Successfully committed and pushed changes in current directory")
-    else:
-        print("Failed to commit and push changes in current directory")
-        sys.exit(1)
-else:
+if result is None:
     print("Failed to create FAT filesystem image.")
+    sys.exit(1)
+
+print("Successfully created FAT filesystem image.")
+
+try:
+    print("\nVerifying the contents of the created image:")
+    read_fat_image(fatfs_image)
+except ValueError as e:
+    print(f"\nFAT filesystem validation failed: {str(e)}")
+    # Clean up the temporary files
+    shutil.rmtree(temp_directory)
+    sys.exit(1)
+
+# Create and write the manifest file with the correct format
+manifest_data = {
+    "name": "AVS MCT",
+    "version": logical_version,
+    "builds": [
+        {
+            "chipFamily": "ESP32-S3",
+            "parts": [
+                {
+                    "path": micropython_firmware_dest,
+                    "offset": 0
+                },
+                {
+                    "path": "mct.bin",
+                    "offset": vfs_offset
+                }
+            ]
+        }
+    ]
+}
+
+with open(manifest_file, 'w') as f:
+    json.dump(manifest_data, f, indent=2)
+
+print(f"Created manifest file: {manifest_file}")
+
+# Add this new section
+print_step(7, "Commit and push changes in current working directory")
+cwd = os.getcwd()
+if commit_and_push(cwd, logical_version, add_new_files=False):
+    print("Successfully committed and pushed changes in current directory")
+else:
+    print("Failed to commit and push changes in current directory")
     sys.exit(1)
 
 # Print the contents of the directory with file sizes after cleaning
