@@ -863,23 +863,16 @@ try:
             "--flash_freq", "80m",
             "--flash-size", "16",
             "--verify",
-            "--compress"
+            "--compress",
+            "0x0", firmware_dest,  # First file pair
+            f"0x{vfs_offset:x}", fatfs_image  # Second file pair
         ]
-        
-        # Add each part from manifest to flash command
-        for part in flash_parts:
-            flash_command.extend([f"0x{part['offset']:x}", part['path']])
 
-        print("\nFlashing files with command:")
+        # Print the exact command that will be executed
+        print("\nExecuting flash command:")
         print(" ".join(flash_command))
-        
-        # Calculate and display MD5 hashes
-        print("\nFile checksums:")
-        for part in flash_parts:
-            file_md5 = calculate_md5(part['path'])
-            print(f"{part['path']}: {file_md5}")
 
-        print("\nStarting flash process...")
+        # Execute the command
         result = run_command(flash_command)
         if result is None:
             print("Failed to flash the device. Aborting.")
