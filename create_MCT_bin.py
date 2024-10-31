@@ -669,7 +669,12 @@ print(f"Fixed partition size: {partition_size} bytes")
 # Define the output image name and parameters
 fatfs_image = "mct.bin"
 SECTOR_SIZE = 4096  # ESP32-S3 flash sector size
-CLUSTER_SIZE = SECTOR_SIZE  # One sector per cluster for better space utilization
+CLUSTER_SIZE = SECTOR_SIZE  # One sector per cluster
+
+print(f"\nCreating FAT filesystem image...")
+print(f"Partition size: {partition_size:,} bytes")
+print(f"Sector size: {SECTOR_SIZE:,} bytes")
+print(f"Number of sectors: {partition_size // SECTOR_SIZE}")
 
 # Create empty image file
 fatfs_cmd = [
@@ -677,20 +682,22 @@ fatfs_cmd = [
     f"if=/dev/zero", 
     f"of={fatfs_image}", 
     f"bs={SECTOR_SIZE}", 
-    f"count={partition_size // SECTOR_SIZE}"  # Calculate correct number of sectors
+    f"count={partition_size // SECTOR_SIZE}"
 ]
+print(f"Running command: {' '.join(fatfs_cmd)}")
 run_command(fatfs_cmd)
 
-# Format as FAT with specific parameters for ESP32
+# Format as FAT16 with specific parameters for ESP32
 fatfs_cmd = [
     "mkfs.fat",
-    "-F", "32",            # FAT32
+    "-F", "16",            # FAT16
     "-S", str(SECTOR_SIZE),  # Sector size
     "-s", "1",             # Sectors per cluster
     "-R", "512",           # Reserved sectors
     "-n", "MCT",           # Volume name
     fatfs_image
 ]
+print(f"Running command: {' '.join(fatfs_cmd)}")
 run_command(fatfs_cmd)
 
 # Initialize MTOOLS configuration
@@ -699,12 +706,12 @@ drive m:
     file="mct.bin"
     partition=1
     offset=0
-    mformat_only
 """
 with open(".mtoolsrc", "w") as f:
     f.write(mtools_conf)
 
 # Copy files using mcopy with verbose output
+print("\nCopying files to FAT image:")
 for root, dirs, files in os.walk(temp_directory):
     for dir in dirs:
         rel_path = os.path.relpath(os.path.join(root, dir), temp_directory)
@@ -717,10 +724,12 @@ for root, dirs, files in os.walk(temp_directory):
         run_command(["mcopy", "-i", fatfs_image, "-s", src_path, f"::{rel_path}"])
 
 # Verify the filesystem
+print("\nVerifying filesystem:")
 verify_cmd = ["fsck.fat", "-v", fatfs_image]
 run_command(verify_cmd)
 
 # Print filesystem info
+print("\nFilesystem information:")
 info_cmd = ["file", fatfs_image]
 run_command(info_cmd)
 
