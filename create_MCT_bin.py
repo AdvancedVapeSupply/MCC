@@ -666,39 +666,37 @@ print(f"Size of MCT content after cleaning: {mct_size} bytes")
 partition_size = 2 * 1024 * 1024  # 2MB in bytes
 print(f"Fixed partition size: {partition_size} bytes")
 
-# Create the FAT filesystem image
-fatfs_image = os.path.join(os.path.dirname(output_image), "mct.bin")
+# Define the output image name
+fatfs_image = "mct.bin"
+
+# Create empty image file
 fatfs_cmd = [
-    "python", fatfsgen_script,
-    temp_directory,
-    "--output_file", fatfs_image,
-    "--partition_size", str(partition_size),
-    "--sector_size", "4096",
-    "--sectors_per_cluster", "1",
-    "--long_name_support",
-    "--use_default_datetime"
+    "dd", 
+    f"if=/dev/zero", 
+    f"of={fatfs_image}", 
+    f"bs={partition_size}", 
+    "count=1"
 ]
+run_command(fatfs_cmd)
 
-print("\nCreating FAT filesystem image...")
-print(f"Source directory size: {mct_size:,} bytes")
-print(f"Partition size: {partition_size:,} bytes")
-print(f"Executing command: {' '.join(fatfs_cmd)}")
+# Format as FAT32
+fatfs_cmd = [
+    "mkfs.fat",
+    "-F", "32",
+    "-s", "1",  # sectors per cluster
+    fatfs_image
+]
+run_command(fatfs_cmd)
 
-result = run_command(fatfs_cmd)
-if result is None:
-    print("Failed to create FAT filesystem image.")
-    sys.exit(1)
-
-print("Successfully created FAT filesystem image.")
-
-try:
-    print("\nVerifying the contents of the created image:")
-    read_fat_image(fatfs_image)
-except ValueError as e:
-    print(f"\nFAT filesystem validation failed: {str(e)}")
-    # Clean up the temporary files
-    shutil.rmtree(temp_directory)
-    sys.exit(1)
+# Copy files using mcopy
+for root, dirs, files in os.walk(temp_directory):
+    for dir in dirs:
+        rel_path = os.path.relpath(os.path.join(root, dir), temp_directory)
+        run_command(["mmd", f"::/{rel_path}"])
+    for file in files:
+        src_path = os.path.join(root, file)
+        rel_path = os.path.relpath(src_path, temp_directory)
+        run_command(["mcopy", "-s", src_path, f"::/{rel_path}"])
 
 # Create and write the manifest file with the correct format
 manifest_data = {
