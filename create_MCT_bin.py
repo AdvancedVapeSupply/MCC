@@ -528,15 +528,24 @@ def copy_firmware():
     
     if not os.path.exists(firmware_source):
         print(f"Error: Source firmware not found at: {firmware_source}")
-        return False
+        print("Current directory:", os.getcwd())
+        print("Directory contents:", os.listdir("../lvgl_micropython/build/"))
+        sys.exit(1)
     
     try:
+        # Keep existing file if it exists
+        if os.path.exists(firmware_dest):
+            print(f"Keeping existing firmware: {firmware_dest}")
+            print(f"Size: {os.path.getsize(firmware_dest):,} bytes")
+            return True
+            
+        # Copy if it doesn't exist
         shutil.copy2(firmware_source, firmware_dest)
         
         # Verify the copy
         if not os.path.exists(firmware_dest):
             print("Error: Firmware copy failed")
-            return False
+            sys.exit(1)
             
         source_size = os.path.getsize(firmware_source)
         dest_size = os.path.getsize(firmware_dest)
@@ -728,12 +737,6 @@ print(f"Fixed partition size: {partition_size} bytes")
 
 # Define the output image name - ensure it's always mct.bin
 fatfs_image = "mct.bin"  # This should be the only place defining the output filename
-
-# Verify no other .bin files exist in current directory
-for file in glob.glob("*.bin"):
-    if file != fatfs_image:
-        print(f"Removing old binary file: {file}")
-        os.remove(file)
 
 print(f"\nCreating FAT filesystem image: {fatfs_image}")
 print(f"Partition size: {partition_size:,} bytes")
