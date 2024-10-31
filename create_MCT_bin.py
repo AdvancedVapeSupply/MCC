@@ -747,6 +747,59 @@ def get_directory_size(directory):
         print(f"Error calculating directory size: {str(e)}")
         return 0
 
+def run_flash_command(command):
+    """Execute the flash command and handle the output."""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            print(f"\nFlash attempt {attempt + 1} of {max_retries}")
+            
+            # Add a delay before starting
+            time.sleep(2)
+            
+            # Modify the command to use a lower baud rate
+            command_str = " ".join(command)
+            command_str = command_str.replace("-b 460800", "-b 115200")
+            modified_command = command_str.split()
+            
+            process = subprocess.run(
+                modified_command,
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            
+            # Print output in real-time
+            if process.stdout:
+                print(process.stdout)
+            if process.stderr:
+                print(process.stderr)
+                
+            # Check for specific error messages
+            if "Invalid head of packet" in (process.stdout or "") + (process.stderr or ""):
+                print("Communication error detected, retrying...")
+                time.sleep(3)  # Wait longer before retry
+                continue
+                
+            # Check return code
+            if process.returncode != 0:
+                print(f"Flash command failed with return code: {process.returncode}")
+                if attempt < max_retries - 1:
+                    print("Retrying...")
+                    time.sleep(3)
+                    continue
+                return False
+                
+            return True
+            
+        except Exception as e:
+            print(f"Error executing flash command: {str(e)}")
+            return False
+
+
+#######################################
+#######################################
+#######################################
 
 
 def print_step(step_number, step_description):
@@ -944,52 +997,4 @@ finally:
 
 print("Script execution completed.")
 
-def run_flash_command(command):
-    """Execute the flash command and handle the output."""
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            print(f"\nFlash attempt {attempt + 1} of {max_retries}")
-            
-            # Add a delay before starting
-            time.sleep(2)
-            
-            # Modify the command to use a lower baud rate
-            command_str = " ".join(command)
-            command_str = command_str.replace("-b 460800", "-b 115200")
-            modified_command = command_str.split()
-            
-            process = subprocess.run(
-                modified_command,
-                capture_output=True,
-                text=True,
-                check=False
-            )
-            
-            # Print output in real-time
-            if process.stdout:
-                print(process.stdout)
-            if process.stderr:
-                print(process.stderr)
-                
-            # Check for specific error messages
-            if "Invalid head of packet" in (process.stdout or "") + (process.stderr or ""):
-                print("Communication error detected, retrying...")
-                time.sleep(3)  # Wait longer before retry
-                continue
-                
-            # Check return code
-            if process.returncode != 0:
-                print(f"Flash command failed with return code: {process.returncode}")
-                if attempt < max_retries - 1:
-                    print("Retrying...")
-                    time.sleep(3)
-                    continue
-                return False
-                
-            return True
-            
-        except Exception as e:
-            print(f"Error executing flash command: {str(e)}")
-            return False
 
