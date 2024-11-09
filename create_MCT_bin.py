@@ -1083,9 +1083,4 @@ finally:
 
 print("Script execution completed.")
 
-# Add this call right after copying the firmware
-print("\nVerifying partition table in copied firmware:")
-print(f"Firmware path: {micropython_firmware_dest}")
-print_partition_table(micropython_firmware_dest)
-
 
