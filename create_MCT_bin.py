@@ -43,6 +43,11 @@ import serial
 import argparse
 import struct
 import tempfile
+
+print("\nActivating virtual environment...")
+print("Please run: source .venv/bin/activate")
+subprocess.run(["source", ".venv/bin/activate"], shell=True)
+
 try:
     import requests
 except ImportError:
@@ -50,6 +55,7 @@ except ImportError:
     print("Please run: source .venv/bin/activate")
     print("If that doesn't work, try: pip install requests\n")
     sys.exit(1)
+    
 from typing import Optional
 
 # Define paths
@@ -371,8 +377,13 @@ def get_partition_info(firmware_path: str) -> Optional[tuple]:
                 # Print partition info
                 print(f"{name:<16} {type_val:<8d} {subtype:<8d} 0x{part_offset:08x} {part_size:<12,d} 0x{flags:02x}")
                 
-                # Store VFS partition info if found
+                # Store VFS partition info if found and verify type
                 if name == "vfs":
+                    # Type 1 is "data", subtype 130 is "spiffs"
+                    if type_val != 1 or subtype != 130:
+                        print("\nError: VFS partition must be type=data(1) and subtype=spiffs(130)")
+                        print(f"Found type={type_val} subtype={subtype}")
+                        return None
                     vfs_info = (part_offset, part_size)
                     
                 offset += 32
