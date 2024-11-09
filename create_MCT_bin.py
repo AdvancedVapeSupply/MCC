@@ -882,6 +882,78 @@ def validate_mct_image(image_path: str, expected_size: int):
         print(f"Error validating MCT image: {e}")
         return False
 
+def read_partitions_csv():
+    """Read the partition configuration from partitions.csv."""
+    partitions_file = os.path.abspath("../lvgl_micropython/build/partitions.csv")
+    print(f"\nReading partitions from: {partitions_file}")
+    
+    try:
+        if not os.path.exists(partitions_file):
+            print(f"Error: Partitions file not found: {partitions_file}")
+            build_dir = os.path.dirname(partitions_file)
+            if os.path.exists(build_dir):
+                print(f"\nContents of {build_dir}:")
+                print("\n".join(os.listdir(build_dir)))
+            return None
+            
+        print("\nPartitions from CSV:")
+        print("=" * 80)
+        print(f"{'Name':<16} {'Type':<8} {'SubType':<8} {'Offset':<10} {'Size':<12}")
+        print("-" * 80)
+        
+        partitions = []
+        with open(partitions_file, 'r') as f:
+            # Skip comments
+            lines = [l.strip() for l in f.readlines() if l.strip() and not l.startswith('#')]
+            
+            for line in lines:
+                # Parse the basic 5 columns: name,type,subtype,offset,size
+                name, type_str, subtype, offset, size = [p.strip() for p in line.split(',')[:5]]
+                
+                # Convert values
+                offset_val = int(offset, 16) if '0x' in offset else int(offset)
+                size_val = int(size, 16) if '0x' in size else int(size)
+                
+                print(f"{name:<16} {type_str:<8} {subtype:<8} 0x{offset_val:08x} {size_val:<12,d}")
+                partitions.append({
+                    'name': name,
+                    'offset': offset_val,
+                    'size': size_val
+                })
+                
+        return partitions
+        
+    except Exception as e:
+        print(f"Error reading partitions.csv: {e}")
+        return None
+
+def compare_partitions(firmware_path):
+    """Compare partitions from firmware against partitions.csv."""
+    print("\nComparing partitions:")
+    print("=" * 80)
+    
+    # Read expected partitions
+    csv_partitions = read_partitions_csv()
+    if not csv_partitions:
+        print("Failed to read partitions.csv")
+        return None
+        
+    # Read actual partitions from firmware
+    print("\nPartitions from firmware:")
+    print("-" * 80)
+    print_partition_table(firmware_path)
+    
+    # Find VFS partition in CSV
+    vfs_partition = next((p for p in csv_partitions if p['name'] == 'vfs'), None)
+    if vfs_partition:
+        print("\nVFS Partition from CSV:")
+        print(f"Offset: 0x{vfs_partition['offset']:x}")
+        print(f"Size: {vfs_partition['size']:,} bytes")
+        return vfs_partition['offset'], vfs_partition['size']
+    else:
+        print("Error: VFS partition not found in partitions.csv")
+        return None
+
 
 #######################################
 #######################################
