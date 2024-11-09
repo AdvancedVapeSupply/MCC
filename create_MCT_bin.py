@@ -723,20 +723,26 @@ def clean_directory(temp_dir, source_dir):
                 shutil.rmtree(item_path)
                 
         # Copy MCT files to temp directory
-        mct_source = os.path.join(source_dir, "frozen")
+        # Changed from "frozen" to the root directory
+        mct_source = source_dir
         if not os.path.exists(mct_source):
             print(f"Error: MCT source directory not found at {mct_source}")
             return False
             
-        # Copy all files from frozen directory
+        # Copy all Python files and directories, excluding git and other non-essential files
         for item in os.listdir(mct_source):
+            # Skip git directory and other non-essential files
+            if item.startswith('.') or item in ['__pycache__', 'tests', 'docs']:
+                continue
+                
             source_path = os.path.join(mct_source, item)
             dest_path = os.path.join(temp_dir, item)
             
-            if os.path.isfile(source_path):
+            if os.path.isfile(source_path) and item.endswith('.py'):
                 shutil.copy2(source_path, dest_path)
             elif os.path.isdir(source_path):
-                shutil.copytree(source_path, dest_path)
+                shutil.copytree(source_path, dest_path, 
+                              ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.git*'))
                 
         print(f"Copied MCT files to temporary directory")
         
