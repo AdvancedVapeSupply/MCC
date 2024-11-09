@@ -446,7 +446,7 @@ def verify_firmware():
     print(f"Size: {os.path.getsize(firmware_path):,} bytes")
     return True
 
-# Verify firmware source exists
+# First, verify and copy the firmware
 if not os.path.exists(micropython_firmware_source):
     print(f"Error: MicroPython firmware not found at: {micropython_firmware_source}")
     sys.exit(1)
@@ -468,7 +468,7 @@ if source_md5 != dest_md5:
 
 print("MicroPython firmware copied successfully and verified.")
 
-# Parse the partition table to get the VFS offset
+# Now parse the partition table from the local copy
 partition_info = get_partition_info(micropython_firmware_dest)
 if partition_info is None:
     print("Failed to find VFS partition information")
