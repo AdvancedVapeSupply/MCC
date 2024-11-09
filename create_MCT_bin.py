@@ -43,7 +43,13 @@ import serial
 import argparse
 import struct
 import tempfile
-import requests
+try:
+    import requests
+except ImportError:
+    print("\nError: Missing requests module")
+    print("Please run: source .venv/bin/activate")
+    print("If that doesn't work, try: pip install requests\n")
+    sys.exit(1)
 from typing import Optional
 
 # Define paths
