@@ -282,6 +282,33 @@ def commit_and_push(repo_path, version, add_new_files=False):
             if os.path.exists(os.path.join(submodule_path, ".git")):
                 print(f"\nHandling submodule: {submodule}")
                 
+                # Get current branch name
+                branch = subprocess.run(
+                    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                    cwd=submodule_path,
+                    capture_output=True,
+                    text=True,
+                    check=True
+                ).stdout.strip()
+                
+                # If in detached HEAD state, create and checkout a temporary branch
+                if branch == "HEAD":
+                    print(f"Detected detached HEAD in {submodule}, creating temporary branch")
+                    subprocess.run(
+                        ["git", "checkout", "-b", "temp_branch"],
+                        cwd=submodule_path,
+                        check=True,
+                        capture_output=True
+                    )
+                    
+                # Ensure main branch exists and is up to date
+                subprocess.run(
+                    ["git", "fetch", "origin", "main"],
+                    cwd=submodule_path,
+                    check=True,
+                    capture_output=True
+                )
+                
                 # Ensure we're on main branch
                 subprocess.run(
                     ["git", "checkout", "main"],
