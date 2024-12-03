@@ -273,100 +273,112 @@ def commit_and_push(repo_path, version, add_new_files=False):
     print(f"\nCommitting changes in {repo_path}")
     
     try:
-        # Always check these known submodule paths
-        submodules = ["lib/io", "lib/ui"]
+        # Check if .gitmodules exists before trying to initialize
+        gitmodules_path = os.path.join(repo_path, ".gitmodules")
+        has_submodules = os.path.exists(gitmodules_path)
         
-        # First commit changes in each submodule
-        for submodule in submodules:
-            submodule_path = os.path.join(repo_path, submodule)
-            if os.path.exists(os.path.join(submodule_path, ".git")):
-                print(f"\nHandling submodule: {submodule}")
+        if has_submodules:
+            print("\nInitializing and updating submodules...")
+            try:
+                subprocess.run(
+                    ["git", "submodule", "init"],
+                    cwd=repo_path,
+                    check=True,
+                    capture_output=True
+                )
+                subprocess.run(
+                    ["git", "submodule", "update", "--init", "--recursive"],
+                    cwd=repo_path,
+                    check=True,
+                    capture_output=True
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"Warning: Submodule initialization failed: {e}")
+                print("Continuing with repository operations...")
+        else:
+            print("\nNo .gitmodules file found - skipping submodule initialization")
+        
+        # Always check these known directories
+        submodule_dirs = ["lib/io", "lib/ui"]
+        
+        # First commit changes in each directory
+        for subdir in submodule_dirs:
+            subdir_path = os.path.join(repo_path, subdir)
+            if os.path.exists(os.path.join(subdir_path, ".git")):
+                print(f"\nHandling git repository: {subdir}")
                 
-                # Get current branch name
-                branch = subprocess.run(
-                    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                    cwd=submodule_path,
-                    capture_output=True,
-                    text=True,
-                    check=True
-                ).stdout.strip()
-                
-                # If in detached HEAD state, create and checkout a temporary branch
-                if branch == "HEAD":
-                    print(f"Detected detached HEAD in {submodule}, creating temporary branch")
+                try:
+                    # Ensure we're on main branch and up to date
                     subprocess.run(
-                        ["git", "checkout", "-b", "temp_branch"],
-                        cwd=submodule_path,
+                        ["git", "fetch", "origin"],
+                        cwd=subdir_path,
                         check=True,
                         capture_output=True
                     )
                     
-                # Ensure main branch exists and is up to date
-                subprocess.run(
-                    ["git", "fetch", "origin", "main"],
-                    cwd=submodule_path,
-                    check=True,
-                    capture_output=True
-                )
-                
-                # Ensure we're on main branch
-                subprocess.run(
-                    ["git", "checkout", "main"],
-                    cwd=submodule_path,
-                    check=True,
-                    capture_output=True
-                )
-                
-                # Pull latest changes
-                subprocess.run(
-                    ["git", "pull", "origin", "main"],
-                    cwd=submodule_path,
-                    check=True,
-                    capture_output=True
-                )
-                
-                # Stage all changes first
-                subprocess.run(["git", "add", "-A"], cwd=submodule_path, check=True)
-                
-                # Check if there are staged changes
-                status = subprocess.run(
-                    ["git", "status", "--porcelain"],
-                    cwd=submodule_path,
-                    capture_output=True,
-                    text=True,
-                    check=True
-                ).stdout.strip()
-                
-                if status:
-                    print(f"Changes detected in {submodule}:")
-                    print(status)
-                    
-                    # Commit and push submodule changes
                     subprocess.run(
-                        ["git", "commit", "-m", f"Update submodule {submodule} to v{version}"],
-                        cwd=submodule_path,
-                        check=True
+                        ["git", "checkout", "main"],
+                        cwd=subdir_path,
+                        check=True,
+                        capture_output=True
                     )
                     
-                    # Push changes to submodule
                     subprocess.run(
-                        ["git", "push"],
-                        cwd=submodule_path,
-                        check=True
+                        ["git", "pull", "origin", "main"],
+                        cwd=subdir_path,
+                        check=True,
+                        capture_output=True
                     )
-                
+                    
+                    # Stage all changes
+                    subprocess.run(["git", "add", "-A"], cwd=subdir_path, check=True)
+                    
+                    # Check if there are staged changes
+                    status = subprocess.run(
+                        ["git", "status", "--porcelain"],
+                        cwd=subdir_path,
+                        capture_output=True,
+                        text=True,
+                        check=True
+                    ).stdout.strip()
+                    
+                    if status:
+                        print(f"Changes detected in {subdir}:")
+                        print(status)
+                        
+                        # Commit and push changes
+                        subprocess.run(
+                            ["git", "commit", "-m", f"Update {subdir} to v{version}"],
+                            cwd=subdir_path,
+                            check=True
+                        )
+                        subprocess.run(["git", "push", "origin", "main"], cwd=subdir_path, check=True)
+                        print(f"Committed and pushed changes in {subdir}")
+                    else:
+                        print(f"No changes to commit in {subdir}")
+                except subprocess.CalledProcessError as e:
+                    print(f"Warning: Git operations failed in {subdir}: {e}")
+                    print("Continuing with next directory...")
+            else:
+                print(f"\nSkipping {subdir} - not a git repository")
+
         # Now handle main repository
         print("\nCommitting changes in main repository...")
         if add_new_files:
-            stage_command = ["git", "add", "-A"]
+            subprocess.run(["git", "add", "-A"], cwd=repo_path, check=True)
         else:
-            stage_command = ["git", "add", "-u"]
+            subprocess.run(["git", "add", "-u"], cwd=repo_path, check=True)
             
-        subprocess.run(stage_command, cwd=repo_path, check=True)
+        # Add known directories explicitly
+        for subdir in submodule_dirs:
+            try:
+                subprocess.run(["git", "add", subdir], cwd=repo_path, check=True)
+            except subprocess.CalledProcessError:
+                print(f"Warning: Could not add {subdir}")
         
-        # Check if there are changes to commit (skip submodules)
+        # Check if there are changes to commit
         status = subprocess.run(
-            ["git", "status", "--porcelain"],  # Removed --recurse-submodules
+            ["git", "status", "--porcelain"],
             cwd=repo_path,
             capture_output=True,
             text=True,
@@ -374,31 +386,22 @@ def commit_and_push(repo_path, version, add_new_files=False):
         ).stdout.strip()
         
         if status:
-            print("Changes detected:")
+            print("Changes detected in main repository:")
             print(status)
             
-            commit_message = f"Update version files to v{version}"
-            
-            # Commit changes in main repository only
+            # Commit and push
             subprocess.run(
-                ["git", "commit", "-m", commit_message],
+                ["git", "commit", "-m", f"Update version files to v{version}"],
                 cwd=repo_path,
                 check=True
             )
-            
-            # Push main repository
-            subprocess.run(
-                ["git", "push", "origin", "main"],
-                cwd=repo_path,
-                check=True
-            )
-            
+            subprocess.run(["git", "push"], cwd=repo_path, check=True)
             print(f"Successfully committed and pushed changes in {repo_path}")
-            return True
         else:
-            print(f"No changes detected in {repo_path}")
-            return True
+            print("No changes to commit in main repository")
             
+        return True
+        
     except subprocess.CalledProcessError as e:
         print(f"Git command failed: {e}")
         return False
