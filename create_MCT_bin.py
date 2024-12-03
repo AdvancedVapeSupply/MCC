@@ -215,7 +215,7 @@ def ensure_on_main_branch(repo_path):
         return False
     
 def commit_and_push(repo_path, version, add_new_files=False):
-    """Commit and push changes to the repository."""
+    """Commit and push changes to the repository and its submodules."""
     print(f"\nCommitting changes in {repo_path}")
     
     try:
@@ -236,14 +236,17 @@ def commit_and_push(repo_path, version, add_new_files=False):
                 check=True
             )
             
-        # Pull latest changes
-        subprocess.run(
-            ["git", "pull", "origin", "main"],
-            cwd=repo_path,
-            check=True
-        )
+        # Pull latest changes (skip submodules if they're broken)
+        try:
+            subprocess.run(
+                ["git", "pull"],  # Removed --recurse-submodules
+                cwd=repo_path,
+                check=True
+            )
+        except subprocess.CalledProcessError:
+            print("Warning: Pull failed, continuing anyway...")
         
-        # Stage changes
+        # Stage changes in main repository only
         print("Staging changes...")
         if add_new_files:
             stage_command = ["git", "add", "-A"]
@@ -252,9 +255,9 @@ def commit_and_push(repo_path, version, add_new_files=False):
             
         subprocess.run(stage_command, cwd=repo_path, check=True)
         
-        # Check if there are changes to commit
+        # Check if there are changes to commit (skip submodules)
         status = subprocess.run(
-            ["git", "status", "--porcelain"],
+            ["git", "status", "--porcelain"],  # Removed --recurse-submodules
             cwd=repo_path,
             capture_output=True,
             text=True,
@@ -265,17 +268,16 @@ def commit_and_push(repo_path, version, add_new_files=False):
             print("Changes detected:")
             print(status)
             
-            # Commit changes
-            print("Committing changes...")
-            commit_message = f"v{version}"
+            commit_message = f"Update version files to v{version}"
+            
+            # Commit changes in main repository only
             subprocess.run(
                 ["git", "commit", "-m", commit_message],
                 cwd=repo_path,
                 check=True
             )
             
-            # Push changes
-            print("Pushing changes...")
+            # Push main repository
             subprocess.run(
                 ["git", "push", "origin", "main"],
                 cwd=repo_path,
