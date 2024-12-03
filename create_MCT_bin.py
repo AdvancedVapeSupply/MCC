@@ -22,7 +22,7 @@ Usage:
     python3 create_MCT_bin.py [--flash]
 
 Options:
-    --flash     Erase and flash the ESP32-S3 device after creating the image
+    --flash     Erase and flash the device after creating the image
 
 Note: This script requires various dependencies and assumes a specific project structure.
 Ensure all prerequisites are met before running.
@@ -214,10 +214,69 @@ def ensure_on_main_branch(repo_path):
         print(f"Error ensuring main branch: {str(e)}")
         return False
     
+def validate_submodules(repo_path):
+    """Validate that submodules are properly initialized and committed."""
+    print("\nValidating submodules...")
+    
+    try:
+        # Check if .gitmodules exists
+        gitmodules_path = os.path.join(repo_path, ".gitmodules")
+        if not os.path.exists(gitmodules_path):
+            print("No .gitmodules file found - repository may not have submodules")
+            return True  # Success case - no submodules is okay
+            
+        result = subprocess.run(
+            ["git", "submodule", "status"],
+            cwd=repo_path,
+            capture_output=True,
+            text=True
+        )
+        
+        # If no submodules are found, that's okay
+        submodules = result.stdout.strip().split('\n')
+        if not submodules or submodules[0] == '':
+            print("No active submodules found!")
+            return True  # Changed from False to True
+            
+        has_errors = False
+        for submodule in submodules:
+            if not submodule:
+                continue
+                
+            # Parse submodule status line
+            # Format: [+-U][commit-sha] [path] [(commit description)]
+            status_char = submodule[0]
+            parts = submodule[1:].strip().split(' ')
+            path = parts[1] if len(parts) > 1 else "unknown"
+            
+            if status_char == '-':
+                print(f"Error: Submodule {path} is not initialized")
+                has_errors = True
+            elif status_char == '+':
+                print(f"Warning: Submodule {path} has uncommitted changes")
+                has_errors = True
+                
+        if has_errors:
+            print("\nPlease initialize and update submodules with:")
+            print("git submodule update --init --recursive")
+            return False
+            
+        print("All submodules are properly initialized")
+        return True
+        
+    except Exception as e:
+        print(f"Error checking submodules: {str(e)}")
+        return False
+
 def commit_and_push(repo_path, version, add_new_files=False):
     """Commit and push changes to the repository and its submodules."""
     print(f"\nCommitting changes in {repo_path}")
     
+    # Add submodule validation before committing
+    if not validate_submodules(repo_path):
+        print("Submodule validation failed")
+        return False
+        
     try:
         # Get current branch
         current = subprocess.run(
