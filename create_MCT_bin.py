@@ -272,41 +272,29 @@ def commit_and_push(repo_path, version, add_new_files=False):
     """Commit and push changes to the repository and its submodules."""
     print(f"\nCommitting changes in {repo_path}")
     
-    # Add submodule validation before committing
-    if not validate_submodules(repo_path):
-        print("Submodule validation failed")
-        return False
-        
     try:
-        # Get current branch
-        current = subprocess.run(
-            ["git", "branch", "--show-current"],
-            cwd=repo_path,
-            capture_output=True,
-            text=True,
-            check=True
-        ).stdout.strip()
-        
-        if current != "main":
-            print(f"Switching to main branch from {current}")
-            subprocess.run(
-                ["git", "checkout", "main"],
-                cwd=repo_path,
-                check=True
-            )
-            
-        # Pull latest changes (skip submodules if they're broken)
-        try:
-            subprocess.run(
-                ["git", "pull"],  # Removed --recurse-submodules
-                cwd=repo_path,
-                check=True
-            )
-        except subprocess.CalledProcessError:
-            print("Warning: Pull failed, continuing anyway...")
-        
-        # Stage changes in main repository only
-        print("Staging changes...")
+        # Always
+
+        # First handle submodule changes
+        submodule_paths = ["lib/io", "lib/ui"]
+        for submodule in submodule_paths:
+            submodule_path = os.path.join(repo_path, submodule)
+            if os.path.exists(submodule_path):
+                print(f"\nCommitting changes in submodule: {submodule}")
+                # Stage and commit submodule changes
+                subprocess.run(["git", "add", "-A"], cwd=submodule_path, check=True)
+                try:
+                    subprocess.run(
+                        ["git", "commit", "-m", f"Update submodule {submodule} to v{version}"],
+                        cwd=submodule_path,
+                        check=True
+                    )
+                    subprocess.run(["git", "push"], cwd=submodule_path, check=True)
+                except subprocess.CalledProcessError:
+                    print(f"No changes to commit in {submodule}")
+
+        # Now handle main repository
+        print("\nCommitting changes in main repository...")
         if add_new_files:
             stage_command = ["git", "add", "-A"]
         else:
