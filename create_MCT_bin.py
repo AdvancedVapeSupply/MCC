@@ -1386,5 +1386,23 @@ finally:
 
 print("Script execution completed.")
 
+def update_mcc_version_file():
+    """Copy version.py from MCT to MCC repository."""
+    try:
+        mct_version_file = os.path.join(mct_path, "version.py")
+        mcc_version_file = "version.py"  # Current directory
+        
+        if not os.path.exists(mct_version_file):
+            print(f"Error: Source version file not found at {mct_version_file}")
+            return False
+            
+        shutil.copy2(mct_version_file, mcc_version_file)
+        print(f"Copied version file from MCT to MCC")
+        return True
+        
+    except Exception as e:
+        print(f"Error copying version file: {str(e)}")
+        return False
+
 
 
