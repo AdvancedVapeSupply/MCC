@@ -1073,26 +1073,42 @@ def update_changes_file(version, previous_version=None):
                 "versions": []
             }
 
-        # Get git log since last version
+        # Get modified files since last version in MCT directory
         if previous_version:
-            git_cmd = ["git", "log", f"{previous_version}..HEAD", "--pretty=format:%s"]
+            files_cmd = ["git", "diff", "--name-only", f"{previous_version}..HEAD", "."]
         else:
-            git_cmd = ["git", "log", "-10", "--pretty=format:%s"]  # Last 10 commits if no previous version
+            files_cmd = ["git", "diff", "--name-only", "HEAD~10..HEAD", "."]
             
-        result = subprocess.run(
-            git_cmd,
-            cwd=mct_path,
+        files_result = subprocess.run(
+            files_cmd,
+            cwd=mct_path,  # Explicitly use MCT directory
             capture_output=True,
             text=True,
             check=True
         )
-        commit_messages = result.stdout.split('\n')
+        modified_files = [f for f in files_result.stdout.split('\n') if f.strip()]
+
+        # Get commit messages since last version from MCT directory
+        if previous_version:
+            git_cmd = ["git", "log", f"{previous_version}..HEAD", "--pretty=format:%s", "."]
+        else:
+            git_cmd = ["git", "log", "-10", "--pretty=format:%s", "."]
+            
+        msg_result = subprocess.run(
+            git_cmd,
+            cwd=mct_path,  # Explicitly use MCT directory
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        commit_messages = [msg for msg in msg_result.stdout.split('\n') if msg.strip()]
 
         # Create new version entry
         new_version = {
             "version": version,
             "date": datetime.now(timezone.utc).isoformat(),
-            "changes": [msg for msg in commit_messages if msg.strip()]  # Filter out empty messages
+            "modified_files": modified_files,
+            "changes": commit_messages
         }
 
         # Add new version to the beginning of the list
@@ -1103,10 +1119,13 @@ def update_changes_file(version, previous_version=None):
             json.dump(changes_data, f, indent=2)
 
         print(f"\nUpdated changes.json with version {version}")
-        print("Changes since last version:")
+        if modified_files:
+            print("\nModified files in MCT:")
+            for file in modified_files:
+                print(f"- {file}")
+        print("\nChanges since last version:")
         for msg in commit_messages:
-            if msg.strip():  # Only print non-empty messages
-                print(f"- {msg}")
+            print(f"- {msg}")
 
         return True
 
