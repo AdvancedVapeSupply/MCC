@@ -1070,8 +1070,14 @@ def update_changes_file(version, previous_version=None):
                 changes_data = json.load(f)
         else:
             changes_data = {
+                "previous_version": None,
+                "current_version": None,
                 "versions": []
             }
+
+        # Update version tracking
+        changes_data["previous_version"] = changes_data.get("current_version")
+        changes_data["current_version"] = version
 
         # Get modified files since last version in MCT directory
         if previous_version:
@@ -1081,7 +1087,7 @@ def update_changes_file(version, previous_version=None):
             
         files_result = subprocess.run(
             files_cmd,
-            cwd=mct_path,  # Explicitly use MCT directory
+            cwd=mct_path,
             capture_output=True,
             text=True,
             check=True
@@ -1096,7 +1102,7 @@ def update_changes_file(version, previous_version=None):
             
         msg_result = subprocess.run(
             git_cmd,
-            cwd=mct_path,  # Explicitly use MCT directory
+            cwd=mct_path,
             capture_output=True,
             text=True,
             check=True
@@ -1106,6 +1112,7 @@ def update_changes_file(version, previous_version=None):
         # Create new version entry
         new_version = {
             "version": version,
+            "previous_version": previous_version,  # Add previous version to entry
             "date": datetime.now(timezone.utc).isoformat(),
             "modified_files": modified_files,
             "changes": commit_messages
@@ -1119,6 +1126,8 @@ def update_changes_file(version, previous_version=None):
             json.dump(changes_data, f, indent=2)
 
         print(f"\nUpdated changes.json with version {version}")
+        if previous_version:
+            print(f"Previous version: {previous_version}")
         if modified_files:
             print("\nModified files in MCT:")
             for file in modified_files:
