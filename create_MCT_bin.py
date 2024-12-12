@@ -1057,6 +1057,62 @@ def read_partitions_csv():
     except Exception as e:
         print(f"Error reading partitions.csv: {e}")
         return None
+    
+
+def update_changes_file(version, previous_version=None):
+    """Update changes.json with version history."""
+    changes_file = "changes.json"
+    
+    try:
+        # Load existing changes file if it exists
+        if os.path.exists(changes_file):
+            with open(changes_file, 'r') as f:
+                changes_data = json.load(f)
+        else:
+            changes_data = {
+                "versions": []
+            }
+
+        # Get git log since last version
+        if previous_version:
+            git_cmd = ["git", "log", f"{previous_version}..HEAD", "--pretty=format:%s"]
+        else:
+            git_cmd = ["git", "log", "-10", "--pretty=format:%s"]  # Last 10 commits if no previous version
+            
+        result = subprocess.run(
+            git_cmd,
+            cwd=mct_path,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        commit_messages = result.stdout.split('\n')
+
+        # Create new version entry
+        new_version = {
+            "version": version,
+            "date": datetime.now(timezone.utc).isoformat(),
+            "changes": [msg for msg in commit_messages if msg.strip()]  # Filter out empty messages
+        }
+
+        # Add new version to the beginning of the list
+        changes_data["versions"].insert(0, new_version)
+
+        # Write updated changes file
+        with open(changes_file, 'w') as f:
+            json.dump(changes_data, f, indent=2)
+
+        print(f"\nUpdated changes.json with version {version}")
+        print("Changes since last version:")
+        for msg in commit_messages:
+            if msg.strip():  # Only print non-empty messages
+                print(f"- {msg}")
+
+        return True
+
+    except Exception as e:
+        print(f"Error updating changes file: {str(e)}")
+        return False
 
 def compare_partitions(firmware_path):
     """Compare partitions from firmware against partitions.csv."""
@@ -1106,6 +1162,22 @@ if mct_version is None:
 print(f"Using MCT version: {mct_version}")
 
 logical_version = mct_version  # Use MCT version instead of generating a new one
+
+# Get previous version from changes.json if it exists
+previous_version = None
+if os.path.exists("changes.json"):
+    try:
+        with open("changes.json", 'r') as f:
+            changes_data = json.load(f)
+            if changes_data["versions"]:
+                previous_version = changes_data["versions"][0]["version"]
+    except Exception as e:
+        print(f"Warning: Could not read previous version from changes.json: {e}")
+
+# Update changes.json
+if not update_changes_file(logical_version, previous_version):
+    print("Warning: Failed to update changes.json")
+    # Continue execution as this is not critical
 
 # Update version file in ../MCT
 if update_version_file(mct_path, logical_version):
@@ -1285,5 +1357,6 @@ finally:
     print(f"Removed temporary directory: {temp_directory}")
 
 print("Script execution completed.")
+
 
 
