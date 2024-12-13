@@ -461,7 +461,7 @@ def calculate_md5(filename):
     return hash_md5.hexdigest()
 
 def get_partition_info(firmware_path: str) -> Optional[tuple]:
-    """Get the offset and size of the VFS partition from the partition table."""
+    """Get the offset and size of the app_0 and VFS partitions from the partition table."""
     try:
         with open(firmware_path, 'rb') as f:
             f.seek(0x8000)  # Partition table offset
@@ -474,6 +474,7 @@ def get_partition_info(firmware_path: str) -> Optional[tuple]:
             
             offset = 0
             vfs_info = None
+            app_0_info = None
             
             while offset < 0x1000 - 32:  # 32 bytes per entry
                 entry_data = partition_data[offset:offset + 32]
@@ -491,19 +492,32 @@ def get_partition_info(firmware_path: str) -> Optional[tuple]:
                 # Print partition info
                 print(f"{name:<16} {type_val:<8d} {subtype:<8d} 0x{part_offset:08x} {part_size:<12,d} 0x{flags:02x}")
                 
-                # Store VFS partition info if found and verify type
+                # Store partition info
                 if name == "vfs":
-                    # Type 1 is "data", subtype 130 is "spiffs"
-                    if type_val != 1 or subtype != 130:
+                    if type_val != 1 or subtype != 130:  # Type 1 is "data", subtype 130 is "spiffs"
                         print("\nError: VFS partition must be type=data(1) and subtype=spiffs(130)")
                         print(f"Found type={type_val} subtype={subtype}")
                         return None
                     vfs_info = (part_offset, part_size)
+                elif name == "app_0":
+                    if type_val != 0:  # Type 0 is "app"
+                        print("\nError: app_0 partition must be type=app(0)")
+                        print(f"Found type={type_val}")
+                        return None
+                    app_0_info = (part_offset, part_size)
                     
                 offset += 32
             
             print("=" * 80)
-            return vfs_info
+            
+            if not app_0_info:
+                print("Error: app_0 partition not found")
+                return None
+            if not vfs_info:
+                print("Error: VFS partition not found")
+                return None
+                
+            return app_0_info, vfs_info
             
     except Exception as e:
         print(f"Error reading partition table: {e}")
@@ -596,10 +610,12 @@ print("MicroPython firmware copied successfully and verified.")
 # Now parse the partition table from the local copy
 partition_info = get_partition_info(micropython_firmware_dest)
 if partition_info is None:
-    print("Failed to find VFS partition information")
+    print("Failed to find partition information")
     sys.exit(1)
 
-vfs_offset, vfs_size = partition_info
+(app_0_offset, app_0_size), (vfs_offset, vfs_size) = partition_info
+print(f"Using app_0 partition offset: 0x{app_0_offset:x}")
+print(f"Using app_0 partition size: {app_0_size:,} bytes")
 print(f"Using VFS partition offset: 0x{vfs_offset:x}")
 print(f"Using VFS partition size: {vfs_size:,} bytes")
 
@@ -646,12 +662,11 @@ def run_command(command, cwd=None):
         print(f"Error running command: {str(e)}")
         return None
 
-def update_manifest(directory, version, vfs_offset):
+def update_manifest(directory, version, app_0_offset, vfs_offset):
     """Update manifest.json with new version information and build details."""
     manifest_path = os.path.join(directory, "manifest.json")
     
     try:
-        # Create manifest data with the required structure
         manifest_data = {
             "name": "AVS MCT",
             "version": version,
@@ -664,7 +679,11 @@ def update_manifest(directory, version, vfs_offset):
                             "offset": 0
                         },
                         {
-                            "path": "mct.bin",
+                            "path": "app_0/mct.bin",
+                            "offset": app_0_offset
+                        },
+                        {
+                            "path": "vfs.bin",
                             "offset": vfs_offset
                         }
                     ]
@@ -672,11 +691,11 @@ def update_manifest(directory, version, vfs_offset):
             ]
         }
         
-        # Write manifest file with proper formatting
         with open(manifest_path, 'w') as f:
             json.dump(manifest_data, f, indent=2)
             
         print(f"Updated manifest.json with version {version}")
+        print(f"app_0 offset: {app_0_offset} (0x{app_0_offset:x})")
         print(f"VFS offset: {vfs_offset} (0x{vfs_offset:x})")
         return True
         
@@ -1205,6 +1224,54 @@ def compare_partitions(firmware_path):
         print("Error: VFS partition not found in partitions.csv")
         return None
 
+def create_vfs_image(mct_path, output_size):
+    """Create a VFS image containing boot.py and main.py from MCT."""
+    try:
+        # Create temp directory for VFS contents
+        vfs_temp = "vfs_temp"
+        os.makedirs(vfs_temp, exist_ok=True)
+        
+        # Copy boot.py and main.py from MCT
+        for file in ["boot.py", "main.py"]:
+            source = os.path.join(mct_path, file)
+            dest = os.path.join(vfs_temp, file)
+            if os.path.exists(source):
+                shutil.copy2(source, dest)
+                print(f"Copied {file} to VFS image")
+            else:
+                print(f"Warning: {file} not found in MCT")
+        
+        # Create VFS image using fatfsgen
+        vfs_image = "vfs.bin"  # Changed to root directory
+        fatfs_cmd = [
+            sys.executable,
+            fatfsgen_script,
+            "--partition-size", str(output_size),
+            "--sector-size", "4096",
+            vfs_temp,
+            vfs_image
+        ]
+        
+        print("\nCreating VFS image:")
+        print(f"Command: {' '.join(fatfs_cmd)}")
+        
+        result = subprocess.run(fatfs_cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print("Error creating VFS image:")
+            print(result.stderr)
+            return None
+            
+        # Clean up temp directory
+        shutil.rmtree(vfs_temp)
+        
+        print(f"Created VFS image: {vfs_image}")
+        print(f"Size: {os.path.getsize(vfs_image):,} bytes")
+        
+        return vfs_image
+        
+    except Exception as e:
+        print(f"Error creating VFS image: {str(e)}")
+        return None
 
 #######################################
 #######################################
@@ -1252,7 +1319,7 @@ else:
 
 # Update manifest file in the current directory
 current_dir = "."
-if update_manifest(current_dir, logical_version, vfs_offset):
+if update_manifest(current_dir, logical_version, app_0_offset, vfs_offset):
     print(f"Updated manifest file in {current_dir}")
 else:
     print(f"Failed to update manifest file in {current_dir}")
@@ -1392,7 +1459,8 @@ try:
             "--flash_size", "16MB",
             "--flash_freq", "80m",
             "0x0", firmware_dest,
-            f"0x{vfs_offset:x}", fatfs_image
+            f"0x{app_0_offset:x}", "app_0/mct.bin",
+            f"0x{vfs_offset:x}", "mct.bin"
         ]
 
         # Print the exact command that will be executed
