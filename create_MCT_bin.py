@@ -1508,5 +1508,19 @@ def update_mcc_version_file():
         print(f"Error copying version file: {str(e)}")
         return False
 
+print_step(3, "Create VFS image")
+vfs_image = create_vfs_image(mct_path, vfs_size)
+if not vfs_image:
+    print("Failed to create VFS image")
+    sys.exit(1)
+
+# Validate VFS image size
+if os.path.getsize(vfs_image) > vfs_size:
+    print(f"Error: VFS image size ({os.path.getsize(vfs_image):,} bytes) exceeds partition size ({vfs_size:,} bytes)")
+    sys.exit(1)
+
+print(f"VFS image created successfully: {vfs_image}")
+print(f"Size: {os.path.getsize(vfs_image):,} bytes")
+
 
 
