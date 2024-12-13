@@ -719,9 +719,9 @@ if not os.path.exists(MCT_DIR):
     sys.exit(1)
 
 print(f"Using MCT directory: {MCT_DIR}")
-def update_version_file(repo_path, version):
-    """Update version.py in the MCT repository."""
-    version_file = os.path.join(repo_path, "version.py")
+def update_version_file(repo_path, version, previous_version=None):
+    """Update version.json in the MCT repository with version and patch history."""
+    version_file = os.path.join(repo_path, "version.json")
     
     try:
         # Get the current commit hash
@@ -733,20 +733,56 @@ def update_version_file(repo_path, version):
             check=True
         )
         commit_hash = process.stdout.strip()
-        
-        # Create the version file content
-        content = f'''# MCT Version Information
-__version__ = "{version}"
-__commit_hash__ = "{commit_hash}"
-__commit_url__ = "https://github.com/AdvancedVapeSupply/MCT/commit/{commit_hash}"
-'''
-        
+
+        # Create or load version data
+        version_data = {
+            "version": version,
+            "commit_hash": commit_hash,
+            "commit_url": f"https://github.com/AdvancedVapeSupply/MCT/commit/{commit_hash}",
+            "patches": {}
+        }
+
+        # Get patch if we have a previous version
+        if previous_version:
+            patch_cmd = ["git", "diff", f"{previous_version}..HEAD", "."]
+            patch_result = subprocess.run(
+                patch_cmd,
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            version_data["patches"][previous_version] = {
+                "to_version": version,
+                "patch": patch_result.stdout
+            }
+
+        # Load existing patches if file exists
+        if os.path.exists(version_file):
+            try:
+                with open(version_file, 'r') as f:
+                    existing_data = json.load(f)
+                    if "patches" in existing_data:
+                        # Merge existing patches, keeping only the last 5
+                        version_data["patches"].update(existing_data["patches"])
+                        if len(version_data["patches"]) > 5:
+                            # Keep only the 5 most recent patches
+                            version_data["patches"] = dict(
+                                list(version_data["patches"].items())[-5:]
+                            )
+            except json.JSONDecodeError:
+                print("Warning: Could not parse existing version.json")
+
         # Write the version file
         with open(version_file, 'w') as f:
-            f.write(content)
+            json.dump(version_data, f, indent=2)
             
-        print(f"Updated version.py with version {version}")
+        print(f"Updated version.json with version {version}")
         print(f"Commit hash: {commit_hash}")
+        if version_data["patches"]:
+            print("\nStored patches:")
+            for from_ver, patch_info in version_data["patches"].items():
+                print(f"  {from_ver} → {patch_info['to_version']}")
         return True
         
     except subprocess.CalledProcessError as e:
@@ -754,7 +790,7 @@ __commit_url__ = "https://github.com/AdvancedVapeSupply/MCT/commit/{commit_hash}
         return False
     except Exception as e:
         print(f"Error updating version file: {str(e)}")
-        return False
+        
 
 def validate_version_file(repo_path):
     """Validate version.py exists and has required content."""
