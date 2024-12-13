@@ -1242,14 +1242,14 @@ def create_vfs_image(mct_path, output_size):
                 print(f"Warning: {file} not found in MCT")
         
         # Create VFS image using fatfsgen
-        vfs_image = "vfs.bin"  # Changed to root directory
+        vfs_image = "vfs.bin"
         fatfs_cmd = [
             sys.executable,
             fatfsgen_script,
-            "--partition-size", str(output_size),
-            "--sector-size", "4096",
-            vfs_temp,
-            vfs_image
+            "--output_file", vfs_image,
+            "--partition_size", str(output_size),
+            "--sector_size", "4096",
+            vfs_temp
         ]
         
         print("\nCreating VFS image:")
