@@ -11,7 +11,7 @@ sed -i '' 's/vfs,data,fat,/vfs,data,spiffs,/' ../lvgl_micropython/builder/esp32.
 cd ../lvgl_micropython
 
 # Run make and capture the output
-BUILD_OUTPUT=$(python3 make.py esp32 BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT --flash-size=16 DISPLAY=ST7735 --usb-otg --ota --dual-core-threads)
+BUILD_OUTPUT=$(python3 make.py esp32 BOARD=ESP32_GENERIC_S3 BOARD_VARIANT=SPIRAM_OCT --flash-size=16 DISPLAY=ST7735 --usb-otg --ota-app --dual-core-threads)
 
 # Find the ESP32 port automatically
 PORT=$(ls /dev/tty.usbmodem* 2>/dev/null | head -n 1)
