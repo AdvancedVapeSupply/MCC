@@ -1,6 +1,6 @@
 {
   "name": "AVS MCT",
-  "version": "0.2.20241218_1143",
+  "version": "0.2.20241218_1144",
   "builds": [
     {
       "chipFamily": "ESP32-S3",
@@ -10,7 +10,7 @@
           "offset": 0
         },
         {
-          "path": "app_0/mct.bin",
+          "path": "mct.bin",
           "offset": 6422528
         },
         {

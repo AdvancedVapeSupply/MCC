@@ -679,7 +679,7 @@ def update_manifest(directory, version, app_0_offset, vfs_offset):
                             "offset": 0
                         },
                         {
-                            "path": "app_0/mct.bin",
+                            "path": "mct.bin",
                             "offset": app_0_offset
                         },
                         {
