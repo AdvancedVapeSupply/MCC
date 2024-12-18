@@ -1,6 +1,6 @@
 {
   "name": "AVS MCT",
-  "version": "0.2.20241218_1145",
+  "version": "0.2.20241218_1146",
   "builds": [
     {
       "chipFamily": "ESP32-S3",

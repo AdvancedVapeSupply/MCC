@@ -1450,7 +1450,7 @@ try:
             "python", "-m", "esptool",
             "--chip", "esp32s3",
             "-p", esp32_port,
-            "-b", "460800",  # Updated to higher baud rate
+            "-b", "460800",
             "--before", "default_reset",
             "--after", "hard_reset",
             "--no-stub",
@@ -1459,8 +1459,8 @@ try:
             "--flash_size", "16MB",
             "--flash_freq", "80m",
             "0x0", firmware_dest,
-            f"0x{app_0_offset:x}", "app_0/mct.bin",
-            f"0x{vfs_offset:x}", "mct.bin"
+            f"0x{app_0_offset:x}", fatfs_image,  # Use fatfs_image (mct.bin) directly
+            f"0x{vfs_offset:x}", vfs_image       # Use vfs_image (vfs.bin) directly
         ]
 
         # Print the exact command that will be executed
