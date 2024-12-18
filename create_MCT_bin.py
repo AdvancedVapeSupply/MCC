@@ -1364,10 +1364,10 @@ if not validate_manifest_file(current_dir):
 
 print("Version files validation successful")
 
-print_step(6, "Create filesystem image")
-fatfs_image = "mct.bin"
+print_step(6, "Create filesystem images")
 
-# Create temporary directory
+# Create MCT filesystem image
+fatfs_image = "mct.bin"
 temp_directory = tempfile.mkdtemp()
 print(f"Created temporary directory: {temp_directory}")
 
@@ -1375,14 +1375,20 @@ try:
     # Clean the temporary directory
     clean_directory(temp_directory, mct_path)
 
-    # Create the filesystem image
+    # Create the MCT filesystem image
     if not create_littlefs_image(fatfs_image, temp_directory, vfs_size):
         print("Failed to create filesystem image")
         sys.exit(1)
 
     print(f"Successfully created filesystem image: {fatfs_image}")
 
-    # Add this new section
+    # Create VFS image
+    print("\nCreating VFS image...")
+    vfs_image = create_vfs_image(mct_path, vfs_size)
+    if not vfs_image:
+        print("Failed to create VFS image")
+        sys.exit(1)
+
     print_step(7, "Commit and push changes in current working directory")
     cwd = os.getcwd()
     if commit_and_push(cwd, logical_version, add_new_files=False):
