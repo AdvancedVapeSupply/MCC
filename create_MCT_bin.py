@@ -1451,28 +1451,32 @@ try:
         print("Waiting for device to stabilize after erase...")
         time.sleep(5)
 
-        # Flash command (no need for --erase-all since we just erased)
+        # Flash command with more reliable settings
         flash_command = [
             "python", "-m", "esptool",
             "--chip", "esp32s3",
+            "--no-stub",                # Added earlier in command
             "-p", esp32_port,
-            "-b", "460800",
+            "-b", "115200",            # Reduced baud rate for reliability
             "--before", "default_reset",
             "--after", "hard_reset",
-            "--no-stub",
             "write_flash",
             "--flash_mode", "dio",
             "--flash_size", "16MB",
-            "--flash_freq", "80m",
+            "--flash_freq", "40m",      # Reduced to 40MHz for stability
             "0x0", firmware_dest,
-            f"0x{app_0_offset:x}", fatfs_image,  # Use fatfs_image (mct.bin) directly
-            f"0x{vfs_offset:x}", vfs_image       # Use vfs_image (vfs.bin) directly
+            f"0x{app_0_offset:x}", fatfs_image,
+            f"0x{vfs_offset:x}", vfs_image
         ]
 
         # Print the exact command that will be executed
         print("\nExecuting flash command:")
         print(" ".join(flash_command))
         print("\nFlash output:")
+
+        # Add longer delay before flashing
+        print("Waiting for device to stabilize...")
+        time.sleep(5)                   # Increased delay
 
         if not run_flash_command(flash_command):
             print("Failed to flash the device. Aborting.")
