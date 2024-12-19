@@ -415,8 +415,8 @@ mct_commit_id = "main"  # Replace with the specific commit ID or tag when ready
 output_image = "mct.bin"
 output_size = 4 * 1024 * 1024  # Set the size of the image to 4MB
 manifest_file = "manifest.json"
-micropython_firmware_source = "../lvgl_micropython/build/lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin"
-micropython_firmware_dest = "lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin"
+micropython_firmware_source = "../lvgl_micropython/build/lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-8.bin"
+micropython_firmware_dest = "lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-8.bin"
 
 # Path to fatfsgen.py (now in fatfs directory)
 fatfsgen_script = "fatfs/fatfsgen.py"
@@ -461,7 +461,7 @@ def calculate_md5(filename):
     return hash_md5.hexdigest()
 
 def get_partition_info(firmware_path: str) -> Optional[tuple]:
-    """Get the offset and size of the app_0 and VFS partitions from the partition table."""
+    """Get the offset and size of the kernel_0, app_0, and vfs partitions."""
     try:
         with open(firmware_path, 'rb') as f:
             f.seek(0x8000)  # Partition table offset
@@ -473,8 +473,9 @@ def get_partition_info(firmware_path: str) -> Optional[tuple]:
             print("-" * 80)
             
             offset = 0
-            vfs_info = None
+            kernel_0_info = None
             app_0_info = None
+            vfs_info = None
             
             while offset < 0x1000 - 32:  # 32 bytes per entry
                 entry_data = partition_data[offset:offset + 32]
@@ -493,31 +494,40 @@ def get_partition_info(firmware_path: str) -> Optional[tuple]:
                 print(f"{name:<16} {type_val:<8d} {subtype:<8d} 0x{part_offset:08x} {part_size:<12,d} 0x{flags:02x}")
                 
                 # Store partition info
-                if name == "vfs":
-                    if type_val != 1 or subtype != 130:  # Type 1 is "data", subtype 130 is "spiffs"
-                        print("\nError: VFS partition must be type=data(1) and subtype=spiffs(130)")
-                        print(f"Found type={type_val} subtype={subtype}")
-                        return None
-                    vfs_info = (part_offset, part_size)
-                elif name == "app_0":
+                if name == "kernel_0":
                     if type_val != 0:  # Type 0 is "app"
-                        print("\nError: app_0 partition must be type=app(0)")
+                        print("\nError: kernel_0 partition must be type=app(0)")
                         print(f"Found type={type_val}")
                         return None
+                    kernel_0_info = (part_offset, part_size)
+                elif name == "app_0":
+                    if type_val != 1 or subtype != 130:
+                        print("\nError: app_0 partition must be type=data(1) and subtype=spiffs(130)")
+                        print(f"Found type={type_val} subtype={subtype}")
+                        return None
                     app_0_info = (part_offset, part_size)
+                elif name == "vfs":
+                    if type_val != 1:  # Type 1 is "data"
+                        print("\nError: vfs partition must be type=data(1)")
+                        print(f"Found type={type_val}")
+                        return None
+                    vfs_info = (part_offset, part_size)
                     
                 offset += 32
             
             print("=" * 80)
             
+            if not kernel_0_info:
+                print("Error: kernel_0 partition not found")
+                return None
             if not app_0_info:
                 print("Error: app_0 partition not found")
                 return None
             if not vfs_info:
-                print("Error: VFS partition not found")
+                print("Error: vfs partition not found")
                 return None
                 
-            return app_0_info, vfs_info
+            return kernel_0_info, app_0_info, vfs_info
             
     except Exception as e:
         print(f"Error reading partition table: {e}")
@@ -525,7 +535,7 @@ def get_partition_info(firmware_path: str) -> Optional[tuple]:
 
 # Define the firmware paths
 LVGL_MICROPYTHON_DIR = "../lvgl_micropython"
-FIRMWARE_FILENAME = "lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin"
+FIRMWARE_FILENAME = "lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-8.bin"
 firmware_source = os.path.join(LVGL_MICROPYTHON_DIR, "build", FIRMWARE_FILENAME)
 firmware_dest = FIRMWARE_FILENAME
 
@@ -613,7 +623,9 @@ if partition_info is None:
     print("Failed to find partition information")
     sys.exit(1)
 
-(app_0_offset, app_0_size), (vfs_offset, vfs_size) = partition_info
+(kernel_0_offset, kernel_0_size), (app_0_offset, app_0_size), (vfs_offset, vfs_size) = partition_info
+print(f"Using kernel_0 partition offset: 0x{kernel_0_offset:x}")
+print(f"Using kernel_0 partition size: {kernel_0_size:,} bytes")
 print(f"Using app_0 partition offset: 0x{app_0_offset:x}")
 print(f"Using app_0 partition size: {app_0_size:,} bytes")
 print(f"Using VFS partition offset: 0x{vfs_offset:x}")
@@ -1375,14 +1387,14 @@ try:
     # Clean the temporary directory
     clean_directory(temp_directory, mct_path)
 
-    # Create the MCT filesystem image
-    if not create_littlefs_image(fatfs_image, temp_directory, vfs_size):
+    # Create the MCT filesystem image using app_0 size instead of vfs_size
+    if not create_littlefs_image(fatfs_image, temp_directory, app_0_size):  # Changed from vfs_size to app_0_size
         print("Failed to create filesystem image")
         sys.exit(1)
 
     print(f"Successfully created filesystem image: {fatfs_image}")
 
-    # Create VFS image
+    # Create VFS image with correct vfs_size
     print("\nCreating VFS image...")
     vfs_image = create_vfs_image(mct_path, vfs_size)
     if not vfs_image:
@@ -1429,15 +1441,15 @@ try:
             print(f"Found {file_path} ({os.path.getsize(file_path):,} bytes)")
             print(f"Flash offset: 0x{part['offset']:x}")
 
-        # Erase flash with verbose output
+        # Erase flash with verbose output (update size to 8MB)
         erase_command = [
             "esptool.py",
             "--chip", "esp32s3",
             "--port", esp32_port,
-            "--baud", "460800",  # Updated to higher baud rate
+            "--baud", "460800",
             "--before", "default_reset",
             "--after", "hard_reset",
-            "erase_region", "0x0", "0x1000000"  # Erase first 16MB
+            "erase_region", "0x0", "0x800000"  # Changed from 0x1000000 (16MB) to 0x800000 (8MB)
         ]
 
         print("\nErasing flash with command:")
@@ -1451,19 +1463,20 @@ try:
         print("Waiting for device to stabilize after erase...")
         time.sleep(5)
 
-        # Flash command with more reliable settings
+        # Flash command with 8MB flash size
         flash_command = [
             "python", "-m", "esptool",
             "--chip", "esp32s3",
-            "--no-stub",                # Added earlier in command
+            "--no-stub",
             "-p", esp32_port,
-            "-b", "115200",            # Reduced baud rate for reliability
-            "--before", "default_reset",
+            "-b", "115200",
+            "--before", "usb_reset",
             "--after", "hard_reset",
             "write_flash",
             "--flash_mode", "dio",
-            "--flash_size", "16MB",
-            "--flash_freq", "40m",      # Reduced to 40MHz for stability
+            "--flash_size", "8MB",        # Changed from 16MB to 8MB
+            "--flash_freq", "40m",
+            "--no-compress",
             "0x0", firmware_dest,
             f"0x{app_0_offset:x}", fatfs_image,
             f"0x{vfs_offset:x}", vfs_image
