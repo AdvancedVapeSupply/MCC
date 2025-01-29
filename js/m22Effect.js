@@ -1,9 +1,11 @@
-var m22Mesh;
-var displayPlane;
-var smmButton, smuButton, smkButton, smdButton;
-var raycaster = new THREE.Raycaster();
-var mouse = new THREE.Vector2();
-var INTERSECTED;
+import * as THREE from 'three';
+
+let m22Mesh;
+let displayPlane;
+let smmButton, smuButton, smkButton, smdButton;
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let INTERSECTED;
 
 function createHexagonalButtonGeometry() {
     const sideLength = 2.0; // The length of each side of the hexagon
@@ -35,9 +37,7 @@ function createHexagonalButtonGeometry() {
         bevelEnabled: false,
     };
 
-    const geometry = new THREE.ExtrudeGeometry(hexagonShape, extrudeSettings);
-
-    return geometry;
+    return new THREE.ExtrudeGeometry(hexagonShape, extrudeSettings);
 }
 
 
