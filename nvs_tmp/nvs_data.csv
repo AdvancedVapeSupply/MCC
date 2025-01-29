@@ -1,0 +1,8 @@
+key,type,encoding,value
+mct,namespace,,
+sn,data,string,5024-0014
+led,namespace,,
+sn,data,string,5024-0010
+wifi,namespace,,
+ssid,data,string,AVS
+pass,data,string,Advanced

@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCT BLE Interface</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.0/dist/chartjs-adapter-moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-streaming@2.0.0/dist/chartjs-plugin-streaming.min.js"></script>
+</head>
+<body>
+    <h1>MCT BLE Interface</h1>
+    <button id="scanBtn">Scan for Bluetooth Devices</button>
+    <div id="deviceList"></div>
+    <div id="status"></div>
+
+    <h2>BLE Endpoints</h2>
+    <table id="endpointsTable">
+        <tr>
+            <th>Characteristic</th>
+            <th>UUID</th>
+            <th>Current Value</th>
+        </tr>
+    </table>
+
+    <div id="chartContainer" style="height: 500px; width: 100%;">
+        <canvas id="dataChart"></canvas>
+    </div>
+
+    <script>
+        const scanBtn = document.getElementById('scanBtn');
+        const deviceList = document.getElementById('deviceList');
+        const statusDiv = document.getElementById('status');
+        const endpointsTable = document.getElementById('endpointsTable');
+
+        const VAPE_SERVICE_UUID = '00000420-0000-1000-8000-00805f9b34fb';
+        const CHAR_UUID_MAP = {
+            'alpha': '00000001-0000-1000-8000-00805f9b34fb',
+            'Tset': '00000002-0000-1000-8000-00805f9b34fb',
+            'Pset': '00000003-0000-1000-8000-00805f9b34fb',
+            'tFset_s': '00000004-0000-1000-8000-00805f9b34fb',
+            'buttons': '00000005-0000-1000-8000-00805f9b34fb',
+            'Tescc': '00000006-0000-1000-8000-00805f9b34fb',
+            'Tkmeter': '00000007-0000-1000-8000-00805f9b34fb',
+            'ms_timestamp': '00000008-0000-1000-8000-00805f9b34fb',
+            'omega': '00000009-0000-1000-8000-00805f9b34fb'
+        };
+
+        // Populate the endpoints table
+        for (const [characteristic, uuid] of Object.entries(CHAR_UUID_MAP)) {
+            const row = endpointsTable.insertRow();
+            row.insertCell(0).textContent = characteristic;
+            row.insertCell(1).textContent = uuid;
+            row.insertCell(2).id = `value-${characteristic}`;
+        }
+
+        let device, server, service;
+        let characteristicsCache = {};
+        let chart;
+        let chartData = {};
+        let chartInitialized = false;
+
+        scanBtn.addEventListener('click', scanForDevices);
+
+        async function scanForDevices() {
+            try {
+                statusDiv.textContent = 'Scanning for Bluetooth devices...';
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [VAPE_SERVICE_UUID]
+                });
+                
+                console.log('Device selected:', device.name);
+                connectToDevice(device);
+            } catch (error) {
+                console.error('Error scanning for devices:', error);
+                statusDiv.textContent = 'Error scanning for devices: ' + error;
+            }
+        }
+
+        async function connectToDevice(selectedDevice) {
+            try {
+                device = selectedDevice;
+                console.log('Connecting to device:', device.name);
+                statusDiv.textContent = 'Connecting to device...';
+                server = await device.gatt.connect();
+                console.log('Connected to GATT server');
+
+                statusDiv.textContent = 'Connected. Getting services...';
+                service = await server.getPrimaryService(VAPE_SERVICE_UUID);
+                console.log('Got primary service:', VAPE_SERVICE_UUID);
+                statusDiv.textContent = 'Connected and ready.';
+
+                await cacheCharacteristics();
+                await initializeChart();
+                startDataCollection();
+                startChartUpdate();
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.textContent = 'Error: ' + error;
+            }
+        }
+
+        async function cacheCharacteristics() {
+            for (const [key, uuid] of Object.entries(CHAR_UUID_MAP)) {
+                try {
+                    const characteristic = await service.getCharacteristic(uuid);
+                    console.log(`Got characteristic: ${key} (${uuid})`);
+                    characteristicsCache[key] = characteristic;
+                    chartData[key] = [];
+                } catch (error) {
+                    console.warn(`Characteristic ${key} not found:`, error);
+                }
+            }
+        }
+
+        function startDataCollection() {
+            setInterval(async () => {
+                for (const [key, characteristic] of Object.entries(characteristicsCache)) {
+                    try {
+                        const value = await characteristic.readValue();
+                        updateData(key, value);
+                    } catch (error) {
+                        console.error(`Error reading ${key}:`, error);
+                    }
+                }
+            }, 1000); // Read every 1 second
+        }
+
+        function startChartUpdate() {
+            setInterval(() => {
+                try {
+                    if (chartInitialized && chart && chart.data && chart.data.datasets) {
+                        chart.data.datasets.forEach((dataset, i) => {
+                            const key = dataset.label;
+                            if (chartData[key]) {
+                                dataset.data = chartData[key];
+                            }
+                        });
+                        chart.update('none');
+                    }
+                } catch (error) {
+                    console.error('Error in chart update interval:', error);
+                }
+            }, 1000); // Update chart every 1 second
+        }
+
+        function updateData(key, value) {
+            console.log(`Updating ${key} with value:`, value);
+            let displayValue;
+            
+            try {
+                if (value.byteLength === 4) {
+                    displayValue = new DataView(value.buffer).getFloat32(0, true);
+                } else if (value.byteLength === 8) {
+                    displayValue = Number(new DataView(value.buffer).getBigUint64(0, true));
+                } else {
+                    displayValue = new TextDecoder().decode(value);
+                    if (!isNaN(Number(displayValue))) {
+                        displayValue = Number(displayValue);
+                    }
+                }
+            } catch (error) {
+                console.error(`Error parsing value for ${key}:`, error);
+                displayValue = "Error: " + error.message;
+            }
+
+            console.log(`Parsed ${key} value:`, displayValue);
+
+            if (!chartData[key]) {
+                chartData[key] = [];
+            }
+
+            if (typeof displayValue === 'number' && !isNaN(displayValue)) {
+                const now = Date.now();
+                chartData[key].push({x: now, y: displayValue});
+                if (chartData[key].length > 50) {
+                    chartData[key].shift();
+                }
+                
+                // Update chart dataset if chart is ready
+                try {
+                    if (chartInitialized && chart && chart.data && chart.data.datasets) {
+                        const datasetIndex = chart.data.datasets.findIndex(dataset => dataset.label === key);
+                        if (datasetIndex !== -1) {
+                            chart.data.datasets[datasetIndex].data = chartData[key];
+                        }
+                        updateChartLegend();
+                    }
+                } catch (error) {
+                    console.error(`Error updating chart for ${key}:`, error);
+                }
+            }
+
+            // Update the value in the endpoints table
+            try {
+                const valueCell = document.getElementById(`value-${key}`);
+                if (valueCell) {
+                    if (typeof displayValue === 'number' && !isNaN(displayValue)) {
+                        valueCell.textContent = displayValue.toFixed(2);
+                    } else {
+                        valueCell.textContent = displayValue.toString();
+                    }
+                }
+            } catch (error) {
+                console.error(`Error updating table for ${key}:`, error);
+            }
+        }
+
+        function initializeChart() {
+            return new Promise((resolve) => {
+                const ctx = document.getElementById('dataChart').getContext('2d');
+                const parameters = Object.keys(CHAR_UUID_MAP);
+                const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#FF6384', '#C9CBCF', '#7CFC00'];
+                const units = {
+                    'alpha': '°', 'Tset': '°C', 'Pset': 'W', 'tFset_s': 's',
+                    'buttons': '', 'Tescc': '°C', 'Tkmeter': '°C',
+                    'ms_timestamp': 'ms', 'omega': 'rad/s'
+                };
+
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        datasets: parameters.map((param, index) => ({
+                            label: param,
+                            data: [],
+                            borderColor: colors[index],
+                            backgroundColor: colors[index],
+                            fill: false,
+                            tension: 0.4
+                        }))
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    unit: 'second'
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Time'
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Value'
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'left',
+                                labels: {
+                                    usePointStyle: true,
+                                    pointStyle: 'line'
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Use a timeout to ensure the chart is rendered
+                setTimeout(() => {
+                    chartInitialized = true;
+                    resolve(chart);
+                }, 1000);
+            });
+        }
+
+        function updateChart() {
+            if (chart) {
+                chart.update();
+            }
+        }
+
+        function updateChartLegend() {
+            try {
+                if (chartInitialized && chart && chart.legend && chart.options) {
+                    chart.update('none');
+                }
+            } catch (error) {
+                console.error('Error updating chart legend:', error);
+            }
+        }
+    </script>
+</body>
+</html>

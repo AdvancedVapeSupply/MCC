@@ -1,0 +1,20 @@
+{
+  "mct": {
+    "escc": {
+      "CP": 850,
+      "A_AMBIENT": -2.9,
+      "B_AMBIENT": -0.48,
+      "A_510": -0.32,
+      "B_510": -0.12,
+      "maintenance_slope": 0.088,
+      "maintenance_intercept": 7.4
+    },
+    "fire": {
+      "MOTOR_HAPTIC": 0.300,
+      "MOTOR_FULL_DURATION": 6,
+      "STAGE2_OFFSET": 5.0
+    },
+    "SSID": "TheChateau",
+    "PASS": "thechateau"
+  }
+}

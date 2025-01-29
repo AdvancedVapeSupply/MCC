@@ -189,10 +189,10 @@ function createESCCWithHollowCylinder(imageUrl) {
     const radialSegments = 32;
 
     // Hollow Cylinder geometry
-    const cylinderGeometry = new THREE.CylinderBufferGeometry(outerRadius, outerRadius, height, radialSegments, 1, true);
+    const cylinderGeometry = new THREE.CylinderGeometry(outerRadius, outerRadius, height, radialSegments, 1, true);
 
     // Solid Bottom Disc geometry
-    const bottomGeometry = new THREE.CircleBufferGeometry(outerRadius, radialSegments);
+    const bottomGeometry = new THREE.CircleGeometry(outerRadius, radialSegments);
 
     // Load image texture for the Bottom Disc
     const textureLoader = new THREE.TextureLoader();
@@ -227,7 +227,7 @@ function createESCCWithHollowCylinder(imageUrl) {
 
 
 function initM22Effect(scene, camera) {
-    var geometry = new THREE.BoxBufferGeometry(10, 40, 20);
+    var geometry = new THREE.BoxGeometry(10, 40, 20);
     
     var material = new THREE.MeshPhongMaterial({
         color: 0x000000,      // Base color of the material
@@ -242,7 +242,7 @@ function initM22Effect(scene, camera) {
     var imageURL = 'https://cdn.stamped.io/uploads/videos/593f83842d9dc5b6711cc583b4134598.jpg'
     
    
-    var displayGeometry = new THREE.PlaneBufferGeometry(7, 14);
+    var displayGeometry = new THREE.PlaneGeometry(7, 14);
     var displayMaterial = new THREE.MeshBasicMaterial({ color: 0x00000F });
 
     displayPlane = new THREE.Mesh(displayGeometry, displayMaterial);
@@ -277,7 +277,7 @@ function initM22Effect(scene, camera) {
     m22Mesh.add(smdButton);
 
     // Create a translucent box with the same dimensions
-    var translucentBoxGeometry = new THREE.BoxBufferGeometry(10, 1, 20);
+    var translucentBoxGeometry = new THREE.BoxGeometry(10, 1, 20);
     var translucentBoxMaterial = new THREE.MeshPhongMaterial({
         color: 0xFFFFFF,      // Base color of the material
         specular: 0xffffff,   // Specular highlights color, white in this case
@@ -304,7 +304,7 @@ function initM22Effect(scene, camera) {
 
 
     // Create an opaque box with the same dimensions and material properties
-    var opaqueBoxGeometry = new THREE.BoxBufferGeometry(10, 1, 20);
+    var opaqueBoxGeometry = new THREE.BoxGeometry(10, 1, 20);
     var opaqueBoxMaterial = new THREE.MeshPhongMaterial({
         color: 0x000000,      // Base color of the material
         specular: 0xffffff,   // Specular highlights color, white in this case

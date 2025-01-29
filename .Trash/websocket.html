@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Client</title>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const ws = new WebSocket('ws://mct.local/');
+
+            ws.binaryType = 'arraybuffer'; // Ensure binary messages are treated as ArrayBuffer
+
+            ws.onopen = function() {
+                console.log('WebSocket connection established');
+            };
+
+            ws.onmessage = function(event) {
+                if (event.data instanceof ArrayBuffer) {
+                    // Handle binary data as integers
+                    const dataView = new DataView(event.data);
+                    // Assuming data is packed as four consecutive integers
+                    const time = dataView.getInt32(0, true); // true for little-endian
+                    const Vbat = dataView.getInt32(4, true); // true for little-endian
+                    const Ibat = dataView.getInt32(8, true); // Adjust the offset by 4 bytes for each integer
+                    const Vout = dataView.getInt32(12, true);
+                    const Iout = dataView.getInt32(16, true);
+                    
+                    console.log(`Received ${time}, Vbat: ${Vbat}, Ibat: ${Ibat}, Vout: ${Vout}, Iout: ${Iout}`);
+                    document.getElementById('message').textContent = `${time}: Vbat: ${Vbat}, Ibat: ${Ibat}, Vout: ${Vout}, Iout: ${Iout}`;
+                } else {
+                    // Handle text data
+                    console.log('Received text:', event.data);
+                    document.getElementById('message').textContent = `Text data: ${event.data}`;
+                }
+            };
+
+            ws.onerror = function(error) {
+                console.log('WebSocket Error:', error);
+            };
+
+            ws.onclose = function() {
+                console.log('WebSocket connection closed');
+            };
+        });
+    </script>
+</head>
+<body>
+    <h1>WebSocket Client</h1>
+    <p>Message from server: <span id="message">Awaiting data...</span></p>
+</body>
+</html>
