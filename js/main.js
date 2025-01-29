@@ -1,21 +1,23 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { initM22Effect, onDocumentMouseMove, checkHover } from './m22Effect.js';
 import { initSmokeEffect, updateSmokeEffect } from './smokeEffect.js';
 
 // Scene
-var scene = new THREE.Scene();
+const scene = new THREE.Scene();
 
 // Camera
-var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.z = 800;
 
 // Renderer
-var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 const container = document.getElementById('canvas-container');
 container.appendChild(renderer.domElement);
 
 // OrbitControls
-const controls = new THREE.OrbitControls(camera, renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
 
 // Set the target (lookAt) to your origin point
 const origin = new THREE.Vector3(0, 0, 700);
