@@ -3,110 +3,269 @@
 <head>
     <title>AVS MCT Firmware Update</title>
     <meta charset="utf-8">
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/examples/jsm/controls/OrbitControls": "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js"
+        }
+    }
+    </script>
+    <script type="module" src="js/main.js"></script>
     <script type="module" src="https://unpkg.com/esp-web-tools@9.4.3/dist/web/install-button.js?module"></script>
     <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1e1e1e;
+            color: #fff;
+        }
         #status {
             margin-top: 20px;
             padding: 10px;
             border-radius: 4px;
-            background-color: #f0f0f0;
+            background-color: rgba(40, 40, 40, 0.9);
+            color: #fff;
+        }
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+        /* Hamburger Menu Styles */
+        .menu-container {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+        .hamburger {
+            width: 35px;
+            height: 35px;
+            background: rgba(30, 30, 30, 0.9);
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 5px;
+            border: 1px solid #00ff33;
+        }
+        .hamburger span {
+            width: 25px;
+            height: 2px;
+            background-color: #00ff33;
+            margin: 2px 0;
+            transition: 0.3s;
+        }
+        .menu {
+            position: absolute;
+            top: 45px;
+            left: 0;
+            background: rgba(30, 30, 30, 0.9);
+            border-radius: 5px;
+            padding: 10px;
+            display: none;
+            border: 1px solid #00ff33;
+            min-width: 200px;
+        }
+        .menu.active {
+            display: block;
+        }
+        esp-web-install-button {
+            --esp-tools-button-color: #00ff33;
+            --esp-tools-button-text-color: #000;
+            width: 100%;
+        }
+        button[slot="activate"] {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background-color: #00ff33;
+            color: #000;
+        }
+        button[slot="activate"]:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 15px rgba(0, 255, 51, 0.5);
+        }
+        /* Animation for hamburger menu */
+        .hamburger.active span:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+        .hamburger.active span:nth-child(2) {
+            opacity: 0;
+        }
+        .hamburger.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(5px, -5px);
         }
     </style>
 </head>
 <body>
-    <esp-web-install-button manifest="manifest.json"></esp-web-install-button>
+    <div id="canvas-container"></div>
+    <div class="menu-container">
+        <div class="hamburger" onclick="toggleMenu()">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div class="menu">
+            <esp-web-install-button manifest="manifest.json" chipFamily="ESP32-S3">
+                <button slot="activate" onclick="prepareDevice()">Install MCT Firmware</button>
+                <span slot="unsupported">Browser not supported</span>
+                <span slot="not-allowed">HTTPS required</span>
+            </esp-web-install-button>
+        </div>
+    </div>
     <div id="status"></div>
 
     <script>
+        function toggleMenu() {
+            const menu = document.querySelector('.menu');
+            const hamburger = document.querySelector('.hamburger');
+            menu.classList.toggle('active');
+            hamburger.classList.toggle('active');
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.querySelector('.menu');
+            const hamburger = document.querySelector('.hamburger');
+            const isClickInside = menu.contains(event.target) || hamburger.contains(event.target);
+            
+            if (!isClickInside && menu.classList.contains('active')) {
+                menu.classList.remove('active');
+                hamburger.classList.remove('active');
+            }
+        });
+
         function showStatus(message) {
             const statusDiv = document.getElementById('status');
             statusDiv.textContent = message;
         }
 
-        // Handle installation events
-        document.getElementById('install-button').addEventListener('installation-complete', async () => {
-            showStatus('Installation complete! Connecting to device...');
-            
+        async function prepareDevice() {
             try {
-                // Request serial port access
-                const port = await navigator.serial.requestPort();
-                await port.open({ baudRate: 115200 });
-
-                const reader = port.readable.getReader();
-                const writer = port.writable.getWriter();
-
-                // Send command to get serial number
-                const encoder = new TextEncoder();
-                await writer.write(encoder.encode('import nvs\r\n'));
-                await writer.write(encoder.encode('print(nvs.get_nvs("serial.board"))\r\n'));
-
-                // Read response
-                const decoder = new TextDecoder();
-                let serialNumber = '';
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    serialNumber += decoder.decode(value);
-                    if (serialNumber.includes('\r\n')) break;
-                }
-
-                // Get MAC address
-                await writer.write(encoder.encode('import network\r\n'));
-                await writer.write(encoder.encode('wlan = network.WLAN(network.STA_IF)\r\n'));
-                await writer.write(encoder.encode('wlan.active(True)\r\n'));
-                await writer.write(encoder.encode('print(wlan.config("mac"))\r\n'));
-
-                let macAddress = '';
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    macAddress += decoder.decode(value);
-                    if (macAddress.includes('\r\n')) break;
-                }
-
-                // Clean up serial connection
-                await writer.close();
-                await reader.cancel();
-                await port.close();
-
-                // Extract serial number and MAC from responses
-                const sn = serialNumber.trim();
-                const mac = macAddress.trim();
-
-                // Create registration payload
-                const payload = {
-                    uuid: mac,
-                    timestamp: new Date().toISOString(),
-                    version: document.querySelector('esp-web-install-button').manifest.version,
-                    test_status: "flashed",
-                    sn_mct: sn,
-                    sn_led: sn,
-                    ota_0: {
-                        upy: 'web-flash',
-                        mct: 'web-flash'
-                    }
-                };
-
-                // Make API call to Google Apps Script
-                const response = await fetch('https://script.google.com/macros/s/AKfycbxqaIPGjRak5-k41r5-p2yAavuSaxmHkiAIBc9fr3PDGShNkjRZCoyencZPPduzV8geww/exec', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                const result = await response.text();
-                if (result.includes('success')) {
-                    showStatus('Device registered successfully!');
-                } else {
-                    showStatus('Error registering device');
-                    console.error('Registration error:', result);
-                }
+                showStatus('Preparing device...');
+                
+                const installButton = document.querySelector('esp-web-install-button');
+                const esploader = await installButton._device.transport.get_esp();
+                
+                // Get flash ID
+                showStatus('Reading flash ID...');
+                await esploader.flash_id();
+                
+                // Reset the device
+                showStatus('Resetting device...');
+                await esploader.hard_reset();
+                
+                showStatus('Device prepared successfully. Starting installation...');
+                
+                // Now let esp-web-tools handle the actual installation
+                installButton._onClick();
+                
             } catch (error) {
                 console.error('Error:', error);
-                showStatus('Error connecting to device');
+                showStatus('Error preparing device: ' + error.message);
+            }
+        }
+
+        // Wait for custom elements to be defined
+        customElements.whenDefined('esp-web-install-button').then(() => {
+            const installButton = document.querySelector('esp-web-install-button');
+            if (installButton) {
+                installButton.addEventListener('installation-complete', async () => {
+                    showStatus('Installation complete! Connecting to device...');
+                    
+                    try {
+                        // Request serial port access
+                        const port = await navigator.serial.requestPort();
+                        await port.open({ baudRate: 115200 });
+
+                        const reader = port.readable.getReader();
+                        const writer = port.writable.getWriter();
+
+                        // Send command to get serial number
+                        const encoder = new TextEncoder();
+                        await writer.write(encoder.encode('import nvs\r\n'));
+                        await writer.write(encoder.encode('print(nvs.get_nvs("serial.board"))\r\n'));
+
+                        // Read response
+                        const decoder = new TextDecoder();
+                        let serialNumber = '';
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+                            serialNumber += decoder.decode(value);
+                            if (serialNumber.includes('\r\n')) break;
+                        }
+
+                        // Get MAC address
+                        await writer.write(encoder.encode('import network\r\n'));
+                        await writer.write(encoder.encode('wlan = network.WLAN(network.STA_IF)\r\n'));
+                        await writer.write(encoder.encode('wlan.active(True)\r\n'));
+                        await writer.write(encoder.encode('print(wlan.config("mac"))\r\n'));
+
+                        let macAddress = '';
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+                            macAddress += decoder.decode(value);
+                            if (macAddress.includes('\r\n')) break;
+                        }
+
+                        // Clean up serial connection
+                        await writer.close();
+                        await reader.cancel();
+                        await port.close();
+
+                        // Extract serial number and MAC from responses
+                        const sn = serialNumber.trim();
+                        const mac = macAddress.trim();
+
+                        // Create registration payload
+                        const payload = {
+                            uuid: mac,
+                            timestamp: new Date().toISOString(),
+                            version: document.querySelector('esp-web-install-button').manifest.version,
+                            test_status: "flashed",
+                            sn_mct: sn,
+                            sn_led: sn,
+                            ota_0: {
+                                upy: 'web-flash',
+                                mct: 'web-flash'
+                            }
+                        };
+
+                        // Make API call to Google Apps Script
+                        const response = await fetch('https://script.google.com/macros/s/AKfycbxqaIPGjRak5-k41r5-p2yAavuSaxmHkiAIBc9fr3PDGShNkjRZCoyencZPPduzV8geww/exec', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify(payload)
+                        });
+
+                        const result = await response.text();
+                        if (result.includes('success')) {
+                            showStatus('Device registered successfully!');
+                        } else {
+                            showStatus('Error registering device');
+                            console.error('Registration error:', result);
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        showStatus('Error connecting to device');
+                    }
+                });
             }
         });
     </script>

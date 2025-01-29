@@ -4,20 +4,26 @@ import urllib.request
 import re
 
 class ProxyRequestHandler(SimpleHTTPRequestHandler):
+    def guess_type(self, path):
+        if path.endswith('.js'):
+            return 'text/javascript'
+        return super().guess_type(path)
+
     def end_headers(self):
+        # Add CORS headers
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With')
+        self.send_header('Access-Control-Max-Age', '86400')  # 24 hours
         self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate')
         super().end_headers()
 
     def do_OPTIONS(self):
         self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
 
     def do_GET(self):
+        print(f"Requested path: {self.path}")  # Debug logging
         if self.path.startswith('/proxy/'):
             # Extract the GitHub URL from the path
             github_url = self.path.replace('/proxy/', '')
