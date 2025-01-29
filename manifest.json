@@ -1,26 +1,21 @@
 {
   "name": "AVS MCT",
-  "version": "0.9.20250129_1252-main@321da90",
-  "home_assistant_domain": "avs_mct",
-  "new_install_prompt_erase": true,
+  "version": "0.9.20250129_1252",
   "builds": [
     {
       "chipFamily": "ESP32-S3",
       "parts": [
         {
-          "path": "https://github.com/AdvancedVapeSupply/MCC/releases/download/v0.9.20250129_1252-main@321da90/bootloader.bin",
-          "offset": 0,
-          "sha256": "c77efa0b128585e9768bc85bb9980c4e297ec0ea45921e4163123595a6a145d9"
+          "path": "http://localhost:5050/proxy/https://github.com/AdvancedVapeSupply/MCC/releases/download/v0.9.20250129_1252-main@321da90/bootloader.bin",
+          "offset": 0
         },
         {
-          "path": "https://github.com/AdvancedVapeSupply/MCC/releases/download/v0.9.20250129_1252-main@321da90/partition-table.bin",
-          "offset": 32768,
-          "sha256": "e3094c0fb26994746c92f195c0647b3e8a400567d5fc6351a4dc9ff8c8e90958"
+          "path": "http://localhost:5050/proxy/https://github.com/AdvancedVapeSupply/MCC/releases/download/v0.9.20250129_1252-main@321da90/partition-table.bin",
+          "offset": 32768
         },
         {
-          "path": "https://github.com/AdvancedVapeSupply/MCC/releases/download/v0.9.20250129_1252-main@321da90/micropython.bin",
-          "offset": 131072,
-          "sha256": "2c19c3f0947cf7d3c3e92339efbca025140bfc4566fa1835f006966596204c99"
+          "path": "http://localhost:5050/proxy/https://github.com/AdvancedVapeSupply/MCC/releases/download/v0.9.20250129_1252-main@321da90/micropython.bin",
+          "offset": 131072
         }
       ]
     }

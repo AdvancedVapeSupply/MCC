@@ -9,46 +9,270 @@
     <title>AVS MCT Install Button</title>
     <script type="module" src="https://unpkg.com/esp-web-tools@9/dist/web/install-button.js?module"></script>
     <style>
-             /* Reset default margins and paddings */
+        /* Reset default margins and paddings */
         html, body {
             margin: 0;
             padding: 0;
             overflow: hidden; /* Prevent scrollbars */
             height: 100%; /* Full height */
             width: 100%; /* Full width */
+            background-color: #000; /* Dark background */
         }
 
-        /* Style and position the button container */
-        #install-button-container {
-            position: fixed; /* Keep the button fixed over the content */
-            top: 50;
-            left: 0;
-            right: 0;
-            bottom: 0;
+        /* Main container for both canvas and button */
+        .main-container {
             display: flex;
-            justify-content: center; /* Center horizontally */
-            z-index: 100; /* Ensure it's above the Three.js canvas */
+            flex-direction: column;
+            height: 100vh;
+            align-items: center;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+        }
+
+        /* Hamburger Menu Styles */
+        .menu-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .hamburger {
+            width: 35px;
+            height: 35px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 5px;
+            border: 1px solid #00ff33;
+        }
+
+        .hamburger span {
+            width: 25px;
+            height: 2px;
+            background-color: #00ff33;
+            margin: 2px 0;
+            transition: 0.3s;
+        }
+
+        .menu {
+            position: absolute;
+            top: 45px;
+            right: 0;
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 5px;
+            padding: 10px;
+            display: none;
+            border: 1px solid #00ff33;
+            min-width: 200px;
+        }
+
+        .menu.active {
+            display: block;
         }
 
         esp-web-install-button {
-            --esp-tools-button-color: #00ff33; /* Change button background color */
-            --esp-tools-button-text-color: #000000; /* Change button text color */
+            --esp-tools-button-color: #00ff33;
+            --esp-tools-button-text-color: #000000;
+            width: 100%;
+        }
+
+        button[slot="activate"] {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background-color: #00ff33;
+            color: #000;
+        }
+
+        button[slot="activate"]:hover {
+            transform: scale(1.02);
+            box-shadow: 0 0 15px rgba(0, 255, 51, 0.5);
+        }
+
+        /* Animation for hamburger menu */
+        .hamburger.active span:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+
+        .hamburger.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .hamburger.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(5px, -5px);
+        }
+
+        #status-message {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff33;
+            padding: 10px 20px;
+            border-radius: 5px;
+            border: 1px solid #00ff33;
+            display: none;
+            z-index: 1000;
         }
     </style>
 </head>
 <body>
-    <div id="install-button-container">
-        <esp-web-install-button
-          manifest="https://advancedvapesupply.github.io/MCC/manifest.json"
-        >
-          <button slot="activate">Install MCT Firmware</button>
-          <span slot="unsupported">Ah snap, your browser doesn't work!</span>
-          <span slot="not-allowed">Ah snap, you are not allowed to use this on HTTP!</span>
-        </esp-web-install-button>
-    </div>
     <div id="canvas-container">
-        <!-- Your Three.js canvas will be appended here by your script -->
+        <!-- Three.js canvas will be appended here -->
     </div>
+    <div class="menu-container">
+        <div class="hamburger" onclick="toggleMenu()">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+        <div class="menu">
+            <esp-web-install-button
+              id="install-button"
+              manifest="manifest.json"
+            >
+              <button slot="activate">Install MCT Firmware</button>
+              <span slot="unsupported">Ah snap, your browser doesn't work!</span>
+              <span slot="not-allowed">Ah snap, you are not allowed to use this on HTTP!</span>
+            </esp-web-install-button>
+        </div>
+    </div>
+    <div id="status-message"></div>
     <script type="module" src="js/main.js"></script>
+    <script>
+        function toggleMenu() {
+            const menu = document.querySelector('.menu');
+            const hamburger = document.querySelector('.hamburger');
+            menu.classList.toggle('active');
+            hamburger.classList.toggle('active');
+        }
+
+        // Close menu when clicking outside
+        document.addEventListener('click', function(event) {
+            const menu = document.querySelector('.menu');
+            const hamburger = document.querySelector('.hamburger');
+            const isClickInside = menu.contains(event.target) || hamburger.contains(event.target);
+            
+            if (!isClickInside && menu.classList.contains('active')) {
+                menu.classList.remove('active');
+                hamburger.classList.remove('active');
+            }
+        });
+
+        // Show status message
+        function showStatus(message, duration = 5000) {
+            const statusElement = document.getElementById('status-message');
+            statusElement.textContent = message;
+            statusElement.style.display = 'block';
+            setTimeout(() => {
+                statusElement.style.display = 'none';
+            }, duration);
+        }
+
+        // Handle installation events
+        document.getElementById('install-button').addEventListener('installation-complete', async () => {
+            showStatus('Installation complete! Connecting to device...');
+            
+            try {
+                // Request serial port access
+                const port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+
+                const reader = port.readable.getReader();
+                const writer = port.writable.getWriter();
+
+                // Send command to get serial number
+                const encoder = new TextEncoder();
+                await writer.write(encoder.encode('import nvs\r\n'));
+                await writer.write(encoder.encode('print(nvs.get_nvs("serial.board"))\r\n'));
+
+                // Read response
+                const decoder = new TextDecoder();
+                let serialNumber = '';
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    serialNumber += decoder.decode(value);
+                    if (serialNumber.includes('\r\n')) break;
+                }
+
+                // Clean up serial connection
+                await writer.close();
+                await reader.cancel();
+                await port.close();
+
+                // Extract serial number from response
+                const sn = serialNumber.trim();
+                
+                // Get MAC address
+                const macAddress = await getMACAddress(port);
+
+                // Make API call with serial number and MAC address
+                const response = await fetch('YOUR_GOOGLE_API_ENDPOINT', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        mac: macAddress,
+                        status: 'flashed',
+                        sn_mct: sn,
+                        sn_led: sn,
+                        ota_0: {
+                            upy: 'web-flash',
+                            mct: 'web-flash'
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    showStatus('Device registered successfully!');
+                } else {
+                    showStatus('Error registering device');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus('Error connecting to device');
+            }
+        });
+
+        async function getMACAddress(port) {
+            // Similar to getting serial number, but send command to get MAC
+            const writer = port.writable.getWriter();
+            const reader = port.readable.getReader();
+            const encoder = new TextEncoder();
+            
+            await writer.write(encoder.encode('import network\r\n'));
+            await writer.write(encoder.encode('print(network.WLAN().config("mac"))\r\n'));
+
+            const decoder = new TextDecoder();
+            let macAddress = '';
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                macAddress += decoder.decode(value);
+                if (macAddress.includes('\r\n')) break;
+            }
+
+            await writer.close();
+            await reader.cancel();
+
+            return macAddress.trim();
+        }
+    </script>
 </body>
 </html>
