@@ -151,10 +151,6 @@ function createLEDRingOfPointLights(boxWidth, boxDepth) {
         const lightColor = new THREE.Color(`hsl(${hue}, 100%, 50%)`);
         const pointLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance);
         pointLight.position.set(x, 0.5, z); // Y is set to 0 as the lights are in the XZ plane
-        
-        // Log the position to the console
-        console.log(`Point Light Position: (${x.toFixed(2)}, 0, ${z.toFixed(2)})`);
-
         return pointLight;
     }
 
