@@ -1,21 +1,24 @@
 {
   "name": "AVS MCT",
-  "version": "0.2.20241218_1943",
+  "version": "0.9.20250128_1554-main@f6f6457",
   "builds": [
     {
       "chipFamily": "ESP32-S3",
       "parts": [
         {
-          "path": "lvgl_micropy_ESP32_GENERIC_S3-SPIRAM_OCT-16.bin",
-          "offset": 0
+          "path": "firmware/bootloader.bin",
+          "offset": 0,
+          "sha256": "01c14a359d9319061a23948f733deb45dd9e4c2dbf676bf897bc86482837571d"
         },
         {
-          "path": "mct.bin",
-          "offset": 3211264
+          "path": "firmware/partition-table.bin",
+          "offset": 32768,
+          "sha256": "e3094c0fb26994746c92f195c0647b3e8a400567d5fc6351a4dc9ff8c8e90958"
         },
         {
-          "path": "vfs.bin",
-          "offset": 6356992
+          "path": "firmware/micropython.bin",
+          "offset": 131072,
+          "sha256": "315fb6f0ca5cb8df4230bae9513340cd338f2c4cd7129913f4cf474503cf9473"
         }
       ]
     }
