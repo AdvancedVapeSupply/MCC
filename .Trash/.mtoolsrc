@@ -1,5 +1,0 @@
-
-drive m:
-    file="mct.bin"
-    partition=1
-    offset=0
