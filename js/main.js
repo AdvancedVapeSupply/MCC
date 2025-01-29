@@ -9,9 +9,10 @@ var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHei
 camera.position.z = 800;
 
 // Renderer
-var renderer = new THREE.WebGLRenderer();
+var renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+const container = document.getElementById('canvas-container');
+container.appendChild(renderer.domElement);
 
 // OrbitControls
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
