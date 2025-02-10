@@ -83,15 +83,27 @@ echo "$DEVICE_INFO"
 
 # Get MAC address early while device is in a known state
 echo_status "$BLUE" "Getting MAC address before flashing..."
-MAC_CLEAN=$(get_clean_mac)
+MAC_CLEAN=$(echo "$DEVICE_INFO" | grep '303a:' | awk '{print $2}' | cut -c1-12 | sed 's/\(..\)/\1:/g;s/:$//' | tr '[:upper:]' '[:lower:]')
 if [ -z "$MAC_CLEAN" ] || [ "$MAC_CLEAN" = "unknown" ]; then
     echo_status "$RED" "Failed to get MAC address before flashing. Cannot proceed."
     exit 1
 fi
 echo_status "$GREEN" "Got MAC address: $MAC_CLEAN"
 
-# Store version info
-VERSION_CLEAN=$(git rev-parse --short HEAD | tr -dc '[:print:]')
+# Get version info from version_info.json
+if [ ! -f "${MCC_ROOT}/firmware/version_info.json" ]; then
+    echo_status "$RED" "version_info.json not found"
+    exit 1
+fi
+
+# Read version info using jq
+MCT_VERSION=$(jq -r '.mct_commit' "${MCC_ROOT}/firmware/version_info.json")
+LVGL_VERSION=$(jq -r '.lvgl_commit' "${MCC_ROOT}/firmware/version_info.json")
+
+if [ -z "$MCT_VERSION" ] || [ -z "$LVGL_VERSION" ]; then
+    echo_status "$RED" "Failed to read version info from version_info.json"
+    exit 1
+fi
 
 # Determine the correct port for bootloader mode
 BOOTLOADER_PORT=$(echo "$DEVICE_INFO" | grep '303a:1001' | grep -oE '/dev/cu\.[^ ]+')
@@ -149,7 +161,7 @@ if [ $? -eq 0 ]; then
 
     # Check for device in REPL mode
     check_repl_mode() {
-        local device_info=$(mpremote connect list | grep "AVS Espressif Device")
+        local device_info=$(mpremote connect list | grep "AVS MCT")
         if [ -n "$device_info" ]; then
             echo "Device found in REPL mode: $device_info"
             return 0
@@ -195,8 +207,8 @@ if [ $? -eq 0 ]; then
     JSON_PAYLOAD=$(create_payload "$MAC_CLEAN" "flashed" \
         "sn_mct" "\"$SN_MCT\"" \
         "sn_led" "\"$SN_LED\"" \
-        "ota_0.upy" "\"$VERSION_CLEAN\"" \
-        "ota_0.mct" "\"$VERSION_CLEAN\"")
+        "ota_0.upy" "\"$LVGL_VERSION\"" \
+        "ota_0.mct" "\"$MCT_VERSION\"")
 
     # Register flash
     register_data "$JSON_PAYLOAD" "FLASH" || exit 1
@@ -211,14 +223,14 @@ if [ $? -eq 0 ]; then
         
         # Set OTA version information
         echo_status "$BLUE" "Setting OTA version information..."
-        mpremote exec "import nvs; nvs.set_nvs('ota_0.upy', '${VERSION_CLEAN}')"
-        mpremote exec "import nvs; nvs.set_nvs('ota_0.mct', '${VERSION_CLEAN}')"
+        mpremote exec "import nvs; nvs.set_nvs('ota_0.upy', '${LVGL_VERSION}')"
+        mpremote exec "import nvs; nvs.set_nvs('ota_0.mct', '${MCT_VERSION}')"
         echo_status "$GREEN" "OTA version information set successfully"
         
         # Create JSON payload for REPL test (no serial numbers needed)
         JSON_PAYLOAD=$(create_payload "$MAC_CLEAN" "test_repl" \
-            "ota_0.upy" "\"$VERSION_CLEAN\"" \
-            "ota_0.mct" "\"$VERSION_CLEAN\"")
+            "ota_0.upy" "\"$LVGL_VERSION\"" \
+            "ota_0.mct" "\"$MCT_VERSION\"")
 
         # Register REPL test
         register_data "$JSON_PAYLOAD" "REPL TEST" || exit 1

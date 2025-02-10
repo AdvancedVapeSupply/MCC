@@ -83,12 +83,37 @@ if [ $? -eq 0 ]; then
     # Initialize WiFi using NVS parameters
     echo_status "$BLUE" "Initializing WiFi..."
     WIFI_INIT=$(execute_on_device "
-import mct_ota
-try:
-    if mct_ota.connect_wifi():
-        print('success')
+import network
+import nvs
+import time
+
+def connect_wifi():
+    ssid = nvs.get_nvs('wifi.ssid')
+    passwd = nvs.get_nvs('wifi.passwd')
+    if not ssid or not passwd:
+        raise Exception('WiFi credentials not found in NVS')
+    
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    if not wlan.isconnected():
+        print('Connecting to WiFi...')
+        wlan.connect(ssid, passwd)
+        # Wait up to 10 seconds for connection
+        for _ in range(20):
+            if wlan.isconnected():
+                break
+            time.sleep(0.5)
+    
+    if wlan.isconnected():
+        print('Connected to WiFi')
+        print('IP:', wlan.ifconfig()[0])
+        return True
     else:
         raise Exception('Failed to connect to WiFi')
+
+try:
+    connect_wifi()
+    print('success')
 except Exception as e:
     print('Error:', str(e))
 ")
@@ -120,6 +145,47 @@ except Exception as e:
         register_data "$JSON_PAYLOAD" "WIFI SUCCESS" || exit 1
     fi
 
+    # Test OTA functionality
+    echo_status "$BLUE" "Testing OTA functionality..."
+    OTA_TEST=$(execute_on_device "
+from ota import OTAUpdater
+try:
+    updater = OTAUpdater()
+    if updater.test():
+        print('success')
+    else:
+        raise Exception('OTA tests failed')
+except Exception as e:
+    print('Error:', str(e))
+")
+
+    echo_status "$BLUE" "OTA test output:"
+    echo "$OTA_TEST"
+
+    if echo "$OTA_TEST" | grep -q "success"; then
+        echo_status "$GREEN" "OTA test successful"
+        test_ota=true
+        
+        # Create JSON payload for OTA success
+        JSON_PAYLOAD=$(create_payload "$MAC_CLEAN" "ota_ok" \
+            "test_ota" true)
+
+        # Register OTA success
+        register_data "$JSON_PAYLOAD" "OTA SUCCESS" || exit 1
+    else
+        echo_status "$RED" "OTA test failed"
+        test_ota=false
+        
+        # Create JSON payload for OTA failure
+        JSON_PAYLOAD=$(create_payload "$MAC_CLEAN" "ota_fail" \
+            "test_ota" false \
+            "error" "\"$(echo "$OTA_TEST" | grep "Error:" | cut -d':' -f2- | tr -d '\n' | tr -dc '[:print:]')\"")
+
+        # Register OTA failure
+        register_data "$JSON_PAYLOAD" "OTA FAILURE" || exit 1
+        exit 1
+    fi
+
     # Test MCT instantiation
     echo_status "$BLUE" "Testing MCT instantiation..."
     echo_status "$BLUE" "Raw MCT init output:"
@@ -133,7 +199,7 @@ except Exception as e:
         # Run MCT tests
         echo_status "$BLUE" "Running MCT tests..."
         # Capture test results and clean up any control characters
-        TEST_RESULTS=$(execute_on_device "import json; from MCT import MCT; m=MCT(); print(m.test())" | tail -n 1 | tr -dc '[:print:]\n')
+        TEST_RESULTS=$(execute_on_device "import json; from MCT import MCT; m=MCT(); print(json.dumps(m.test()))" | tail -n 1 | tr -dc '[:print:]\n')
 
         # Verify we got valid JSON
         if ! echo "$TEST_RESULTS" | jq . >/dev/null 2>&1; then
@@ -164,70 +230,6 @@ except Exception as e:
 
         # Register MCT success
         register_data "$JSON_PAYLOAD" "MCT SUCCESS" || exit 1
-
-        # Test UI functionality
-        echo_status "$BLUE" "Testing UI functionality..."
-        UI_TEST=$(execute_on_device "
-import main
-try:
-    main.main()
-    print('success')
-except Exception as e:
-    print('Error:', str(e))
-")
-
-        echo_status "$BLUE" "UI test output:"
-        echo "$UI_TEST"
-
-        if echo "$UI_TEST" | grep -q "success"; then
-            echo_status "$GREEN" "UI test successful"
-            test_ui=true
-        else
-            echo_status "$RED" "UI test failed"
-            test_ui=false
-            echo_status "$RED" "Error: $(echo "$UI_TEST" | grep "Error:" | cut -d':' -f2-)"
-        fi
-
-        # Now test OTA functionality after UI test
-        echo_status "$BLUE" "Testing OTA functionality..."
-        OTA_TEST=$(execute_on_device "
-import mct_ota
-try:
-    updater = mct_ota.OTAUpdater()
-    if updater.test():
-        print('success')
-    else:
-        raise Exception('OTA tests failed')
-except Exception as e:
-    print('Error:', str(e))
-")
-
-        echo_status "$BLUE" "OTA test output:"
-        echo "$OTA_TEST"
-
-        if echo "$OTA_TEST" | grep -q "success"; then
-            echo_status "$GREEN" "OTA test successful"
-            test_ota=true
-            
-            # Create JSON payload for OTA success
-            JSON_PAYLOAD=$(create_payload "$MAC_CLEAN" "ota_ok" \
-                "test_ota" true)
-
-            # Register OTA success
-            register_data "$JSON_PAYLOAD" "OTA SUCCESS" || exit 1
-        else
-            echo_status "$RED" "OTA test failed"
-            test_ota=false
-            
-            # Create JSON payload for OTA failure
-            JSON_PAYLOAD=$(create_payload "$MAC_CLEAN" "ota_fail" \
-                "test_ota" false \
-                "error" "\"$(echo "$OTA_TEST" | grep "Error:" | cut -d':' -f2- | tr -d '\n' | tr -dc '[:print:]')\"")
-
-            # Register OTA failure
-            register_data "$JSON_PAYLOAD" "OTA FAILURE" || exit 1
-        fi
-
     else
         echo_status "$RED" "MCT initialization failed"
         test_mct="$MCT_INIT"

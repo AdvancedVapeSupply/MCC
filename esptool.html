@@ -3,56 +3,9 @@
 <head>
     <title>AVS MCT Firmware Update</title>
     <meta charset="utf-8">
-    <script type="module" src="js/main.js?v=1"></script>
-    <script type="module" src="js/flash_utils.js"></script>
     <script type="module" src="https://unpkg.com/esp-web-tools@9.4.3/dist/web/install-button.js?module"></script>
-    <style>
-        .flash-info {
-            margin: 20px;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            background-color: #f5f5f5;
-        }
-        .flash-info pre {
-            margin: 5px 0;
-            font-family: monospace;
-        }
-    </style>
 </head>
 <body>
-    <div class="flash-info">
-        <h3>Flash Information</h3>
-        <pre id="flash-id-info">Click "Check Flash ID" to view flash chip information</pre>
-        <button id="check-flash-id">Check Flash ID</button>
-    </div>
     <esp-web-install-button manifest="manifest.json"></esp-web-install-button>
-
-    <script type="module">
-        import { getFlashId } from './js/flash_utils.js';
-        
-        const flashIdButton = document.getElementById('check-flash-id');
-        const flashIdInfo = document.getElementById('flash-id-info');
-        
-        flashIdButton.addEventListener('click', async () => {
-            try {
-                flashIdButton.disabled = true;
-                flashIdInfo.textContent = 'Connecting to device...';
-                
-                // Request serial port
-                const port = await navigator.serial.requestPort();
-                const flashInfo = await getFlashId(port);
-                
-                flashIdInfo.textContent = `Flash ID Information:
-Manufacturer ID: ${flashInfo.manufacturer}
-Device ID: ${flashInfo.deviceId}
-Full Flash ID: ${flashInfo.fullId}`;
-            } catch (error) {
-                flashIdInfo.textContent = `Error: ${error.message}`;
-            } finally {
-                flashIdButton.disabled = false;
-            }
-        });
-    </script>
 </body>
 </html>

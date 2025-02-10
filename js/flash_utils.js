@@ -1,4 +1,4 @@
-import { EspLoader } from 'esp-web-flasher';
+import { EspLoader } from 'https://unpkg.com/esp-web-flasher@7.3.1/dist/web/index.js';
 
 export async function getFlashId(port) {
     try {
