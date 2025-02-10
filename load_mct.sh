@@ -15,7 +15,7 @@ echo_status() {
 }
 
 # Source common registration functions
-source "$(dirname "$0")/../MCT/bin/register.sh"
+source "$(dirname "$0")/register.sh"
 
 # Get the MCC root directory
 MCC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
