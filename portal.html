@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>M22 Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000000;
+            overflow: hidden;
+        }
+
+        #portal-container {
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="portal-container"></div>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+        let smokeParticles = [];
+        let scene, camera, renderer, m22Device;
+
+        function init() {
+            console.log('Initializing scene');
+            
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000000);
+
+            // Camera setup
+            const container = document.getElementById('portal-container');
+            const aspect = container.clientWidth / container.clientHeight;
+            camera = new THREE.PerspectiveCamera(85, aspect, 0.1, 1000);
+            camera.position.z = 8;
+
+            // Renderer setup
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true,
+                alpha: true
+            });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            // Add lights
+            const ambientLight = new THREE.AmbientLight(0x404040, 1);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(0, 1, 1);
+            scene.add(directionalLight);
+
+            // Add rim light for the device
+            const rimLight1 = new THREE.PointLight(0x00ff00, 2, 20);
+            rimLight1.position.set(5, 0, 5);
+            scene.add(rimLight1);
+
+            const rimLight2 = new THREE.PointLight(0x00ff00, 2, 20);
+            rimLight2.position.set(-5, 0, 5);
+            scene.add(rimLight2);
+
+            // Initialize effects
+            initM22Device();
+            initSmokeEffect();
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize, false);
+
+            // Start animation
+            animate();
+        }
+
+        function initM22Device() {
+            // Create main device body
+            const deviceGeometry = new THREE.BoxGeometry(5, 15, 3);
+            const deviceMaterial = new THREE.MeshPhongMaterial({
+                color: 0x1a1a1a,
+                specular: 0x333333,
+                shininess: 30,
+                emissive: 0x0a0a0a
+            });
+            m22Device = new THREE.Mesh(deviceGeometry, deviceMaterial);
+            m22Device.position.z = -8;
+            m22Device.renderOrder = 2;
+
+            // Add display screen
+            const screenGeometry = new THREE.PlaneGeometry(3.5, 1.5);
+            const screenMaterial = new THREE.MeshPhongMaterial({
+                color: 0x00ff00,
+                emissive: 0x002200,
+                transparent: true,
+                opacity: 0.8
+            });
+            const screen = new THREE.Mesh(screenGeometry, screenMaterial);
+            screen.position.z = 1.6;
+            screen.position.y = 4;
+            m22Device.add(screen);
+
+            // Add buttons
+            const buttonGeometry = new THREE.CylinderGeometry(0.4, 0.4, 0.2, 16);
+            const buttonMaterial = new THREE.MeshPhongMaterial({
+                color: 0x222222,
+                specular: 0x666666,
+                shininess: 50
+            });
+
+            const button1 = new THREE.Mesh(buttonGeometry, buttonMaterial);
+            button1.rotation.x = Math.PI / 2;
+            button1.position.set(0, -4, 1.6);
+            m22Device.add(button1);
+
+            const button2 = button1.clone();
+            button2.position.set(0, -5.5, 1.6);
+            m22Device.add(button2);
+
+            scene.add(m22Device);
+        }
+
+        function initSmokeEffect() {
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.load(
+                'https://s3-us-west-2.amazonaws.com/s.cdpn.io/95637/Smoke-Element.png',
+                (smokeTexture) => {
+                    const smokeMaterial = new THREE.MeshLambertMaterial({ 
+                        color: 0x00ff00, 
+                        map: smokeTexture, 
+                        transparent: true,
+                        opacity: 0.35,
+                        blending: THREE.AdditiveBlending
+                    });
+                    
+                    const smokeGeo = new THREE.PlaneGeometry(35, 35);
+                    
+                    for (let p = 0; p < 60; p++) {
+                        const particle = new THREE.Mesh(smokeGeo, smokeMaterial);
+                        particle.position.set(
+                            Math.random() * 40 - 20,
+                            Math.random() * 40 - 20,
+                            Math.random() * 10 - 25
+                        );
+                        particle.rotation.z = Math.random() * 2 * Math.PI;
+                        particle.renderOrder = 1;
+                        scene.add(particle);
+                        smokeParticles.push({
+                            mesh: particle,
+                            rotationSpeed: (Math.random() - 0.5) * 0.001,
+                            driftX: (Math.random() - 0.5) * 0.005,
+                            driftY: (Math.random() - 0.5) * 0.005,
+                            driftZ: (Math.random() - 0.5) * 0.002
+                        });
+                    }
+                }
+            );
+        }
+
+        function updateSmokeEffect() {
+            smokeParticles.forEach(particle => {
+                particle.mesh.rotation.z += particle.rotationSpeed;
+                
+                particle.mesh.position.x += particle.driftX;
+                particle.mesh.position.y += particle.driftY;
+                particle.mesh.position.z += particle.driftZ;
+                
+                if (Math.abs(particle.mesh.position.x) > 20) {
+                    particle.mesh.position.x = -particle.mesh.position.x * 0.95;
+                }
+                if (Math.abs(particle.mesh.position.y) > 20) {
+                    particle.mesh.position.y = -particle.mesh.position.y * 0.95;
+                }
+                if (particle.mesh.position.z > -20 || particle.mesh.position.z < -30) {
+                    particle.mesh.position.z = -25;
+                }
+            });
+        }
+
+        function updateM22Device() {
+            if (m22Device) {
+                m22Device.rotation.y += 0.002;
+                // Add subtle floating motion with reduced amplitude
+                m22Device.position.y = Math.sin(Date.now() * 0.001) * 0.1;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateSmokeEffect();
+            updateM22Device();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('portal-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        // Initialize everything
+        init();
+    </script>
+</body>
+</html> 

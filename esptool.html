@@ -4,8 +4,322 @@
     <title>AVS MCT Firmware Update</title>
     <meta charset="utf-8">
     <script type="module" src="https://unpkg.com/esp-web-tools@9.4.3/dist/web/install-button.js?module"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #f5f5f5;
+        }
+        #testPanel {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #testResults {
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            background-color: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+    </style>
 </head>
 <body>
-    <esp-web-install-button manifest="manifest.json"></esp-web-install-button>
+    <h1>AVS MCT Firmware Update & Test</h1>
+    <esp-web-install-button manifest="manifest.json" id="install-button"></esp-web-install-button>
+    <div id="status"></div>
+    
+    <div id="testPanel">
+        <h2>Device Testing</h2>
+        <p>Run tests on the device to verify functionality:</p>
+        <button id="connectBtn">Connect to Device</button>
+        <button id="testReplBtn" disabled>Test REPL</button>
+        <button id="testNvsBtn" disabled>Test NVS</button>
+        <button id="testWifiBtn" disabled>Test WiFi</button>
+        <button id="testMctBtn" disabled>Test MCT</button>
+        <button id="runAllTestsBtn" disabled>Run All Tests</button>
+        <div id="testResults"></div>
+    </div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const testPanel = document.getElementById('testPanel');
+        const testResults = document.getElementById('testResults');
+        const connectBtn = document.getElementById('connectBtn');
+        const testReplBtn = document.getElementById('testReplBtn');
+        const testNvsBtn = document.getElementById('testNvsBtn');
+        const testWifiBtn = document.getElementById('testWifiBtn');
+        const testMctBtn = document.getElementById('testMctBtn');
+        const runAllTestsBtn = document.getElementById('runAllTestsBtn');
+        
+        let port;
+        let reader;
+        let writer;
+        let readableStreamClosed;
+        let writableStreamClosed;
+        
+        function showStatus(message, isError = false) {
+            statusDiv.textContent = message;
+            statusDiv.className = isError ? 'error' : '';
+        }
+        
+        function logResult(message, isSuccess = true) {
+            const div = document.createElement('div');
+            div.textContent = message;
+            div.className = isSuccess ? 'success' : 'error';
+            testResults.appendChild(div);
+            testResults.scrollTop = testResults.scrollHeight;
+        }
+        
+        // Listen for installation complete event
+        document.getElementById('install-button').addEventListener('installation-complete', () => {
+            showStatus('Installation complete! You can now test the device.');
+            testPanel.style.display = 'block';
+        });
+        
+        // Connect to device via Serial API
+        connectBtn.addEventListener('click', async () => {
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+                
+                // Set up the reader and writer
+                const textDecoder = new TextDecoder();
+                const textEncoder = new TextEncoder();
+                
+                // Create streams for reading and writing
+                const readable = port.readable;
+                const writable = port.writable;
+                
+                reader = readable.getReader();
+                writer = writable.getWriter();
+                
+                showStatus('Connected to device');
+                logResult('Serial connection established', true);
+                
+                // Enable test buttons
+                testReplBtn.disabled = false;
+                testNvsBtn.disabled = false;
+                testWifiBtn.disabled = false;
+                testMctBtn.disabled = false;
+                runAllTestsBtn.disabled = false;
+                
+                // Flush any pending data
+                await sendCommand('\r\n');
+                
+            } catch (error) {
+                console.error('Error connecting to device:', error);
+                showStatus('Error connecting to device', true);
+                logResult(`Connection error: ${error.message}`, false);
+            }
+        });
+        
+        // Send command to device and read response
+        async function sendCommand(command, timeout = 5000) {
+            if (!writer) {
+                throw new Error('Serial connection not established');
+            }
+            
+            const encoder = new TextEncoder();
+            await writer.write(encoder.encode(command + '\r\n'));
+            
+            // Read response with timeout
+            let response = '';
+            const decoder = new TextDecoder();
+            const startTime = Date.now();
+            
+            while (Date.now() - startTime < timeout) {
+                try {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    const text = decoder.decode(value);
+                    response += text;
+                    
+                    // Check if we have a complete response (ends with >>> or other prompt)
+                    if (response.includes('>>>') || response.includes('... ')) {
+                        break;
+                    }
+                } catch (error) {
+                    console.error('Error reading response:', error);
+                    break;
+                }
+            }
+            
+            return response;
+        }
+        
+        // Test REPL functionality
+        testReplBtn.addEventListener('click', async () => {
+            try {
+                logResult('Testing REPL communication...', true);
+                const response = await sendCommand('import sys; print(sys.implementation.version)');
+                
+                if (response.includes('(')) {
+                    logResult(`REPL test successful: ${response.trim()}`, true);
+                } else {
+                    logResult('REPL test failed', false);
+                }
+            } catch (error) {
+                console.error('Error testing REPL:', error);
+                logResult(`REPL test error: ${error.message}`, false);
+            }
+        });
+        
+        // Test NVS functionality
+        testNvsBtn.addEventListener('click', async () => {
+            try {
+                logResult('Testing NVS functionality...', true);
+                
+                // Initialize NVS with test values
+                await sendCommand('import nvs');
+                await sendCommand('nvs.set_nvs("wifi.ssid", "AVS")');
+                await sendCommand('nvs.set_nvs("wifi.passwd", "Advanced")');
+                await sendCommand('nvs.set_nvs("serial.board", "5024-0011m")');
+                await sendCommand('nvs.set_nvs("serial.mfg", "5024-0008")');
+                
+                // Verify NVS values
+                const ssidResponse = await sendCommand('print("WiFi SSID:", nvs.get_nvs("wifi.ssid"))');
+                const boardSerialResponse = await sendCommand('print("Board Serial:", nvs.get_nvs("serial.board"))');
+                
+                if (ssidResponse.includes('AVS') && boardSerialResponse.includes('5024-0011m')) {
+                    logResult('NVS test successful', true);
+                } else {
+                    logResult('NVS test failed', false);
+                }
+            } catch (error) {
+                console.error('Error testing NVS:', error);
+                logResult(`NVS test error: ${error.message}`, false);
+            }
+        });
+        
+        // Test WiFi functionality
+        testWifiBtn.addEventListener('click', async () => {
+            try {
+                logResult('Testing WiFi functionality...', true);
+                
+                const wifiResponse = await sendCommand(`
+import mct_ota
+try:
+    if mct_ota.connect_wifi():
+        print('WiFi connection successful')
+    else:
+        print('WiFi connection failed')
+except Exception as e:
+    print('Error:', str(e))
+                `, 10000);
+                
+                if (wifiResponse.includes('WiFi connection successful')) {
+                    logResult('WiFi test successful', true);
+                } else {
+                    logResult(`WiFi test failed: ${wifiResponse}`, false);
+                }
+            } catch (error) {
+                console.error('Error testing WiFi:', error);
+                logResult(`WiFi test error: ${error.message}`, false);
+            }
+        });
+        
+        // Test MCT functionality
+        testMctBtn.addEventListener('click', async () => {
+            try {
+                logResult('Testing MCT functionality...', true);
+                
+                const mctResponse = await sendCommand(`
+try:
+    from MCT import MCT
+    m = MCT()
+    print(m.test())
+except Exception as e:
+    print('Error:', str(e))
+                `, 15000);
+                
+                if (mctResponse.includes('{') && mctResponse.includes('}')) {
+                    logResult(`MCT test results: ${mctResponse}`, true);
+                } else {
+                    logResult(`MCT test failed: ${mctResponse}`, false);
+                }
+            } catch (error) {
+                console.error('Error testing MCT:', error);
+                logResult(`MCT test error: ${error.message}`, false);
+            }
+        });
+        
+        // Run all tests
+        runAllTestsBtn.addEventListener('click', async () => {
+            try {
+                logResult('Running all tests...', true);
+                
+                // Test REPL
+                await testReplBtn.click();
+                
+                // Test NVS
+                await testNvsBtn.click();
+                
+                // Test WiFi
+                await testWifiBtn.click();
+                
+                // Test MCT
+                await testMctBtn.click();
+                
+                logResult('All tests completed', true);
+            } catch (error) {
+                console.error('Error running all tests:', error);
+                logResult(`Test suite error: ${error.message}`, false);
+            }
+        });
+        
+        // Clean up resources when page is unloaded
+        window.addEventListener('beforeunload', async () => {
+            if (reader) {
+                await reader.cancel();
+                reader = null;
+            }
+            
+            if (writer) {
+                await writer.close();
+                writer = null;
+            }
+            
+            if (port) {
+                await port.close();
+                port = null;
+            }
+        });
+    </script>
 </body>
 </html>
