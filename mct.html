@@ -181,6 +181,9 @@
         const scene = new THREE.Scene();
         scene.background = null;  // Keep background transparent
 
+        // Show smoke background
+        document.getElementById('smoke-background').style.display = 'block';
+
         // Camera setup
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
         camera.position.set(0, 0, 100);
@@ -201,17 +204,27 @@
         const rotatingGroup = new THREE.Group();
         scene.add(rotatingGroup);
 
-        // Create highlight overlays group
-        const highlightOverlays = new THREE.Group();
-        rotatingGroup.add(highlightOverlays);
-
-        // Basic lighting setup
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+        // Lighting setup
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
         scene.add(ambientLight);
 
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
-        directionalLight.position.set(0, 1, 2);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(0, 10, 200);
         scene.add(directionalLight);
+
+        // Add rim lights
+        const rimLight1 = new THREE.PointLight(0x00ff00, 0.3, 80);
+        rimLight1.position.set(5, 5, 40);
+        scene.add(rimLight1);
+
+        const rimLight2 = new THREE.PointLight(0x00ff00, 0.3, 80);
+        rimLight2.position.set(-5, 5, 40);
+        scene.add(rimLight2);
+
+        // Add fill light
+        const fillLight = new THREE.PointLight(0xffffff, 0.1, 150);
+        fillLight.position.set(0, 0, 250);
+        scene.add(fillLight);
 
         // Create starfield
         function createStarfield() {
@@ -394,7 +407,12 @@
             ringMaterial.envMap = envMap;
 
             // Create button overlays
+            const highlightOverlays = new THREE.Group();
+            highlightOverlays.userData = {};
             Object.entries(keySurfaces).forEach(([key, surfaces]) => {
+                // Skip creating overlay for 'f' key since we want to highlight the mesh directly
+                if (key === 'f') return;
+                
                 console.log(`Creating overlay for ${key} with surfaces:`, surfaces); // Debug output
                 const buttonGeometry = new THREE.BufferGeometry();
                 const positions = [];
@@ -444,6 +462,9 @@
                     highlightOverlays.userData[key] = buttonMesh;
                 }
             });
+            
+            // Add highlight overlays to the scene
+            rotatingGroup.add(highlightOverlays);
         });
 
         // Orbit controls setup
@@ -462,9 +483,11 @@
             starfield.rotation.y += 0.0002;
             starfield.rotation.x += 0.0001;
 
+            // Update effects
+            updateEffects();
+
             renderer.render(scene, camera);
         }
-        animate();
 
         // Mouse and raycaster setup for all interactions
         const mouse = new THREE.Vector2();
@@ -557,110 +580,83 @@
             opacity: 1.0
         });
 
-        // Remove old overlay material and functions
-        const overlayMaterial = null;
-        function createOverlay() { return null; }
-
         // Track active buttons
         const activeButtons = new Set();
 
-        // Function to highlight button
+        // Function to highlight button - updated to work with mesh surfaces
         function highlightButton(key, highlight) {
-            const buttonMesh = highlightOverlays.userData[key];
-            if (buttonMesh && buttonMesh.material) {
+            if (!window.mctMesh) return;
+            
+            const surfaces = keySurfaces[key];
+            if (!surfaces) return;
+
+            // Get the material array if it exists
+            const materials = Array.isArray(window.mctMesh.material) ? 
+                window.mctMesh.material : 
+                [window.mctMesh.material];
+
+            // Update materials for the key's surfaces
+            surfaces.forEach(faceIndex => {
+                const materialIndex = window.mctMesh.geometry.groups ? 
+                    window.mctMesh.geometry.groups[faceIndex]?.materialIndex || 0 : 
+                    0;
+
+                // Create new material if needed
+                if (!materials[materialIndex]) {
+                    materials[materialIndex] = new THREE.MeshPhongMaterial({
+                        color: buttonProperties[key].color,
+                        specular: 0x666666,
+                        shininess: 100,
+                        side: THREE.DoubleSide
+                    });
+                }
+
+                // Update material properties
                 if (highlight) {
-                    buttonMesh.material.color.setHex(buttonProperties[key].hoverColor);
-                    buttonMesh.material.emissive.setHex(buttonProperties[key].hoverColor);
-                    buttonMesh.material.emissiveIntensity = 1.0;
+                    materials[materialIndex].color.setHex(buttonProperties[key].hoverColor);
+                    materials[materialIndex].emissive.setHex(buttonProperties[key].hoverColor);
+                    materials[materialIndex].emissiveIntensity = 0.5;
                     activeButtons.add(key);
                 } else {
-                    buttonMesh.material.color.setHex(buttonProperties[key].color);
-                    buttonMesh.material.emissive.setHex(0x000000);
-                    buttonMesh.material.emissiveIntensity = 0;
+                    materials[materialIndex].color.setHex(buttonProperties[key].color);
+                    materials[materialIndex].emissive.setHex(0x000000);
+                    materials[materialIndex].emissiveIntensity = 0;
                     activeButtons.delete(key);
                 }
-            }
+            });
+
+            // Update the mesh material
+            window.mctMesh.material = materials.length === 1 ? materials[0] : materials;
         }
 
-        // Consolidated keyboard event listeners
-        window.addEventListener('keydown', (event) => {
-            const key = event.key.toLowerCase();
-            
-            // Handle button keys (f, u, k, d)
-            if (keySurfaces[key]) {
-                highlightButton(key, true);
-            }
-            
-            // Handle ring surface recording (r)
-            if (key === 'r' && surfaceRecording.currentFace !== null) {
-                surfaceRecording.r.add(surfaceRecording.currentFace);
-                updateSurfaceDisplay();
-            }
-            
-            // Handle coordinates toggle (c)
-            if (key === 'c') {
-                coordsDiv.style.display = coordsDiv.style.display === 'none' ? 'block' : 'none';
-                if (coordsDiv.style.display === 'block') {
-                    updateCoordinates();
-                }
-            }
-            
-            // Handle toggles panel (t)
-            if (key === 't') {
-                const togglesDiv = document.getElementById('togglesDiv');
-                togglesDiv.style.display = togglesDiv.style.display === 'none' ? 'block' : 'none';
-            }
-        });
-
-        window.addEventListener('keyup', (event) => {
-            const key = event.key.toLowerCase();
-            if (keySurfaces[key]) {
-                highlightButton(key, false);
-            }
-        });
-
-        // Mouse event handlers for button interaction
+        // Mouse event handlers for button interaction - updated
         window.addEventListener('mousemove', (event) => {
             updateMousePosition(event);
-            // First try to intersect with the base model
-            const intersects = raycaster.intersectObject(mctMesh);
+            if (!window.mctMesh) return;
+
+            const intersects = raycaster.intersectObject(window.mctMesh);
             if (intersects.length > 0) {
                 const faceIndex = Math.floor(intersects[0].faceIndex);
                 surfaceRecording.currentFace = faceIndex;
                 updateSurfaceDisplay();
                 
                 // Check if this face belongs to a key
-                const key = findKeyForSurface(faceIndex);
-                if (key) {
-                    // Highlight all surfaces of this key
-                    const buttonMesh = highlightOverlays.userData[key];
-                    if (buttonMesh && buttonMesh.material) {
-                        buttonMesh.material.color.setHex(buttonProperties[key].hoverColor);
-                        buttonMesh.material.emissive.setHex(buttonProperties[key].hoverColor);
-                        buttonMesh.material.emissiveIntensity = 0.5;
+                let foundKey = null;
+                for (const [key, surfaces] of Object.entries(keySurfaces)) {
+                    if (surfaces.includes(faceIndex)) {
+                        foundKey = key;
+                        break;
                     }
                 }
-                
-                // Reset other keys
-                Object.entries(keySurfaces).forEach(([k, _]) => {
-                    if (k !== key) {
-                        const mesh = highlightOverlays.userData[k];
-                        if (mesh && mesh.material) {
-                            mesh.material.color.setHex(buttonProperties[k].color);
-                            mesh.material.emissive.setHex(0x000000);
-                            mesh.material.emissiveIntensity = 0;
-                        }
-                    }
+
+                // Update button highlights
+                Object.keys(keySurfaces).forEach(key => {
+                    highlightButton(key, key === foundKey);
                 });
             } else {
-                // Reset all keys when not hovering over any
-                Object.entries(keySurfaces).forEach(([key, _]) => {
-                    const mesh = highlightOverlays.userData[key];
-                    if (mesh && mesh.material) {
-                        mesh.material.color.setHex(buttonProperties[key].color);
-                        mesh.material.emissive.setHex(0x000000);
-                        mesh.material.emissiveIntensity = 0;
-                    }
+                // Reset all buttons when not hovering
+                Object.keys(keySurfaces).forEach(key => {
+                    highlightButton(key, false);
                 });
                 surfaceRecording.currentFace = null;
                 updateSurfaceDisplay();
@@ -669,12 +665,16 @@
 
         window.addEventListener('mousedown', (event) => {
             updateMousePosition(event);
-            const intersects = raycaster.intersectObjects(Object.values(highlightOverlays.userData), true);
+            if (!window.mctMesh) return;
+
+            const intersects = raycaster.intersectObject(window.mctMesh);
             if (intersects.length > 0) {
-                const mesh = intersects[0].object;
-                const key = mesh.userData.key;
-                if (key) {
+                const faceIndex = Math.floor(intersects[0].faceIndex);
+                for (const [key, surfaces] of Object.entries(keySurfaces)) {
+                    if (surfaces.includes(faceIndex)) {
                     highlightButton(key, true);
+                        break;
+                    }
                 }
             }
         });
@@ -763,12 +763,22 @@
         coordsDiv.style.display = 'none';
         document.body.appendChild(coordsDiv);
 
-        // Update coordinates display
+        // Update coordinates display function
         function updateCoordinates(event) {
             if (coordsDiv.style.display === 'none') return;
 
             let coordsText = '';
             
+            // Add red dot position
+            coordsText += `Red Dot: (${redDot.position.x.toFixed(2)}, ${redDot.position.y.toFixed(2)}, ${redDot.position.z.toFixed(2)})\n\n`;
+            
+            // Add saved LED positions
+            coordsText += 'Saved LED Positions:\n';
+            Object.entries(savedLedPositions).forEach(([led, pos]) => {
+                coordsText += `${led}: (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)})\n`;
+            });
+            coordsText += '\n';
+
             // Add mouse position if event provided
             if (event) {
                 const worldPos = updateMousePosition(event);
@@ -779,7 +789,7 @@
             coordsText += `Screen: (${screenMesh.position.x.toFixed(2)}, ${screenMesh.position.y.toFixed(2)}, ${screenMesh.position.z.toFixed(2)})\n`;
             coordsText += `Screen Size: ${screenWidth.toFixed(1)} x ${screenHeight.toFixed(1)}\n\n`;
 
-            // Add button overlay positions
+            // Add button positions
             Object.entries(keySurfaces).forEach(([key, _]) => {
                 const buttonMesh = highlightOverlays.userData[key];
                 if (buttonMesh) {
@@ -798,8 +808,38 @@
             coordsDiv.innerHTML = coordsText;
         }
 
-        // Add mouse move listener
+        // Add mousemove listener for coordinate updates
         window.addEventListener('mousemove', updateCoordinates);
+
+        // Function to create light control UI
+        function createLightControl(name, light, maxIntensity) {
+            const container = document.createElement('div');
+            container.className = 'toggle-container';
+            
+            const button = document.createElement('button');
+            button.className = 'toggle-button active';
+            button.textContent = name;
+            
+            const slider = document.createElement('input');
+            slider.type = 'range';
+            slider.className = 'intensity-slider';
+            slider.min = '0';
+            slider.max = '100';
+            slider.value = (light.intensity / maxIntensity) * 100;
+            
+            button.addEventListener('click', () => {
+                button.classList.toggle('active');
+                light.visible = button.classList.contains('active');
+            });
+            
+            slider.addEventListener('input', () => {
+                light.intensity = (slider.value / 100) * maxIntensity;
+            });
+            
+            container.appendChild(button);
+            container.appendChild(slider);
+            return container;
+        }
 
         // Create light controls
         const lightControls = {
@@ -859,108 +899,274 @@
             return cubeRenderTarget.texture;
         }
 
-        // Add background effect controls
-        const bgControl = document.createElement('div');
-        bgControl.className = 'toggle-container';
-        bgControl.style.borderTop = '1px solid #666';
-        bgControl.style.marginTop = '10px';
-        bgControl.style.paddingTop = '10px';
-
-        // Starfield toggle
-        const starfieldButton = document.createElement('button');
-        starfieldButton.className = 'toggle-button active';  // Start active
-        starfieldButton.textContent = 'Starfield';
-        starfieldButton.addEventListener('click', () => {
-            starfieldButton.classList.toggle('active');
-            starfield.visible = starfieldButton.classList.contains('active');
-        });
-
-        // Smoke toggle
-        const smokeButton = document.createElement('button');
-        smokeButton.className = 'toggle-button';  // Start inactive
-        smokeButton.textContent = 'Smoke Effect';
-        const smokeBackground = document.getElementById('smoke-background');
-        smokeButton.addEventListener('click', () => {
-            smokeButton.classList.toggle('active');
-            smokeBackground.style.display = smokeButton.classList.contains('active') ? 'block' : 'none';
-        });
-
-        // Add background controls to toggles div
-        bgControl.appendChild(starfieldButton);
-        bgControl.appendChild(smokeButton);
-        togglesDiv.appendChild(bgControl);
-
-        // Add copy button for ring surfaces
-        const copyButton = document.createElement('button');
-        copyButton.textContent = 'Copy Ring Surfaces';
-        copyButton.style.position = 'absolute';
-        copyButton.style.top = '10px';
-        copyButton.style.right = '10px';
-        copyButton.style.zIndex = '1000';
-        copyButton.style.background = '#00ff00';
-        copyButton.style.color = '#000000';
-        copyButton.style.border = 'none';
-        copyButton.style.padding = '5px 10px';
-        copyButton.style.cursor = 'pointer';
-        copyButton.style.borderRadius = '3px';
-        copyButton.addEventListener('click', () => {
-            const surfaces = Array.from(surfaceRecording.r).join(', ');
-            navigator.clipboard.writeText(surfaces);
-        });
-        document.body.appendChild(copyButton);
-
-        // Create LED chase animation
-        const GREEN = 0x00ff00;
-        const OFF = 0x000000;
-        const CHASE_SPEED = 100; // ms between steps
-        
-        // LED sequence for chase effect (in order)
-        const chaseSequence = [
-            'D2', 'D3', 'D4', 'D5',  // Front
-            'D6', 'D7', 'D8', 'D9',  // Right side
-            'D10', 'D11', 'D12', 'D13', 'D14', 'D15', 'D16', 'D17'  // Left side (bottom to top)
-        ];
-
-        let currentLedIndex = 0;
-        let chaseInterval = null;
-
-        // Function to start LED chase
-        window.startChase = function() {
-            if (chaseInterval) return; // Don't start if already running
+        // Create WiFi effect
+        function createWiFiEffect() {
+            // Create smaller, more intense central sphere
+            const wifiGeometry = new THREE.SphereGeometry(0.5, 32, 32);  // Smaller radius
+            const wifiMaterial = new THREE.MeshPhongMaterial({
+                color: 0x00ff00,
+                transparent: true,
+                opacity: 0.8,  // More opaque
+                emissive: 0x00ff00,
+                emissiveIntensity: 2.0,  // Much stronger emission
+                side: THREE.DoubleSide
+            });
+            const wifiSphere = new THREE.Mesh(wifiGeometry, wifiMaterial);
+            wifiSphere.position.set(0, -15, 0);
+            wifiSphere.visible = false;
             
-            // Turn all LEDs off initially
-            chaseSequence.forEach(name => {
-                setLED(name, OFF, 0);
+            // Create outer wave spheres with more dramatic effect
+            const waveCount = 5;  // More waves for continuous effect
+            const waves = [];
+            for (let i = 0; i < waveCount; i++) {
+                const waveGeometry = new THREE.SphereGeometry(0.5, 32, 32);  // Start small
+                const waveMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x00ff00,
+                    transparent: true,
+                    opacity: 0,
+                    emissive: 0x00ff00,
+                    emissiveIntensity: 0,
+                    side: THREE.DoubleSide
+                });
+                const wave = new THREE.Mesh(waveGeometry, waveMaterial);
+                wave.position.copy(wifiSphere.position);
+                wave.scale.set(1, 1, 1);
+                wave.visible = false;
+                waves.push(wave);
+                rotatingGroup.add(wave);
+            }
+            
+            rotatingGroup.add(wifiSphere);
+            return { sphere: wifiSphere, waves };
+        }
+
+        // Create Bluetooth effect
+        function createBluetoothEffect() {
+            // Create smaller, more intense central sphere
+            const bluetoothGeometry = new THREE.SphereGeometry(0.5, 32, 32);  // Smaller radius
+            const bluetoothMaterial = new THREE.MeshPhongMaterial({
+                color: 0x0088ff,
+                transparent: true,
+                opacity: 0.8,  // More opaque
+                emissive: 0x0088ff,
+                emissiveIntensity: 2.0,  // Much stronger emission
+                side: THREE.DoubleSide
+            });
+            const bluetoothSphere = new THREE.Mesh(bluetoothGeometry, bluetoothMaterial);
+            bluetoothSphere.position.set(0, -15, 0);
+            bluetoothSphere.visible = false;
+            
+            // Create outer wave spheres with more dramatic effect
+            const waveCount = 5;  // More waves for continuous effect
+            const waves = [];
+            for (let i = 0; i < waveCount; i++) {
+                const waveGeometry = new THREE.SphereGeometry(0.5, 32, 32);  // Start small
+                const waveMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x0088ff,
+                    transparent: true,
+                    opacity: 0,
+                    emissive: 0x0088ff,
+                    emissiveIntensity: 0,
+                    side: THREE.DoubleSide
+                });
+                const wave = new THREE.Mesh(waveGeometry, waveMaterial);
+                wave.position.copy(bluetoothSphere.position);
+                wave.scale.set(1, 1, 1);
+                wave.visible = false;
+                waves.push(wave);
+                rotatingGroup.add(wave);
+            }
+            
+            rotatingGroup.add(bluetoothSphere);
+            return { sphere: bluetoothSphere, waves };
+        }
+
+        // Create USB power stream effect
+        function createUSBStreamEffect() {
+            // Create curve pointing towards USB port at bottom
+            const curve = new THREE.CatmullRomCurve3([
+                new THREE.Vector3(0, -8, 9.5),     // Start at USB port
+                new THREE.Vector3(0, -10, 9.5),    // Middle point
+                new THREE.Vector3(0, -12, 9.5)     // End point
+            ]);
+
+            const points = curve.getPoints(50);
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ 
+                color: 0x00ff00,
+                transparent: true,
+                opacity: 0.5
+            });
+            const streamLine = new THREE.Line(geometry, material);
+            streamLine.visible = false;
+            rotatingGroup.add(streamLine);  // Add to rotating group instead of scene
+
+            // Create particles
+            const particleCount = 50;
+            const particleGeometry = new THREE.BufferGeometry();
+            const particlePositions = new Float32Array(particleCount * 3);
+            
+            // Initialize particle positions along the curve
+            for (let i = 0; i < particleCount; i++) {
+                const t = i / particleCount;
+                const point = curve.getPoint(t);
+                particlePositions[i * 3] = point.x;
+                particlePositions[i * 3 + 1] = point.y;
+                particlePositions[i * 3 + 2] = point.z;
+            }
+            
+            particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particlePositions, 3));
+            
+            const particleMaterial = new THREE.PointsMaterial({
+                color: 0x00ff00,
+                size: 0.05,
+                transparent: true,
+                opacity: 0.8
             });
             
-            chaseInterval = setInterval(() => {
-                // Turn off previous LED
-                const prevIndex = (currentLedIndex - 1 + chaseSequence.length) % chaseSequence.length;
-                setLED(chaseSequence[prevIndex], OFF, 0);
-                
-                // Turn on current LED
-                setLED(chaseSequence[currentLedIndex], GREEN, 1);
-                
-                // Move to next LED
-                currentLedIndex = (currentLedIndex + 1) % chaseSequence.length;
-            }, CHASE_SPEED);
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            particles.visible = false;
+            rotatingGroup.add(particles);  // Add to rotating group instead of scene
+
+            return { streamLine, particles, curve };
+        }
+
+        // Create effects
+        const wifiEffect = createWiFiEffect();
+        const bluetoothEffect = createBluetoothEffect();
+        const usbStreamEffect = createUSBStreamEffect();
+
+        // Effect states
+        const effects = {
+            wifi: { active: false, ...createWiFiEffect() },
+            bluetooth: { active: false, ...createBluetoothEffect() },
+            power: { active: false, stream: usbStreamEffect }
         };
 
-        // Function to stop LED chase
-        window.stopChase = function() {
-            if (chaseInterval) {
-                clearInterval(chaseInterval);
-                chaseInterval = null;
+        // Update effects in animation loop
+        let time = 0;
+        function updateEffects() {
+            time += 0.01;
+
+            // WiFi effect
+            if (effects.wifi.active) {
+                const intensity = (Math.sin(time * 8) * 0.5 + 0.5) * 5.0;  // Much faster and more intense pulsing
+                effects.wifi.sphere.material.emissiveIntensity = intensity * 2;  // Double the emission
+                effects.wifi.sphere.material.opacity = 0.8 + intensity * 0.2;  // More consistently visible
+                effects.wifi.sphere.visible = true;
                 
-                // Turn all LEDs off
-                chaseSequence.forEach(name => {
-                    setLED(name, OFF, 0);
+                // Update wave animations with more dramatic scaling
+                effects.wifi.waves.forEach((wave, index) => {
+                    const waveTime = (time + index * 0.15) % 1;  // Even faster wave sequence
+                    wave.visible = true;
+                    wave.scale.setScalar(1 + waveTime * 10);  // Larger expansion
+                    wave.material.opacity = Math.max(0, 0.6 * (1 - waveTime));  // More visible waves
+                    wave.material.emissiveIntensity = Math.max(0, 2.0 * (1 - waveTime));  // Much stronger glow
                 });
+            } else {
+                effects.wifi.sphere.visible = false;
+                effects.wifi.waves.forEach(wave => wave.visible = false);
             }
-        };
 
-        // Start the chase effect
-        window.startChase();
+            // Bluetooth effect
+            if (effects.bluetooth.active) {
+                const intensity = (Math.sin(time * 4) * 0.5 + 0.5) * 3.0;
+                effects.bluetooth.sphere.material.emissiveIntensity = intensity;
+                effects.bluetooth.sphere.material.opacity = 0.6 + intensity * 0.4;
+                effects.bluetooth.sphere.visible = true;
+                
+                effects.bluetooth.waves.forEach((wave, index) => {
+                    const waveTime = (time + index * 0.2) % 1;
+                    wave.visible = true;
+                    wave.scale.setScalar(1 + waveTime * 8);
+                    wave.material.opacity = Math.max(0, 0.4 * (1 - waveTime));
+                    wave.material.emissiveIntensity = Math.max(0, 1.0 * (1 - waveTime));
+                });
+            } else {
+                effects.bluetooth.sphere.visible = false;
+                effects.bluetooth.waves.forEach(wave => wave.visible = false);
+            }
+
+            // USB power stream effect
+            if (effects.power.active) {
+                const { streamLine, particles, curve } = effects.power.stream;
+                streamLine.visible = true;
+                particles.visible = true;
+
+                // Update particle positions
+                const positions = particles.geometry.attributes.position.array;
+                for (let i = 0; i < positions.length; i += 3) {
+                    const t = ((time + i / positions.length) % 1);
+                    const point = curve.getPoint(1 - t); // Reverse direction to flow into USB
+                    positions[i] = point.x;
+                    positions[i + 1] = point.y;
+                    positions[i + 2] = point.z;
+                }
+                particles.geometry.attributes.position.needsUpdate = true;
+            } else {
+                effects.power.stream.streamLine.visible = false;
+                effects.power.stream.particles.visible = false;
+            }
+        }
+
+        // Add effect controls to toggles div
+        const effectControl = document.createElement('div');
+        effectControl.className = 'toggle-container';
+        effectControl.style.borderTop = '1px solid #666';
+        effectControl.style.marginTop = '10px';
+        effectControl.style.paddingTop = '10px';
+
+        // WiFi toggle
+        const wifiButton = document.createElement('button');
+        wifiButton.className = 'toggle-button';
+        wifiButton.textContent = 'WiFi Effect';
+        wifiButton.addEventListener('click', () => {
+            wifiButton.classList.toggle('active');
+            effects.wifi.active = wifiButton.classList.contains('active');
+        });
+
+        // Bluetooth toggle
+        const bluetoothButton = document.createElement('button');
+        bluetoothButton.className = 'toggle-button';
+        bluetoothButton.textContent = 'Bluetooth Effect';
+        bluetoothButton.addEventListener('click', () => {
+            bluetoothButton.classList.toggle('active');
+            effects.bluetooth.active = bluetoothButton.classList.contains('active');
+        });
+
+        // USB Power toggle
+        const powerButton = document.createElement('button');
+        powerButton.className = 'toggle-button';
+        powerButton.textContent = 'USB Power Stream';
+        powerButton.addEventListener('click', () => {
+            powerButton.classList.toggle('active');
+            effects.power.active = powerButton.classList.contains('active');
+        });
+
+        // Add effect controls to toggles div
+        effectControl.appendChild(wifiButton);
+        effectControl.appendChild(bluetoothButton);
+        effectControl.appendChild(powerButton);
+        togglesDiv.appendChild(effectControl);
+
+        // Add keyboard controls for effects
+        window.addEventListener('keydown', (event) => {
+            const key = event.key.toLowerCase();
+            switch(key) {
+                case 'w':
+                    effects.wifi.active = !effects.wifi.active;
+                    wifiButton.classList.toggle('active');
+                    break;
+                case 'b':
+                    effects.bluetooth.active = !effects.bluetooth.active;
+                    bluetoothButton.classList.toggle('active');
+                    break;
+                case 'p':
+                    effects.power.active = !effects.power.active;
+                    powerButton.classList.toggle('active');
+                    break;
+            }
+        });
 
         // Start the animation loop
         animate();
