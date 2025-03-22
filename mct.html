@@ -39,7 +39,7 @@
             background: rgba(0,0,0,0.7);
             padding: 10px;
             border-radius: 5px;
-            display: none;
+            display: block;
             z-index: 3;
         }
         #togglesDiv {
@@ -50,10 +50,10 @@
             padding: 10px;
             border-radius: 5px;
             z-index: 3;
-            display: none;  /* Hide controls by default */
+            display: none;  /* Hide by default */
         }
         #coordsDiv {
-            display: none;  /* Hide coordinates by default */
+            display: none;  /* Hide by default */
         }
         .toggle-container {
             margin-bottom: 10px;
@@ -98,19 +98,84 @@
 
         // Define key surface mappings
         const keySurfaces = {
-            'f': [55966, 55967, 55968, 55969],  // F key surfaces
-            'u': [55966, 55967, 55968],         // U key surfaces
-            'k': [61550, 61551, 61552],         // K key surfaces
-            'd': [61550, 61551, 61552, 61553]   // D key surfaces
+            'f': [19226, 19232, 19229, 19220],  // F key surfaces
+            'u': [45966],                       // U key surfaces
+            'k': [61737, 61736, 61740, 61739, 61741, 61738],  // K key surfaces (all segments)
+            'd': [30100]                        // D key surfaces
         };
 
-        // Define button positions
-        const buttonPositions = {
-            'f': { x: 0.000, y: -1.000, z: 0.500 },
-            'u': { x: 0.000, y: 15.000, z: 2.000 },
-            'k': { x: 0.000, y: -1.000, z: 0.500 },
-            'd': { x: 0.000, y: -15.000, z: 2.000 }
+        // Define button colors and properties
+        const buttonProperties = {
+            'f': { 
+                color: 0x111111,
+                hoverColor: 0x00ff00,
+                label: 'F',
+            },
+            'u': { 
+                color: 0x111111,
+                hoverColor: 0x00ff00,
+                label: 'U'
+            },
+            'k': { 
+                color: 0x111111,
+                hoverColor: 0x00ff00,
+                label: 'K'
+            },
+            'd': { 
+                color: 0x111111,
+                hoverColor: 0x00ff00,
+                label: 'D'
+            }
         };
+
+        // Create button texture
+        function createButtonTexture(label, properties = {}) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            
+            // Fill background with gradient
+            const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+            if (properties.backgroundColor) {
+                gradient.addColorStop(0, properties.backgroundColor.inner);
+                gradient.addColorStop(1, properties.backgroundColor.outer);
+            } else {
+                gradient.addColorStop(0, '#003300');
+                gradient.addColorStop(1, '#001100');
+            }
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 128, 128);
+            
+            // Add text
+            ctx.fillStyle = properties.glowColor || '#00ff00';
+            ctx.font = 'bold 64px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, 64, 64);
+            
+            // Add glow effect
+            ctx.shadowColor = properties.glowColor || '#00ff00';
+            ctx.shadowBlur = 20;
+            ctx.strokeStyle = properties.glowColor || '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.strokeText(label, 64, 64);
+            
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // Create button material
+        function createButtonMaterial(properties) {
+            return new THREE.MeshPhongMaterial({
+                color: properties.color,
+                transparent: false,
+                opacity: 1.0,
+                emissive: 0x000000,
+                specular: 0x222222,
+                shininess: 30,
+                side: THREE.DoubleSide
+            });
+        }
 
         // Scene setup
         const scene = new THREE.Scene();
@@ -118,7 +183,7 @@
 
         // Camera setup
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
-        camera.position.set(0, 0, 100);  // Position camera directly in front
+        camera.position.set(0, 0, 100);
         camera.lookAt(0, 0, 0);
 
         // Renderer setup
@@ -130,8 +195,256 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setClearColor(0x000000, 0);
-        renderer.sortObjects = true;
         document.body.appendChild(renderer.domElement);
+
+        // Create rotating group
+        const rotatingGroup = new THREE.Group();
+        scene.add(rotatingGroup);
+
+        // Create highlight overlays group
+        const highlightOverlays = new THREE.Group();
+        rotatingGroup.add(highlightOverlays);
+
+        // Basic lighting setup
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        directionalLight.position.set(0, 1, 2);
+        scene.add(directionalLight);
+
+        // Create starfield
+        function createStarfield() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starVertices = [];
+            for (let i = 0; i < 3000; i++) {
+                const x = (Math.random() - 0.5) * 2000;
+                const y = (Math.random() - 0.5) * 2000;
+                const z = (Math.random() - 0.5) * 2000;
+                starVertices.push(x, y, z);
+            }
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0x00ff00,
+                size: 2,
+                transparent: true,
+                opacity: 0.8,
+                sizeAttenuation: false
+            });
+
+            return new THREE.Points(starGeometry, starMaterial);
+        }
+
+        const starfield = createStarfield();
+        scene.add(starfield);
+
+        // Load the STL file
+        const loader = new STLLoader();
+        loader.load('MCT.stl', function(geometry) {
+            geometry.center();
+            geometry.computeVertexNormals();
+            
+            const scale = 0.5;
+            geometry.scale(scale, scale, scale);
+            
+            // Create base mesh with glossy black material
+            const baseMaterial = new THREE.MeshPhongMaterial({
+                color: 0x000000,
+                specular: 0x666666,
+                shininess: 100,
+                side: THREE.DoubleSide
+            });
+
+            // Create base model and store it in the global scope
+            window.mctMesh = new THREE.Mesh(geometry, baseMaterial);
+            mctMesh.rotation.x = -Math.PI / 2;
+            rotatingGroup.add(mctMesh);
+
+            // Log total number of faces for debugging
+            const totalFaces = geometry.attributes.position.count / 3;
+            console.log('Total faces in model:', totalFaces);
+
+            // Create ring mesh from selected surfaces
+            const ringGeometry = new THREE.BufferGeometry();
+            const positions = [];
+            const normals = [];
+            const indices = [];
+            let vertexCount = 0;
+
+            const basePositions = geometry.attributes.position.array;
+            const baseNormals = geometry.attributes.normal.array;
+
+            // Process each face
+            for (let i = 0; i < basePositions.length; i += 9) {
+                const faceIndex = Math.floor(i / 9);
+                if (surfaceRecording.r.has(faceIndex)) {
+                    // Add vertices for this face
+                    for (let j = 0; j < 9; j += 3) {
+                        positions.push(
+                            basePositions[i + j],
+                            basePositions[i + j + 1],
+                            basePositions[i + j + 2]
+                        );
+                        normals.push(
+                            baseNormals[i + j],
+                            baseNormals[i + j + 1],
+                            baseNormals[i + j + 2]
+                        );
+                    }
+                    indices.push(vertexCount, vertexCount + 1, vertexCount + 2);
+                    vertexCount += 3;
+                }
+            }
+
+            // Create the ring geometry
+            ringGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            ringGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+            ringGeometry.setIndex(indices);
+            ringGeometry.computeVertexNormals();
+
+            // Create cloudy white material with high translucency
+            const ringMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                metalness: 0.0,
+                roughness: 0.1,
+                transmission: 0.9,  // Very high transmission
+                thickness: 0.2,     // Thinner material
+                envMapIntensity: 0.5,
+                clearcoat: 0.0,     // Remove clearcoat for better transmission
+                transparent: true,
+                opacity: 0.3,       // Very transparent
+                side: THREE.DoubleSide
+            });
+
+            // Create and add ring mesh
+            const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+            ringMesh.rotation.x = -Math.PI / 2;
+            ringMesh.renderOrder = 1;
+            rotatingGroup.add(ringMesh);
+
+            // Create LED lights
+            const ledPositions = [
+                // Front center left to right (D2-D5)
+                { name: 'D2', x: -0.3, y: 0, z: 0.5 },  // Adjusted position for testing
+                { name: 'D3', x: -0.1, y: 0, z: 0.5 },
+                { name: 'D4', x: 0.1, y: 0, z: 0.5 },
+                { name: 'D5', x: 0.3, y: 0, z: 0.5 },
+                
+                // Right side top to bottom (D6-D9)
+                { name: 'D6', x: 0.4, y: 0, z: 0.4 },
+                { name: 'D7', x: 0.4, y: 0, z: 0.3 },
+                { name: 'D8', x: 0.4, y: 0, z: 0.2 },
+                { name: 'D9', x: 0.4, y: 0, z: 0.1 },
+                
+                // Left side top to bottom (D17-D10)
+                { name: 'D17', x: -0.4, y: 0, z: 0.4 },
+                { name: 'D16', x: -0.4, y: 0, z: 0.3 },
+                { name: 'D15', x: -0.4, y: 0, z: 0.2 },
+                { name: 'D14', x: -0.4, y: 0, z: 0.1 },
+                { name: 'D13', x: -0.4, y: 0, z: 0 },
+                { name: 'D12', x: -0.4, y: 0, z: -0.1 },
+                { name: 'D11', x: -0.4, y: 0, z: -0.2 },
+                { name: 'D10', x: -0.4, y: 0, z: -0.3 }
+            ];
+
+            // Create LED lights group
+            const ledGroup = new THREE.Group();
+            window.leds = {};  // Store LED references globally
+
+            ledPositions.forEach(pos => {
+                const light = new THREE.PointLight(0x000000, 2, 1);  // Increased intensity and reduced distance
+                light.position.set(pos.x, pos.y, pos.z);
+                
+                // Create small sphere to visualize LED position
+                const sphere = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.02, 8, 8),
+                    new THREE.MeshBasicMaterial({ color: 0x000000 })
+                );
+                sphere.position.copy(light.position);
+                
+                // Group light and sphere
+                const ledUnit = new THREE.Group();
+                ledUnit.add(light);
+                ledUnit.add(sphere);
+                ledUnit.name = pos.name;
+                
+                ledGroup.add(ledUnit);
+                window.leds[pos.name] = { light, sphere };
+            });
+
+            // Add LED group to scene
+            rotatingGroup.add(ledGroup);
+
+            // Function to set LED color and intensity
+            window.setLED = function(name, color, intensity = 2.0) {
+                const led = window.leds[name];
+                if (led) {
+                    led.light.color.setHex(color);
+                    led.light.intensity = intensity;
+                    led.sphere.material.color.setHex(color);
+                }
+            };
+
+            // Test D2 with green
+            window.setLED('D2', 0x00ff00);
+
+            // Create environment map from starfield for reflections
+            const envMap = createStarfieldEnvMap(renderer, scene, starfield);
+            ringMaterial.envMap = envMap;
+
+            // Create button overlays
+            Object.entries(keySurfaces).forEach(([key, surfaces]) => {
+                console.log(`Creating overlay for ${key} with surfaces:`, surfaces); // Debug output
+                const buttonGeometry = new THREE.BufferGeometry();
+                const positions = [];
+                const normals = [];
+                const uvs = [];
+                const indices = [];
+                let vertexCount = 0;
+
+                const basePositions = geometry.attributes.position.array;
+                const baseNormals = geometry.attributes.normal.array;
+
+                for (let i = 0; i < basePositions.length; i += 9) {
+                    const faceIndex = Math.floor(i / 9);
+                    if (surfaces.includes(faceIndex)) {
+                        for (let j = 0; j < 9; j += 3) {
+                            positions.push(
+                                basePositions[i + j],
+                                basePositions[i + j + 1],
+                                basePositions[i + j + 2] + 0.1
+                            );
+                            normals.push(
+                                baseNormals[i + j],
+                                baseNormals[i + j + 1],
+                                baseNormals[i + j + 2]
+                            );
+                            uvs.push(j === 0 ? 0 : j === 3 ? 1 : 0.5, j === 0 ? 0 : j === 3 ? 0 : 1);
+                        }
+                        indices.push(vertexCount, vertexCount + 1, vertexCount + 2);
+                        vertexCount += 3;
+                    }
+                }
+
+                if (positions.length > 0) {
+                    buttonGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                    buttonGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+                    buttonGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+                    buttonGeometry.setIndex(indices);
+                    buttonGeometry.computeVertexNormals();
+
+                    const buttonMaterial = createButtonMaterial(buttonProperties[key]);
+                    const buttonMesh = new THREE.Mesh(buttonGeometry, buttonMaterial);
+                    buttonMesh.rotation.x = -Math.PI / 2;
+                    buttonMesh.renderOrder = 1;
+                    buttonMesh.userData.key = key;
+                    rotatingGroup.add(buttonMesh);
+                    
+                    highlightOverlays.userData[key] = buttonMesh;
+                }
+            });
+        });
 
         // Orbit controls setup
         const orbitControls = new OrbitControls(camera, renderer.domElement);
@@ -139,199 +452,238 @@
         orbitControls.dampingFactor = 0.05;
         orbitControls.minDistance = 50;
         orbitControls.maxDistance = 300;
-        orbitControls.maxPolarAngle = Math.PI / 1.5;
-        orbitControls.minPolarAngle = Math.PI / 6;
-        orbitControls.target.set(0, 0, 0);
 
-        // Lighting setup
-        const lights = {
-            ambient: new THREE.AmbientLight(0xffffff, 2.0),
-            key: new THREE.SpotLight(0xffffff, 12.0),
-            lowKey: new THREE.SpotLight(0xffffff, 8.0),
-            rim: new THREE.DirectionalLight(0xffffff, 8.0),
-            left: new THREE.SpotLight(0xffffff, 8.0),
-            right: new THREE.SpotLight(0xffffff, 8.0)
-        };
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            orbitControls.update();
+            
+            // Rotate starfield slowly
+            starfield.rotation.y += 0.0002;
+            starfield.rotation.x += 0.0001;
 
-        // Add lights to scene
-        scene.add(lights.ambient);
+            renderer.render(scene, camera);
+        }
+        animate();
 
-        // Configure key light
-        lights.key.position.set(0, 100, 300);
-        lights.key.target.position.set(0, 0, 0);
-        lights.key.angle = Math.PI / 4;
-        lights.key.penumbra = 0.3;
-        lights.key.decay = 1;
-        lights.key.distance = 1000;
-        scene.add(lights.key);
-        scene.add(lights.key.target);
-
-        // Configure low key light
-        lights.lowKey.position.set(0, -100, 300);
-        lights.lowKey.target.position.set(0, 0, 0);
-        lights.lowKey.angle = Math.PI / 4;
-        lights.lowKey.penumbra = 0.3;
-        lights.lowKey.decay = 1;
-        lights.lowKey.distance = 1000;
-        scene.add(lights.lowKey);
-        scene.add(lights.lowKey.target);
-
-        // Configure rim light
-        lights.rim.position.set(0, 0, 200);
-        lights.rim.visible = false;  // Set rim light off by default
-        scene.add(lights.rim);
-
-        // Configure left light
-        lights.left.position.set(-200, 0, 100);
-        lights.left.target.position.set(0, 0, 0);
-        lights.left.angle = Math.PI / 4;
-        lights.left.penumbra = 0.3;
-        lights.left.decay = 1;
-        lights.left.distance = 1000;
-        scene.add(lights.left);
-        scene.add(lights.left.target);
-
-        // Configure right light
-        lights.right.position.set(200, 0, 100);
-        lights.right.target.position.set(0, 0, 0);
-        lights.right.angle = Math.PI / 4;
-        lights.right.penumbra = 0.3;
-        lights.right.decay = 1;
-        lights.right.distance = 1000;
-        scene.add(lights.right);
-        scene.add(lights.right.target);
-
-        // Create rotating group
-        const rotatingGroup = new THREE.Group();
-        scene.add(rotatingGroup);
-
-        // Create starfield with higher intensity for reflections
-        const starfield = createStarfield();
-        starfield.renderOrder = -1;
-        scene.add(starfield);
-
-        // Create environment map from starfield
-        const envMap = createStarfieldEnvMap(renderer, scene, starfield);
-
-        // Mouse and raycaster setup
+        // Mouse and raycaster setup for all interactions
         const mouse = new THREE.Vector2();
         const raycaster = new THREE.Raycaster();
-        let mctMesh = null;
-        let hoveredFace = null;
 
-        // Add XYZ axes with hash marks
-        const createAxisWithHashes = () => {
-            const axisGroup = new THREE.Group();
-            
-            // Main axes
-            const axesHelper = new THREE.AxesHelper(50);
-            axesHelper.setColors(
-                new THREE.Color(0xff0000), // X axis - red
-                new THREE.Color(0x00ff00), // Y axis - green
-                new THREE.Color(0x0000ff)  // Z axis - blue
-            );
-            axisGroup.add(axesHelper);
-
-            // Create hash marks every 10 units
-            const hashMarkLength = 2;
-            const hashMarkMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
-
-            // Function to create hash marks for each axis
-            const createHashMarks = (axis) => {
-                for (let i = 10; i <= 50; i += 10) {
-                    const hashGeometry = new THREE.BufferGeometry();
-                    let vertices;
-                    
-                    switch(axis) {
-                        case 'x':
-                            vertices = new Float32Array([
-                                i, -hashMarkLength, 0,
-                                i, hashMarkLength, 0,
-                                i, 0, -hashMarkLength,
-                                i, 0, hashMarkLength
-                            ]);
-                            break;
-                        case 'y':
-                            vertices = new Float32Array([
-                                -hashMarkLength, i, 0,
-                                hashMarkLength, i, 0,
-                                0, i, -hashMarkLength,
-                                0, i, hashMarkLength
-                            ]);
-                            break;
-                        case 'z':
-                            vertices = new Float32Array([
-                                -hashMarkLength, 0, i,
-                                hashMarkLength, 0, i,
-                                0, -hashMarkLength, i,
-                                0, hashMarkLength, i
-                            ]);
-                            break;
-                    }
-                    
-                    hashGeometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-                    const hashMark = new THREE.LineSegments(hashGeometry, hashMarkMaterial);
-                    axisGroup.add(hashMark);
-                }
-            };
-
-            // Add hash marks to each axis
-            createHashMarks('x');
-            createHashMarks('y');
-            createHashMarks('z');
-
-            return axisGroup;
-        };
-
-        // Create axis group but don't add to scene yet
-        const axisGroup = createAxisWithHashes();
-        axisGroup.visible = false;
-
-        // Add axis labels
-        const createAxisLabel = (text, position, color) => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 64;
-            canvas.height = 64;
-            const context = canvas.getContext('2d');
-            context.fillStyle = color;
-            context.font = 'bold 48px Arial';
-            context.textAlign = 'center';
-            context.textBaseline = 'middle';
-            context.fillText(text, 32, 32);
-
-            const texture = new THREE.CanvasTexture(canvas);
-            const material = new THREE.SpriteMaterial({ map: texture });
-            const sprite = new THREE.Sprite(material);
-            sprite.position.copy(position);
-            sprite.scale.set(5, 5, 5);
-            return sprite;
-        };
-
-        // Add number labels at hash marks
-        const createNumberLabel = (number, position, color) => {
-            const sprite = createAxisLabel(number.toString(), position, color);
-            sprite.scale.set(2, 2, 2);
-            return sprite;
-        };
-
-        // Add number labels every 10 units on each axis
-        const axisLabels = new THREE.Group();
-        for (let i = 10; i <= 50; i += 10) {
-            axisLabels.add(createNumberLabel(i, new THREE.Vector3(i, -3, 0), '#ff0000')); // X axis
-            axisLabels.add(createNumberLabel(i, new THREE.Vector3(-3, i, 0), '#00ff00')); // Y axis
-            axisLabels.add(createNumberLabel(i, new THREE.Vector3(0, -3, i), '#0000ff')); // Z axis
+        // Mouse position tracking
+        function updateMousePosition(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            return new THREE.Vector3(mouse.x, mouse.y, 0).unproject(camera);
         }
 
-        const xLabel = createAxisLabel('X', new THREE.Vector3(55, 0, 0), '#ff0000');
-        const yLabel = createAxisLabel('Y', new THREE.Vector3(0, 55, 0), '#00ff00');
-        const zLabel = createAxisLabel('Z', new THREE.Vector3(0, 0, 55), '#0000ff');
-        axisLabels.add(xLabel);
-        axisLabels.add(yLabel);
-        axisLabels.add(zLabel);
-        
-        axisLabels.visible = false;
-        axisGroup.add(axisLabels);
-        scene.add(axisGroup);
+        // Add info display for surface IDs
+        const infoDiv = document.getElementById('info');
+        infoDiv.style.display = 'none';  // Hide the info div completely
+
+        // Function to find surface ID from face index
+        function getSurfaceInfo(faceIndex) {
+            for (const [key, surfaces] of Object.entries(keySurfaces)) {
+                if (surfaces.includes(faceIndex)) {
+                    return `Surface ID: ${faceIndex} (${key.toUpperCase()} key)`;
+                }
+            }
+            return `Surface ID: ${faceIndex}`;
+        }
+
+        // Surface recording state
+        const surfaceRecording = {
+            'r': new Set([
+                // Original pairs
+                27963, 27962,                    // First pair
+                22009, 22010,                    // Second pair
+                23201, 23200,                    // Third pair
+                
+                // 21987-22008 sequence
+                21987, 21988, 21989, 21990, 21991, 21992, 21993,
+                21994, 21995, 21996, 21997, 21998, 21999, 22000,
+                22001, 22002, 22003, 22004, 22005, 22006, 22007, 22008,
+                
+                // 23202-23223 sequence
+                23202, 23203, 23204, 23205, 23206, 23207, 23208, 23209, 23210,
+                23211, 23212, 23213, 23214, 23215, 23216, 23217, 23218, 23219,
+                23220, 23221, 23222, 23223,
+                
+                // 26626-26707 sequence
+                26626, 26627, 26628, 26629,    // First group
+                26631, 26632, 26633, 26634, 26635, 26636,    // Second group
+                26637, 26638, 26639, 26640, 26641, 26642, 26643,  // Third group
+                26644, 26645, 26646, 26647, 26648, 26649,  // Fourth group
+                26650, 26651, 26652, 26653, 26654,    // Fifth group
+                26655, 26656, 26657, 26658, 26659,    // Sixth group
+                26660, 26661, 26662, 26663, 26664, 26665,  // Seventh group
+                26666, 26667, 26668, 26669, 26670,    // Eighth group
+                26671, 26672, 26673, 26674, 26675, 26676,  // Ninth group
+                26677, 26678, 26679, 26680, 26681, 26682, 26683, 26684,  // Tenth group
+                26685, 26686, 26687, 26688, 26689,  // Eleventh group
+                26690, 26691, 26692, 26693, 26694, 26695, 26696, 26697, 26698, 26699,  // Twelfth group
+                26700, 26701, 26702, 26703, 26704, 26705, 26706, 26707,  // Final group
+                
+                // Additional surfaces
+                82100, 82146,                  // 82xxx group
+                25951                          // Single
+            ]),
+            currentFace: null
+        };
+
+        // Function to update the display of recorded surfaces
+        function updateSurfaceDisplay() {
+            // Empty function - we no longer need to display surface info
+        }
+
+        // Function to find key from surface ID
+        function findKeyForSurface(faceIndex) {
+            for (const [key, surfaces] of Object.entries(keySurfaces)) {
+                if (surfaces.includes(faceIndex)) {
+                    return key;
+                }
+            }
+            return null;
+        }
+
+        // Materials for different states
+        const mctMaterial = new THREE.MeshPhongMaterial({
+            color: 0x333333,
+            specular: 0x444444,
+            shininess: 30,
+            side: THREE.DoubleSide,
+            transparent: false,
+            opacity: 1.0
+        });
+
+        // Remove old overlay material and functions
+        const overlayMaterial = null;
+        function createOverlay() { return null; }
+
+        // Track active buttons
+        const activeButtons = new Set();
+
+        // Function to highlight button
+        function highlightButton(key, highlight) {
+            const buttonMesh = highlightOverlays.userData[key];
+            if (buttonMesh && buttonMesh.material) {
+                if (highlight) {
+                    buttonMesh.material.color.setHex(buttonProperties[key].hoverColor);
+                    buttonMesh.material.emissive.setHex(buttonProperties[key].hoverColor);
+                    buttonMesh.material.emissiveIntensity = 1.0;
+                    activeButtons.add(key);
+                } else {
+                    buttonMesh.material.color.setHex(buttonProperties[key].color);
+                    buttonMesh.material.emissive.setHex(0x000000);
+                    buttonMesh.material.emissiveIntensity = 0;
+                    activeButtons.delete(key);
+                }
+            }
+        }
+
+        // Consolidated keyboard event listeners
+        window.addEventListener('keydown', (event) => {
+            const key = event.key.toLowerCase();
+            
+            // Handle button keys (f, u, k, d)
+            if (keySurfaces[key]) {
+                highlightButton(key, true);
+            }
+            
+            // Handle ring surface recording (r)
+            if (key === 'r' && surfaceRecording.currentFace !== null) {
+                surfaceRecording.r.add(surfaceRecording.currentFace);
+                updateSurfaceDisplay();
+            }
+            
+            // Handle coordinates toggle (c)
+            if (key === 'c') {
+                coordsDiv.style.display = coordsDiv.style.display === 'none' ? 'block' : 'none';
+                if (coordsDiv.style.display === 'block') {
+                    updateCoordinates();
+                }
+            }
+            
+            // Handle toggles panel (t)
+            if (key === 't') {
+                const togglesDiv = document.getElementById('togglesDiv');
+                togglesDiv.style.display = togglesDiv.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+
+        window.addEventListener('keyup', (event) => {
+            const key = event.key.toLowerCase();
+            if (keySurfaces[key]) {
+                highlightButton(key, false);
+            }
+        });
+
+        // Mouse event handlers for button interaction
+        window.addEventListener('mousemove', (event) => {
+            updateMousePosition(event);
+            // First try to intersect with the base model
+            const intersects = raycaster.intersectObject(mctMesh);
+            if (intersects.length > 0) {
+                const faceIndex = Math.floor(intersects[0].faceIndex);
+                surfaceRecording.currentFace = faceIndex;
+                updateSurfaceDisplay();
+                
+                // Check if this face belongs to a key
+                const key = findKeyForSurface(faceIndex);
+                if (key) {
+                    // Highlight all surfaces of this key
+                    const buttonMesh = highlightOverlays.userData[key];
+                    if (buttonMesh && buttonMesh.material) {
+                        buttonMesh.material.color.setHex(buttonProperties[key].hoverColor);
+                        buttonMesh.material.emissive.setHex(buttonProperties[key].hoverColor);
+                        buttonMesh.material.emissiveIntensity = 0.5;
+                    }
+                }
+                
+                // Reset other keys
+                Object.entries(keySurfaces).forEach(([k, _]) => {
+                    if (k !== key) {
+                        const mesh = highlightOverlays.userData[k];
+                        if (mesh && mesh.material) {
+                            mesh.material.color.setHex(buttonProperties[k].color);
+                            mesh.material.emissive.setHex(0x000000);
+                            mesh.material.emissiveIntensity = 0;
+                        }
+                    }
+                });
+            } else {
+                // Reset all keys when not hovering over any
+                Object.entries(keySurfaces).forEach(([key, _]) => {
+                    const mesh = highlightOverlays.userData[key];
+                    if (mesh && mesh.material) {
+                        mesh.material.color.setHex(buttonProperties[key].color);
+                        mesh.material.emissive.setHex(0x000000);
+                        mesh.material.emissiveIntensity = 0;
+                    }
+                });
+                surfaceRecording.currentFace = null;
+                updateSurfaceDisplay();
+            }
+        });
+
+        window.addEventListener('mousedown', (event) => {
+            updateMousePosition(event);
+            const intersects = raycaster.intersectObjects(Object.values(highlightOverlays.userData), true);
+            if (intersects.length > 0) {
+                const mesh = intersects[0].object;
+                const key = mesh.userData.key;
+                if (key) {
+                    highlightButton(key, true);
+                }
+            }
+        });
+
+        window.addEventListener('mouseup', (event) => {
+            activeButtons.forEach(key => {
+                highlightButton(key, false);
+            });
+        });
 
         // Create a canvas texture for the 80x160 pixel grid
         const createPixelGridTexture = () => {
@@ -404,19 +756,58 @@
         coordsDiv.style.color = '#00ff00';
         coordsDiv.style.fontFamily = 'monospace';
         coordsDiv.style.whiteSpace = 'pre';
-        coordsDiv.style.display = 'none';  // Hide by default
+        coordsDiv.style.background = 'rgba(0,0,0,0.7)';
+        coordsDiv.style.padding = '10px';
+        coordsDiv.style.borderRadius = '5px';
+        coordsDiv.style.zIndex = '1000';
+        coordsDiv.style.display = 'none';
         document.body.appendChild(coordsDiv);
 
-        // Get the toggles div that's already in the HTML
-        const togglesDiv = document.getElementById('togglesDiv');
+        // Update coordinates display
+        function updateCoordinates(event) {
+            if (coordsDiv.style.display === 'none') return;
+
+            let coordsText = '';
+            
+            // Add mouse position if event provided
+            if (event) {
+                const worldPos = updateMousePosition(event);
+                coordsText += `Mouse: (${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)})\n\n`;
+            }
+
+            // Add screen position
+            coordsText += `Screen: (${screenMesh.position.x.toFixed(2)}, ${screenMesh.position.y.toFixed(2)}, ${screenMesh.position.z.toFixed(2)})\n`;
+            coordsText += `Screen Size: ${screenWidth.toFixed(1)} x ${screenHeight.toFixed(1)}\n\n`;
+
+            // Add button overlay positions
+            Object.entries(keySurfaces).forEach(([key, _]) => {
+                const buttonMesh = highlightOverlays.userData[key];
+                if (buttonMesh) {
+                    const worldPos = new THREE.Vector3();
+                    const worldRot = new THREE.Euler();
+                    
+                    buttonMesh.getWorldPosition(worldPos);
+                    worldRot.setFromRotationMatrix(buttonMesh.matrixWorld);
+                    
+                    coordsText += `${key.toUpperCase()} Key:\n`;
+                    coordsText += `  Pos: (${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)})\n`;
+                    coordsText += `  Rot: (${(worldRot.x * 180/Math.PI).toFixed(1)}°, ${(worldRot.y * 180/Math.PI).toFixed(1)}°, ${(worldRot.z * 180/Math.PI).toFixed(1)}°)\n\n`;
+                }
+            });
+
+            coordsDiv.innerHTML = coordsText;
+        }
+
+        // Add mouse move listener
+        window.addEventListener('mousemove', updateCoordinates);
 
         // Create light controls
         const lightControls = {
-            key: createLightControl('Key Light', lights.key, 12.0),
-            lowKey: createLightControl('Low Key', lights.lowKey, 8.0),
-            rim: createLightControl('Rim Light', lights.rim, 8.0),
-            left: createLightControl('Left Light', lights.left, 8.0),
-            right: createLightControl('Right Light', lights.right, 8.0)
+            key: createLightControl('Key Light', directionalLight, 12.0),
+            lowKey: createLightControl('Low Key', ambientLight, 8.0),
+            rim: createLightControl('Rim Light', directionalLight, 8.0),
+            left: createLightControl('Left Light', directionalLight, 8.0),
+            right: createLightControl('Right Light', directionalLight, 8.0)
         };
 
         // Add controls to toggles div
@@ -441,623 +832,6 @@
 
         coordsControl.appendChild(coordsButton);
         togglesDiv.appendChild(coordsControl);
-
-        // Update the keydown handler for 'c' key to also update button state
-        window.addEventListener('keydown', function(event) {
-            if (event.key.toLowerCase() === 'c') {
-                coordsDiv.style.display = coordsDiv.style.display === 'none' ? 'block' : 'none';
-                coordsButton.classList.toggle('active', coordsDiv.style.display === 'block');
-            }
-        });
-
-        // Materials for different states
-        const mctMaterial = new THREE.MeshPhongMaterial({
-            color: 0x333333,
-            specular: 0x444444,
-            shininess: 30,
-            side: THREE.DoubleSide,
-            transparent: false,
-            opacity: 1.0
-        });
-
-        // Materials for overlays with improved visibility
-        const overlayMaterial = new THREE.MeshBasicMaterial({
-            color: 0x00ff00,
-            transparent: true,
-            opacity: 0.7,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-            depthTest: true,
-            polygonOffset: true,
-            polygonOffsetFactor: -4
-        });
-
-        // Add shader code for plasma effect
-        const vertexShader = `
-            varying vec2 vUv;
-            varying vec3 vNormal;
-            varying vec3 vViewPosition;
-
-            void main() {
-                vUv = uv;
-                vNormal = normalize(normalMatrix * normal);
-                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                vViewPosition = -mvPosition.xyz;
-                gl_Position = projectionMatrix * mvPosition;
-            }
-        `;
-
-        const fragmentShader = `
-            uniform float time;
-            varying vec2 vUv;
-            varying vec3 vNormal;
-            varying vec3 vViewPosition;
-
-            // Noise functions
-            float rand(vec2 n) { 
-                return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
-            }
-
-            float noise(vec2 p) {
-                vec2 ip = floor(p);
-                vec2 u = fract(p);
-                u = u*u*(3.0-2.0*u);
-                
-                float res = mix(
-                    mix(rand(ip), rand(ip+vec2(1.0,0.0)), u.x),
-                    mix(rand(ip+vec2(0.0,1.0)), rand(ip+vec2(1.0,1.0)), u.x), u.y);
-                return res*res;
-            }
-
-            void main() {
-                // Create plasma effect
-                float n = noise(vUv * 5.0 + time * 0.2);
-                float n2 = noise(vUv * 10.0 - time * 0.1);
-                
-                // Create color gradients
-                vec3 baseBlue = vec3(0.0, 0.2, 0.8);
-                vec3 purple = vec3(0.5, 0.0, 0.8);
-                vec3 brightBlue = vec3(0.0, 0.4, 1.0);
-                
-                // Mix colors based on noise
-                vec3 color = mix(baseBlue, purple, n);
-                color = mix(color, brightBlue, n2 * 0.5);
-                
-                // Add fresnel effect for edge glow
-                vec3 viewDir = normalize(vViewPosition);
-                float fresnel = pow(1.0 - abs(dot(vNormal, viewDir)), 2.0);
-                color += vec3(0.2, 0.0, 0.4) * fresnel;
-                
-                // Add pulsing glow
-                float pulse = sin(time) * 0.5 + 0.5;
-                color += vec3(0.1, 0.0, 0.2) * pulse;
-                
-                gl_FragColor = vec4(color, 1.0);
-            }
-        `;
-
-        // Create plasma material
-        const plasmaMaterial = new THREE.ShaderMaterial({
-            uniforms: {
-                time: { value: 0 }
-            },
-            vertexShader: vertexShader,
-            fragmentShader: fragmentShader,
-            side: THREE.DoubleSide
-        });
-
-        // Function to create overlay geometry with improved error handling and visibility
-        function createOverlay(geometry, surfaceIds, material, heightOffset) {
-            console.log('Creating overlay with surfaces:', surfaceIds);
-            try {
-                const overlayGeometry = new THREE.BufferGeometry();
-                const positions = [];
-                const indices = [];
-                let vertexCount = 0;
-
-                if (!geometry.attributes.position) {
-                    console.error('Geometry has no position attribute');
-                    return null;
-                }
-
-                const basePositions = geometry.attributes.position.array;
-                for (let i = 0; i < basePositions.length; i += 9) {
-                    const faceIndex = Math.floor(i / 9);
-                    if (surfaceIds.includes(faceIndex)) {
-                        console.log('Found matching surface:', faceIndex);
-                        for (let j = 0; j < 9; j += 3) {
-                            positions.push(
-                                basePositions[i + j],
-                                basePositions[i + j + 1],
-                                basePositions[i + j + 2] + (heightOffset || 0.1)
-                            );
-                            indices.push(vertexCount++);
-                        }
-                    }
-                }
-
-                if (positions.length === 0) {
-                    console.warn('No positions generated for overlay');
-                    return null;
-                }
-
-                console.log(`Created overlay with ${positions.length / 3} vertices`);
-                overlayGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-                overlayGeometry.setIndex(indices);
-                overlayGeometry.computeVertexNormals();
-
-                const mesh = new THREE.Mesh(overlayGeometry, material || overlayMaterial.clone());
-                mesh.renderOrder = 999;
-                return mesh;
-            } catch (error) {
-                console.error('Error in createOverlay:', error);
-                return null;
-            }
-        }
-
-        // Create highlight overlays group
-        const highlightOverlays = new THREE.Group();
-        scene.add(highlightOverlays);
-
-        // Create STL loader with error handling
-        const loader = new STLLoader();
-
-        // Move elements into rotating group
-        rotatingGroup.add(mctMesh);
-        rotatingGroup.add(highlightOverlays);
-        rotatingGroup.add(screenMesh);
-
-        // Add rotation controls (single declaration)
-        const rotationControls = {
-            enabled: true,      // Start enabled
-            speed: 0.2,        // Slower default speed
-            angle: 0,          // Start at 0
-            maxAngle: Math.PI / 6,  // 30 degrees
-            direction: 1,      // Start moving right
-            startAngle: 0      // Forward position
-        };
-
-        // Update animate function to handle both rotation and starfield
-        function animate() {
-            requestAnimationFrame(animate);
-            orbitControls.update();
-            updateCoordinates();
-
-            // Handle rotation
-            if (rotationControls.enabled) {
-                // Update angle
-                rotationControls.angle += rotationControls.direction * rotationControls.speed * 0.01;
-                
-                // Check bounds and reverse direction
-                if (Math.abs(rotationControls.angle) >= rotationControls.maxAngle) {
-                    rotationControls.direction *= -1;  // Reverse direction
-                    // Clamp angle to max to prevent overshooting
-                    rotationControls.angle = rotationControls.maxAngle * Math.sign(rotationControls.angle);
-                }
-                
-                // Apply rotation from start position
-                rotatingGroup.rotation.y = rotationControls.startAngle + rotationControls.angle;
-            }
-
-            // Update starfield rotation
-            if (starfield && starfield.visible) {
-                starfield.rotation.y += 0.0001;
-                starfield.rotation.x += 0.0001;
-            }
-
-            renderer.render(scene, camera);
-        }
-
-        // Function to update coordinates display
-        function updateCoordinates() {
-            if (coordsDiv.style.display === 'none') return;
-            
-            const screenPos = screenMesh.position;
-            let coordsText = `Screen: (${screenPos.x.toFixed(2)}, ${screenPos.y.toFixed(2)}, ${screenPos.z.toFixed(2)})<br>` +
-                           `Size: ${screenWidth.toFixed(1)} x ${screenHeight.toFixed(1)}`;
-            
-            // Add positions for all button overlays
-            const buttons = ['f', 'u', 'k', 'd'];
-            buttons.forEach(key => {
-                const overlay = key === 'f' ? 
-                    highlightOverlays.userData.fOverlay : 
-                    highlightOverlays.userData[`${key}Overlay`];
-                    
-                if (overlay) {
-                    const pos = overlay.position;
-                    coordsText += `<br>${key.toUpperCase()} Key Position: (${pos.x.toFixed(3)}, ${pos.y.toFixed(3)}, ${pos.z.toFixed(3)})`;
-                }
-            });
-            
-            coordsDiv.innerHTML = coordsText;
-        }
-
-        // Update the model loading section with reflective material
-        loader.load(
-            'MCT.stl',
-            function(geometry) {
-                console.log('STL loaded successfully, processing geometry...');
-                
-                geometry.center();
-                geometry.computeVertexNormals();
-                geometry.computeBoundingBox();
-                geometry.computeTangents();
-                
-                const scale = 0.5;
-                geometry.scale(scale, scale, scale);
-                
-                // Create the base mesh with reflective glossy black material
-                console.log('Creating base mesh with reflective glossy black material...');
-                const glossyBlackMaterial = new THREE.MeshPhysicalMaterial({
-                    color: 0x000000,           // Pure black
-                    metalness: 0.9,            // Very metallic
-                    roughness: 0.1,            // Very smooth
-                    envMapIntensity: 1.0,      // Full environment map intensity
-                    clearcoat: 1.0,            // Add clearcoat
-                    clearcoatRoughness: 0.1,   // Smooth clearcoat
-                    side: THREE.DoubleSide
-                });
-
-                mctMesh = new THREE.Mesh(geometry, glossyBlackMaterial);
-                mctMesh.rotation.x = -Math.PI / 2;
-                mctMesh.renderOrder = 1;
-                mctMesh.castShadow = true;
-                mctMesh.receiveShadow = true;
-                rotatingGroup.add(mctMesh);
-
-                // Create and apply environment map
-                const envMap = createStarfieldEnvMap(renderer, scene, starfield);
-                glossyBlackMaterial.envMap = envMap;
-                
-                // Detailed geometry info
-                console.log('Geometry details:', {
-                    hasIndex: !!geometry.index,
-                    hasPosition: !!geometry.attributes.position,
-                    numVertices: geometry.attributes.position.count,
-                    numFaces: geometry.attributes.position.array.length / 9,
-                    boundingBox: geometry.boundingBox,
-                    boundingSphere: geometry.boundingSphere
-                });
-
-                // Create F button overlay with improved visibility
-                console.log('Creating F key overlay...');
-                const fOverlay = createOverlay(geometry, keySurfaces['f'], overlayMaterial.clone(), 0.1);
-                if (fOverlay) {
-                    fOverlay.rotation.x = -Math.PI / 2;
-                    fOverlay.position.copy(buttonPositions['f']);
-                    fOverlay.renderOrder = 999;
-                    fOverlay.visible = false;  // Hide by default
-                    highlightOverlays.userData.fOverlay = fOverlay;
-                    highlightOverlays.add(fOverlay);
-                    console.log('F overlay created successfully');
-                }
-
-                // Create axes helper
-                const axesHelper = new THREE.AxesHelper(5);
-                axesHelper.visible = false;
-                scene.add(axesHelper);
-
-                // Add axes toggle to controls
-                const axesDiv = document.createElement('div');
-                axesDiv.className = 'toggle-container';
-                const axesLabel = document.createElement('label');
-                axesLabel.textContent = 'Axes: ';
-                const axesButton = document.createElement('button');
-                axesButton.textContent = 'Show';
-                axesButton.onclick = function() {
-                    axesHelper.visible = !axesHelper.visible;
-                    axesButton.textContent = axesHelper.visible ? 'Hide' : 'Show';
-                };
-                axesDiv.appendChild(axesLabel);
-                axesDiv.appendChild(axesButton);
-                togglesDiv.appendChild(axesDiv);
-
-                // Create other key overlays with improved visibility
-                for (const [key, surfaces] of Object.entries(keySurfaces)) {
-                    if (key !== 'f') {  // Skip F key (already created)
-                        console.log(`Creating overlay for ${key}:`, {
-                            numSurfaces: surfaces.length,
-                            surfaces: surfaces,
-                            position: buttonPositions[key]
-                        });
-                        const overlay = createOverlay(geometry, surfaces, overlayMaterial.clone(), 0.1);
-                        if (overlay) {
-                            overlay.rotation.x = -Math.PI / 2;
-                            overlay.position.copy(buttonPositions[key]);
-                            overlay.renderOrder = 999;
-                            overlay.visible = false;
-                            overlay.userData.key = key;
-                            highlightOverlays.userData[`${key}Overlay`] = overlay;
-                            highlightOverlays.add(overlay);
-                            console.log(`Successfully created and configured overlay for key: ${key}`);
-                        }
-                    }
-                }
-                
-                // Move screen and overlays into rotating group
-                rotatingGroup.add(screenMesh);
-                rotatingGroup.add(highlightOverlays);
-                
-                // Update camera and controls
-                orbitControls.target.copy(rotatingGroup.position);
-                camera.lookAt(rotatingGroup.position);
-                
-                console.log('Model setup complete');
-                
-                // Reset camera and controls to front view
-                camera.position.set(0, 0, 100);
-                camera.lookAt(0, 0, 0);
-                orbitControls.target.set(0, 0, 0);
-                orbitControls.update();
-                
-                // Ensure rotating group starts at 0
-                rotatingGroup.rotation.y = 0;
-            },
-            function(xhr) {
-                // Progress callback
-                console.log((xhr.loaded / xhr.total * 100) + '% loaded');
-            },
-            function(error) {
-                // Error callback
-                console.error('Error loading STL:', error);
-            }
-        );
-
-        // Update highlighting function to use overlays
-        function highlightSurfacesForKey(key) {
-            highlightOverlays.children.forEach(overlay => {
-                if (overlay.userData.key) {
-                    overlay.visible = overlay.userData.key === key;
-                }
-            });
-        }
-
-        // Materials for highlighting
-        const highlightMaterial = new THREE.MeshPhongMaterial({
-            color: 0x00ff00,
-            emissive: 0x00ff00,
-            emissiveIntensity: 0.5,
-            transparent: true,
-            opacity: 0.7
-        });
-
-        const fKeyMaterial = new THREE.MeshPhongMaterial({
-            color: 0xff0000,
-            emissive: 0xff0000,
-            emissiveIntensity: 0.5,
-            transparent: true,
-            opacity: 0.7
-        });
-
-        // Keep track of original face materials
-        const originalFaceMaterials = new Map();
-        let activeKey = null;
-
-        // Update the keydown handler
-        document.addEventListener('keydown', (event) => {
-            const key = event.key.toLowerCase();
-            const infoDiv = document.getElementById('info');
-            
-            if (keySurfaces[key]) {
-                const surfaceIds = Array.from(keySurfaces[key]).join(', ');
-                infoDiv.textContent = `Active Key: ${key}, Surface IDs: ${surfaceIds}`;
-                infoDiv.style.display = 'block';
-                
-                // Show the appropriate overlay
-                const overlay = key === 'f' ? 
-                    highlightOverlays.userData.fOverlay : 
-                    highlightOverlays.userData[`${key}Overlay`];
-                    
-                if (overlay) {
-                    overlay.visible = true;
-                }
-            }
-        });
-
-        // Update the keyup handler
-        document.addEventListener('keyup', (event) => {
-            const key = event.key.toLowerCase();
-            const infoDiv = document.getElementById('info');
-            
-            // Hide overlays and info
-            infoDiv.textContent = '';
-            infoDiv.style.display = 'none';
-            
-            // Hide the appropriate overlay
-            const overlay = key === 'f' ? 
-                highlightOverlays.userData.fOverlay : 
-                highlightOverlays.userData[`${key}Overlay`];
-                
-            if (overlay) {
-                overlay.visible = false;
-            }
-            
-            if (key === activeKey) {
-                activeKey = null;
-            }
-        });
-
-        // Dragging state
-        let selectedLight = null;
-        const dragPlane = new THREE.Plane();
-        const intersection = new THREE.Vector3();
-        const offset = new THREE.Vector3();
-        const dragStart = new THREE.Vector3();
-
-        // Wait for DOM to be loaded before setting up toggles
-        document.addEventListener('DOMContentLoaded', () => {
-            setupToggle('keyToggle', (active) => {
-                lights.key.visible = active;
-            });
-
-            setupToggle('rimToggle', (active) => {
-                lights.rim.visible = active;
-            });
-
-            setupToggle('lowKeyToggle', (active) => {
-                lights.lowKey.visible = active;
-            });
-
-            setupToggle('axesToggle', (active) => {
-                axisGroup.visible = active;
-                axisLabels.visible = active;
-            });
-        });
-
-        // Create rotation control UI
-        const rotationDiv = document.createElement('div');
-        rotationDiv.className = 'toggle-container';
-        rotationDiv.style.borderTop = '1px solid #666';
-        rotationDiv.style.marginTop = '10px';
-        rotationDiv.style.paddingTop = '10px';
-
-        // Rotation toggle button
-        const rotateButton = document.createElement('button');
-        rotateButton.className = 'toggle-button active';  // Start active
-        rotateButton.textContent = 'Rotate ±30°';
-        rotateButton.addEventListener('click', () => {
-            rotateButton.classList.toggle('active');
-            rotationControls.enabled = rotateButton.classList.contains('active');
-            if (!rotationControls.enabled) {
-                // Reset to forward position when stopping
-                rotationControls.angle = 0;
-                rotationControls.direction = 1;
-                rotatingGroup.rotation.y = rotationControls.startAngle;
-            }
-        });
-
-        // Rotation speed slider with slower default
-        const speedSlider = document.createElement('input');
-        speedSlider.type = 'range';
-        speedSlider.className = 'intensity-slider';
-        speedSlider.min = '0.1';
-        speedSlider.max = '2.0';
-        speedSlider.step = '0.1';
-        speedSlider.value = '0.2';  // Set to slower default speed
-        speedSlider.addEventListener('input', () => {
-            rotationControls.speed = parseFloat(speedSlider.value);
-        });
-
-        // Add rotation controls to toggles div
-        rotationDiv.appendChild(rotateButton);
-        rotationDiv.appendChild(speedSlider);
-        togglesDiv.appendChild(rotationDiv);
-
-        // Handle window resize
-        window.addEventListener('resize', onWindowResize, false);
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        // Toggle handlers
-        function setupToggle(id, callback) {
-            const toggle = document.getElementById(id);
-            if (toggle) {
-                toggle.addEventListener('click', function() {
-                    this.classList.toggle('active');
-                    callback(this.classList.contains('active'));
-                });
-            }
-        }
-
-        // Remove unused variables and code
-        let sourceVisible = false;
-
-        function updateHighlightIntensity() {
-            if (hoveredFace !== null) {
-                const totalIntensity = controls.keyIntensity + 
-                                     controls.lowKeyIntensity + controls.rimIntensity;
-                highlightMaterial.emissiveIntensity = Math.min(totalIntensity * 0.3, 1.0);
-            }
-        }
-
-        // Add keyboard controls for screen position
-        window.addEventListener('keydown', function(event) {
-            if (!screenMesh) return;
-            
-            const normalSpeed = 1;
-            const fineSpeed = 0.1;
-            const moveSpeed = event.shiftKey ? fineSpeed : normalSpeed;
-            
-            switch(event.key) {
-                case 'ArrowLeft':
-                    screenMesh.position.x -= moveSpeed;
-                    break;
-                case 'ArrowRight':
-                    screenMesh.position.x += moveSpeed;
-                    break;
-                case 'ArrowUp':
-                    screenMesh.position.y += moveSpeed;
-                    break;
-                case 'ArrowDown':
-                    screenMesh.position.y -= moveSpeed;
-                    break;
-                case 'PageUp':
-                    screenMesh.position.z += moveSpeed;
-                    break;
-                case 'PageDown':
-                    screenMesh.position.z -= moveSpeed;
-                    break;
-            }
-            screenMesh.updateMatrix();
-        });
-
-        // Function to create a toggle container with intensity slider
-        function createLightControl(label, light, initialIntensity) {
-            const container = document.createElement('div');
-            container.className = 'toggle-container';
-            
-            // Create toggle button
-            const button = document.createElement('button');
-            button.className = 'toggle-button active';
-            button.textContent = label;
-            button.addEventListener('click', () => {
-                button.classList.toggle('active');
-                light.visible = button.classList.contains('active');
-            });
-            
-            // Create intensity slider
-            const slider = document.createElement('input');
-            slider.type = 'range';
-            slider.className = 'intensity-slider';
-            slider.min = '0';
-            slider.max = '20';
-            slider.step = '0.1';
-            slider.value = initialIntensity;
-            slider.addEventListener('input', () => {
-                light.intensity = parseFloat(slider.value);
-            });
-            
-            container.appendChild(button);
-            container.appendChild(slider);
-            return container;
-        }
-
-        // Create starfield with higher intensity for reflections
-        function createStarfield() {
-            const starGeometry = new THREE.BufferGeometry();
-            const starMaterial = new THREE.PointsMaterial({
-                color: 0xffffff,
-                size: 2,             // Increased size
-                transparent: true,
-                opacity: 1.0,        // Full opacity
-                sizeAttenuation: false
-            });
-
-            const starVertices = [];
-            for (let i = 0; i < 3000; i++) {  // More stars
-                const x = (Math.random() - 0.5) * 2000;
-                const y = (Math.random() - 0.5) * 2000;
-                const z = (Math.random() - 0.5) * 2000;
-                starVertices.push(x, y, z);
-            }
-
-            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
-            const stars = new THREE.Points(starGeometry, starMaterial);
-            return stars;
-        }
 
         // Create environment map from starfield
         function createStarfieldEnvMap(renderer, scene, stars) {
@@ -1116,13 +890,77 @@
         bgControl.appendChild(smokeButton);
         togglesDiv.appendChild(bgControl);
 
-        // Add 't' key handler for toggle controls
-        window.addEventListener('keydown', function(event) {
-            if (event.key.toLowerCase() === 't') {
-                const togglesDiv = document.getElementById('togglesDiv');
-                togglesDiv.style.display = togglesDiv.style.display === 'none' ? 'block' : 'none';
-            }
+        // Add copy button for ring surfaces
+        const copyButton = document.createElement('button');
+        copyButton.textContent = 'Copy Ring Surfaces';
+        copyButton.style.position = 'absolute';
+        copyButton.style.top = '10px';
+        copyButton.style.right = '10px';
+        copyButton.style.zIndex = '1000';
+        copyButton.style.background = '#00ff00';
+        copyButton.style.color = '#000000';
+        copyButton.style.border = 'none';
+        copyButton.style.padding = '5px 10px';
+        copyButton.style.cursor = 'pointer';
+        copyButton.style.borderRadius = '3px';
+        copyButton.addEventListener('click', () => {
+            const surfaces = Array.from(surfaceRecording.r).join(', ');
+            navigator.clipboard.writeText(surfaces);
         });
+        document.body.appendChild(copyButton);
+
+        // Create LED chase animation
+        const GREEN = 0x00ff00;
+        const OFF = 0x000000;
+        const CHASE_SPEED = 100; // ms between steps
+        
+        // LED sequence for chase effect (in order)
+        const chaseSequence = [
+            'D2', 'D3', 'D4', 'D5',  // Front
+            'D6', 'D7', 'D8', 'D9',  // Right side
+            'D10', 'D11', 'D12', 'D13', 'D14', 'D15', 'D16', 'D17'  // Left side (bottom to top)
+        ];
+
+        let currentLedIndex = 0;
+        let chaseInterval = null;
+
+        // Function to start LED chase
+        window.startChase = function() {
+            if (chaseInterval) return; // Don't start if already running
+            
+            // Turn all LEDs off initially
+            chaseSequence.forEach(name => {
+                setLED(name, OFF, 0);
+            });
+            
+            chaseInterval = setInterval(() => {
+                // Turn off previous LED
+                const prevIndex = (currentLedIndex - 1 + chaseSequence.length) % chaseSequence.length;
+                setLED(chaseSequence[prevIndex], OFF, 0);
+                
+                // Turn on current LED
+                setLED(chaseSequence[currentLedIndex], GREEN, 1);
+                
+                // Move to next LED
+                currentLedIndex = (currentLedIndex + 1) % chaseSequence.length;
+            }, CHASE_SPEED);
+        };
+
+        // Function to stop LED chase
+        window.stopChase = function() {
+            if (chaseInterval) {
+                clearInterval(chaseInterval);
+                chaseInterval = null;
+                
+                // Turn all LEDs off
+                chaseSequence.forEach(name => {
+                    setLED(name, OFF, 0);
+                });
+            }
+        };
+
+        // Start the chase effect
+        window.startChase();
 
         // Start the animation loop
         animate();
