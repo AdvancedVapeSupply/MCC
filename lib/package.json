@@ -1,0 +1,18 @@
+{
+  "name": "lib",
+  "version": "1.0.0",
+  "description": "",
+  "main": "esp-web-flasher.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "esp-web-flasher": "^5.1.5"
+  }
+}

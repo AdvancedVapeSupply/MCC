@@ -16,19 +16,6 @@
             z-index: 2;
             background: transparent;
         }
-        #smoke-background {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            width: 100vw;
-            height: 100vh;
-            border: none;
-            pointer-events: none;
-            z-index: 1;
-            background: black;
-            transform: translate(-50%, -50%);
-            display: none;  /* Hide smoke by default */
-        }
         #info {
             position: absolute;
             top: 10px;
@@ -81,112 +68,389 @@
             "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
             "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
             "three/examples/jsm/controls/OrbitControls": "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js",
+            "three/examples/jsm/controls/DragControls": "https://unpkg.com/three@0.160.0/examples/jsm/controls/DragControls.js",
             "three/examples/jsm/loaders/STLLoader": "https://unpkg.com/three@0.160.0/examples/jsm/loaders/STLLoader.js"
         }
     }
     </script>
 </head>
 <body>
-    <iframe id="smoke-background" src="smoke.html"></iframe>
     <div id="info"></div>
     <div id="togglesDiv"></div>
     <div id="coordsDiv"></div>
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+        import { DragControls } from 'three/examples/jsm/controls/DragControls';
         import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
-
-        // Define key surface mappings
-        const keySurfaces = {
-            'f': [19226, 19232, 19229, 19220],  // F key surfaces
-            'u': [45966],                       // U key surfaces
-            'k': [61737, 61736, 61740, 61739, 61741, 61738],  // K key surfaces (all segments)
-            'd': [30100]                        // D key surfaces
-        };
-
-        // Define button colors and properties
-        const buttonProperties = {
-            'f': { 
-                color: 0x111111,
-                hoverColor: 0x00ff00,
-                label: 'F',
-            },
-            'u': { 
-                color: 0x111111,
-                hoverColor: 0x00ff00,
-                label: 'U'
-            },
-            'k': { 
-                color: 0x111111,
-                hoverColor: 0x00ff00,
-                label: 'K'
-            },
-            'd': { 
-                color: 0x111111,
-                hoverColor: 0x00ff00,
-                label: 'D'
-            }
-        };
-
-        // Create button texture
-        function createButtonTexture(label, properties = {}) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 128;
-            canvas.height = 128;
-            const ctx = canvas.getContext('2d');
-            
-            // Fill background with gradient
-            const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-            if (properties.backgroundColor) {
-                gradient.addColorStop(0, properties.backgroundColor.inner);
-                gradient.addColorStop(1, properties.backgroundColor.outer);
-            } else {
-                gradient.addColorStop(0, '#003300');
-                gradient.addColorStop(1, '#001100');
-            }
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 128, 128);
-            
-            // Add text
-            ctx.fillStyle = properties.glowColor || '#00ff00';
-            ctx.font = 'bold 64px monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(label, 64, 64);
-            
-            // Add glow effect
-            ctx.shadowColor = properties.glowColor || '#00ff00';
-            ctx.shadowBlur = 20;
-            ctx.strokeStyle = properties.glowColor || '#00ff00';
-            ctx.lineWidth = 2;
-            ctx.strokeText(label, 64, 64);
-            
-            return new THREE.CanvasTexture(canvas);
-        }
-
-        // Create button material
-        function createButtonMaterial(properties) {
-            return new THREE.MeshPhongMaterial({
-                color: properties.color,
-                transparent: false,
-                opacity: 1.0,
-                emissive: 0x000000,
-                specular: 0x222222,
-                shininess: 30,
-                side: THREE.DoubleSide
-            });
-        }
 
         // Scene setup
         const scene = new THREE.Scene();
         scene.background = null;  // Keep background transparent
 
-        // Show smoke background
-        document.getElementById('smoke-background').style.display = 'block';
+        // Surface recording state
+        const surfaceRecording = {
+            'r': new Set([
+                // Ring surfaces
+                27963, 27962, 22009, 22010, 23201, 23200,
+                // 21987-22008 sequence
+                21987, 21988, 21989, 21990, 21991, 21992, 21993,
+                21994, 21995, 21996, 21997, 21998, 21999, 22000,
+                22001, 22002, 22003, 22004, 22005, 22006, 22007, 22008,
+                // 23202-23223 sequence
+                23202, 23203, 23204, 23205, 23206, 23207, 23208, 23209, 23210,
+                23211, 23212, 23213, 23214, 23215, 23216, 23217, 23218, 23219,
+                23220, 23221, 23222, 23223,
+                // 26626-26707 sequence
+                26626, 26627, 26628, 26629, 26631, 26632, 26633, 26634, 26635, 26636,
+                26637, 26638, 26639, 26640, 26641, 26642, 26643, 26644, 26645, 26646,
+                26647, 26648, 26649, 26650, 26651, 26652, 26653, 26654, 26655, 26656,
+                26657, 26658, 26659, 26660, 26661, 26662, 26663, 26664, 26665, 26666,
+                26667, 26668, 26669, 26670, 26671, 26672, 26673, 26674, 26675, 26676,
+                26677, 26678, 26679, 26680, 26681, 26682, 26683, 26684, 26685, 26686,
+                26687, 26688, 26689, 26690, 26691, 26692, 26693, 26694, 26695, 26696,
+                26697, 26698, 26699, 26700, 26701, 26702, 26703, 26704, 26705, 26706, 26707,
+                // Additional surfaces
+                82100, 82146, 25951
+            ]),
+            'f': new Set([19226, 19232, 19229, 19220]),  // F key surfaces
+            'u': new Set([45966]),                       // U key surfaces
+            'k': new Set([61737, 61736, 61740, 61739, 61741, 61738]),  // K key surfaces
+            'd': new Set([30100]),                       // D key surfaces
+            'b': new Set([91044, 91043, 237907, 62712, 45674, 241780, 240788, 240988, 361877, 361791, 241748, 361778, 242229, 242238, 242237, 240990, 241024, 241254, 240979, 241014, 241235, 242205, 242210, 242198, 240852, 239539, 62755, 241872, 62707, 237906, 238792, 240785, 239547, 239459, 239526, 240789, 240936, 241281]),  // USB port surfaces
+            'faceplate': new Set([45464, 45622, 45629, 45457, 45456, 45624, 45460, 45621, 19198, 45465, 45616, 45470, 45473, 45476, 45458, 45555, 45492, 45560, 45463, 45590, 45589, 45455, 45564, 45594, 45546, 45550, 45487, 45485, 45496, 45554, 45489, 45552, 45588, 45565, 45576, 45572, 45569, 45581, 45579, 45614, 45602, 45613, 45536, 45500, 45509, 45508, 45501, 45607, 45527, 45519, 45516, 45513, 45514, 45518, 45528, 45532, 45530, 45535, 45533, 45449, 45601, 45599, 45580, 45577, 45593, 45597, 45556, 45494, 45562, 45543, 45541, 45542, 45544, 45545, 45549, 45547, 45548, 45490, 45491, 45551, 45553, 45495, 45523, 45525, 45520, 45522, 45609]),  // Faceplate surfaces
+            't': new Set([]),                           // Top surfaces
+            '5': new Set([377786, 377514, 377238, 376951, 376685, 376591, 373868, 375997, 375716, 375420, 365891, 374843, 374563, 374284, 374116, 386805, 374149, 376274, 376000, 379580, 366235, 379016, 372106, 366265, 365504])  // 510 surfaces
+        };
+
+        // Mouse and raycaster for surface selection
+        const mouse = new THREE.Vector2();
+        const raycaster = new THREE.Raycaster();
+        raycaster.params.Line.threshold = 0.1;
+        raycaster.params.Points.threshold = 0.1;
+        raycaster.params.Mesh = {
+            threshold: 0,
+            firstHitOnly: false  // Allow detecting all intersections to find the best one
+        };
+
+        // Add info display for surface IDs
+        const infoDiv = document.getElementById('info');
+        infoDiv.style.display = 'block';
+        infoDiv.innerHTML = 'Click to select surfaces. Press key (r/f/u/k/d/b/p) to assign to that group.';
+
+        // Track current surface selection
+        let currentSurface = null;
+        let currentGroup = null;
+        let highlightMesh = null;  // Store the highlight mesh
+
+        // Function to highlight surfaces in a group
+        function highlightGroupSurfaces(group) {
+            // Remove existing highlight mesh if it exists
+            if (highlightMesh) {
+                scene.remove(highlightMesh);
+                highlightMesh.geometry.dispose();
+                highlightMesh.material.dispose();
+            }
+
+            if (!group || !surfaceRecording[group]) return;
+
+            // Create geometry for highlighted surfaces
+            const highlightGeometry = new THREE.BufferGeometry();
+            const positions = [];
+            const normals = [];
+            const indices = [];
+            let vertexCount = 0;
+
+            // Get positions from original mesh (since that's where all geometry data is)
+            const basePositions = window.mctMesh.geometry.attributes.position.array;
+            const baseNormals = window.mctMesh.geometry.attributes.normal.array;
+
+            // Process each face
+            for (let i = 0; i < basePositions.length; i += 9) {
+                const faceIndex = Math.floor(i / 9);
+                if (surfaceRecording[group].has(faceIndex)) {
+                    // Add vertices for this face with a small offset
+                    for (let j = 0; j < 9; j += 3) {
+                        const normal = new THREE.Vector3(
+                            baseNormals[i + j],
+                            baseNormals[i + j + 1],
+                            baseNormals[i + j + 2]
+                        );
+                        // Add vertices with a small offset along the normal
+                        positions.push(
+                            basePositions[i + j] + normal.x * 0.05,
+                            basePositions[i + j + 1] + normal.y * 0.05,
+                            basePositions[i + j + 2] + normal.z * 0.05
+                        );
+                        normals.push(normal.x, normal.y, normal.z);
+                    }
+                    indices.push(vertexCount, vertexCount + 1, vertexCount + 2);
+                    vertexCount += 3;
+                }
+            }
+
+            if (positions.length > 0) {
+                highlightGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                highlightGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+                highlightGeometry.setIndex(indices);
+                highlightGeometry.computeVertexNormals();
+
+                // Create material for highlighting with increased opacity and offset
+                const highlightMaterial = new THREE.MeshPhongMaterial({
+                    color: 0x00ff00,
+                    opacity: 0.7,
+                    transparent: true,
+                    side: THREE.DoubleSide,
+                    depthWrite: false,
+                    depthTest: true,
+                    emissive: 0x00ff00,
+                    emissiveIntensity: 0.3
+                });
+
+                // Create and add highlight mesh
+                highlightMesh = new THREE.Mesh(highlightGeometry, highlightMaterial);
+                highlightMesh.rotation.x = -Math.PI / 2;
+                highlightMesh.renderOrder = 999;  // Ensure it renders on top
+                scene.add(highlightMesh);
+
+                // Log the number of surfaces being highlighted
+                console.log(`Highlighting ${surfaceRecording[group].size} surfaces in group ${group}`);
+            }
+        }
+
+        // Function to find which group a surface belongs to
+        function findSurfaceGroup(surfaceId) {
+            for (const [group, surfaces] of Object.entries(surfaceRecording)) {
+                if (surfaces.has(surfaceId)) {
+                    return group;
+                }
+            }
+            return null;
+        }
+
+        // Remove surface selection functionality
+        window.addEventListener('mousemove', (event) => {
+            // Empty handler - surface selection disabled
+        });
+
+        window.addEventListener('click', (event) => {
+            // Empty handler - surface selection disabled
+        });
+
+        // Update keydown handler to only handle group selection
+        window.addEventListener('keydown', (event) => {
+            const key = event.key.toLowerCase();
+            if ('rfudkbpt5'.includes(key)) {
+                currentGroup = key === 'p' ? 'faceplate' : key;
+                infoDiv.innerHTML = `Selected group: ${currentGroup.toUpperCase()}`;
+                highlightGroupSurfaces(currentGroup);
+            }
+        });
+
+        // Hide the info display since we're not showing surface IDs anymore
+        infoDiv.style.display = 'none';
+
+        // Function to create mesh from surface group
+        function createGroupMesh(group, material) {
+            if (!window.mctMesh || !surfaceRecording[group]) return null;
+
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            const normals = [];
+            const indices = [];
+            let vertexCount = 0;
+
+            const basePositions = window.mctMesh.geometry.attributes.position.array;
+            const baseNormals = window.mctMesh.geometry.attributes.normal.array;
+
+            // Process each face
+            for (let i = 0; i < basePositions.length; i += 9) {
+                const faceIndex = Math.floor(i / 9);
+                if (surfaceRecording[group].has(faceIndex)) {
+                    // Add vertices for this face
+                    for (let j = 0; j < 9; j += 3) {
+                        positions.push(
+                            basePositions[i + j],
+                            basePositions[i + j + 1],
+                            basePositions[i + j + 2]
+                        );
+                        normals.push(
+                            baseNormals[i + j],
+                            baseNormals[i + j + 1],
+                            baseNormals[i + j + 2]
+                        );
+                    }
+                    indices.push(vertexCount, vertexCount + 1, vertexCount + 2);
+                    vertexCount += 3;
+                }
+            }
+
+            if (positions.length > 0) {
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+                geometry.setIndex(indices);
+                geometry.computeVertexNormals();
+
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.renderOrder = 1;
+                return mesh;
+            }
+            return null;
+        }
+
+        // Create materials for each group
+        const materials = {
+            'r': new THREE.MeshPhysicalMaterial({  // Ring material
+                color: 0xffffff,
+                metalness: 0.0,
+                roughness: 0.1,
+                transmission: 0.9,
+                thickness: 0.2,
+                envMapIntensity: 0.5,
+                clearcoat: 0.0,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.DoubleSide
+            }),
+            'screen': new THREE.MeshBasicMaterial({
+                color: 0x000000,
+                side: THREE.DoubleSide
+            }),
+            'f': new THREE.MeshPhongMaterial({  // F key material
+                color: 0x333333,
+                specular: 0x444444,
+                shininess: 30,
+                side: THREE.DoubleSide
+            }),
+            'u': new THREE.MeshPhongMaterial({  // U key material
+                color: 0x333333,
+                specular: 0x444444,
+                shininess: 30,
+                side: THREE.DoubleSide
+            }),
+            'k': new THREE.MeshPhongMaterial({  // K key material
+                color: 0x333333,
+                specular: 0x444444,
+                shininess: 30,
+                side: THREE.DoubleSide
+            }),
+            'd': new THREE.MeshPhongMaterial({  // D key material
+                color: 0x333333,
+                specular: 0x444444,
+                shininess: 30,
+                side: THREE.DoubleSide
+            }),
+            'b': new THREE.MeshPhongMaterial({  // USB port material
+                color: 0x222222,
+                specular: 0x666666,
+                shininess: 50,
+                side: THREE.DoubleSide
+            }),
+            'faceplate': new THREE.MeshPhysicalMaterial({  // Clear glossy faceplate
+                color: 0xffffff,
+                metalness: 0.0,        // Non-metallic for glass/acrylic look
+                roughness: 0.05,       // Very smooth for high gloss
+                transmission: 0.9,     // High transparency
+                thickness: 0.5,        // Glass thickness
+                envMapIntensity: 2.0,  // Strong reflections
+                clearcoat: 1.0,        // Maximum clearcoat
+                clearcoatRoughness: 0.05,  // Very smooth clearcoat
+                transparent: true,     // Enable transparency
+                opacity: 0.3,          // Subtle visibility
+                side: THREE.DoubleSide
+            }),
+            't': new THREE.MeshPhongMaterial({  // Top material
+                color: 0x333333,
+                specular: 0x444444,
+                shininess: 30,
+                side: THREE.DoubleSide
+            }),
+            '5': new THREE.MeshPhysicalMaterial({  // 510 material (brass)
+                color: 0xb5a642,    // Brass color
+                metalness: 0.9,     // Very metallic
+                roughness: 0.2,     // Smoother for more shine
+                envMapIntensity: 1.2, // Stronger reflections
+                clearcoat: 0.8,     // More clearcoat for extra shine
+                clearcoatRoughness: 0.2,
+                side: THREE.DoubleSide
+            })
+        };
+
+        // Store group meshes
+        const groupMeshes = {};
+
+        // Function to update group meshes
+        function updateGroupMeshes() {
+            // Remove existing group meshes
+            Object.values(groupMeshes).forEach(mesh => {
+                if (mesh) rotatingGroup.remove(mesh);
+            });
+
+            // Create new meshes for each group
+            Object.entries(materials).forEach(([group, material]) => {
+                const mesh = createGroupMesh(group, material);
+                if (mesh) {
+                    groupMeshes[group] = mesh;
+                    rotatingGroup.add(mesh);
+                }
+            });
+
+            // Update original mesh to exclude grouped surfaces
+            if (window.mctMesh) {
+                const allGroupSurfaces = new Set();
+                Object.values(surfaceRecording).forEach(surfaces => {
+                    surfaces.forEach(surface => allGroupSurfaces.add(surface));
+                });
+
+                const geometry = new THREE.BufferGeometry();
+                const positions = [];
+                const normals = [];
+                const indices = [];
+                let vertexCount = 0;
+
+                const basePositions = window.mctMesh.geometry.attributes.position.array;
+                const baseNormals = window.mctMesh.geometry.attributes.normal.array;
+
+                // Process each face
+                for (let i = 0; i < basePositions.length; i += 9) {
+                    const faceIndex = Math.floor(i / 9);
+                    if (!allGroupSurfaces.has(faceIndex)) {
+                        // Add vertices for this face
+                        for (let j = 0; j < 9; j += 3) {
+                            positions.push(
+                                basePositions[i + j],
+                                basePositions[i + j + 1],
+                                basePositions[i + j + 2]
+                            );
+                            normals.push(
+                                baseNormals[i + j],
+                                baseNormals[i + j + 1],
+                                baseNormals[i + j + 2]
+                            );
+                        }
+                        indices.push(vertexCount, vertexCount + 1, vertexCount + 2);
+                        vertexCount += 3;
+                    }
+                }
+
+                if (positions.length > 0) {
+                    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+                    geometry.setIndex(indices);
+                    geometry.computeVertexNormals();
+                    window.mctMesh.geometry.dispose();
+                    window.mctMesh.geometry = geometry;
+                }
+            }
+        }
+
+        // Initial update of group meshes
+        updateGroupMeshes();
 
         // Camera setup
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
-        camera.position.set(0, 0, 100);
+        camera.position.set(-30.69, 37.73, 87.38);
         camera.lookAt(0, 0, 0);
 
         // Renderer setup
@@ -205,26 +469,78 @@
         scene.add(rotatingGroup);
 
         // Lighting setup
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
         scene.add(ambientLight);
 
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(0, 10, 200);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        directionalLight.position.set(0, 10, 100);
         scene.add(directionalLight);
 
-        // Add rim lights
-        const rimLight1 = new THREE.PointLight(0x00ff00, 0.3, 80);
-        rimLight1.position.set(5, 5, 40);
-        scene.add(rimLight1);
+        // Add overhead lights with visible spheres
+        function createDraggableLight(color, intensity, distance, position) {
+            const light = new THREE.PointLight(color, intensity, distance);
+            light.position.copy(position);
+            
+            // Create larger, more visible sphere for the light
+            const sphereGeometry = new THREE.SphereGeometry(2, 16, 16);
+            const sphereMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0x00ff00,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.8
+            });
+            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphere.position.copy(position);  // Position sphere independently
+            
+            return { light, sphere };  // Return both light and sphere
+        }
 
-        const rimLight2 = new THREE.PointLight(0x00ff00, 0.3, 80);
-        rimLight2.position.set(-5, 5, 40);
-        scene.add(rimLight2);
+        const overheadLight1 = createDraggableLight(0xffffff, 30000.0, 100, new THREE.Vector3(36.66, -7.65, 68.34));
+        scene.add(overheadLight1.light);
+        scene.add(overheadLight1.sphere);  // Add sphere directly to scene
+
+        const overheadLight2 = createDraggableLight(0xffffff, 30000.0, 100, new THREE.Vector3(30.01, 71.96, -42.37));
+        scene.add(overheadLight2.light);
+        scene.add(overheadLight2.sphere);  // Add sphere directly to scene
 
         // Add fill light
-        const fillLight = new THREE.PointLight(0xffffff, 0.1, 150);
+        const fillLight = new THREE.PointLight(0xffffff, 0.7, 150);
         fillLight.position.set(0, 0, 250);
         scene.add(fillLight);
+
+        // Dragging functionality
+        const dragControls = new DragControls(
+            [overheadLight1.sphere, overheadLight2.sphere], 
+            camera, 
+            renderer.domElement
+        );
+
+        dragControls.addEventListener('dragstart', function (event) {
+            orbitControls.enabled = false;  // Disable orbit controls while dragging
+        });
+
+        dragControls.addEventListener('drag', function (event) {
+            // Update light position to match sphere position
+            const sphere = event.object;
+            const light = sphere === overheadLight1.sphere ? overheadLight1.light : overheadLight2.light;
+            light.position.copy(sphere.position);
+            
+            // Log both light positions
+            console.log('Light 1 position:', {
+                x: overheadLight1.sphere.position.x.toFixed(2),
+                y: overheadLight1.sphere.position.y.toFixed(2),
+                z: overheadLight1.sphere.position.z.toFixed(2)
+            });
+            console.log('Light 2 position:', {
+                x: overheadLight2.sphere.position.x.toFixed(2),
+                y: overheadLight2.sphere.position.y.toFixed(2),
+                z: overheadLight2.sphere.position.z.toFixed(2)
+            });
+        });
+
+        dragControls.addEventListener('dragend', function (event) {
+            orbitControls.enabled = true;  // Re-enable orbit controls after dragging
+        });
 
         // Create starfield
         function createStarfield() {
@@ -252,6 +568,49 @@
         const starfield = createStarfield();
         scene.add(starfield);
 
+        // Function to create screen grid
+        function createScreenGrid() {
+            const gridGroup = new THREE.Group();
+            
+            // Create base screen plane
+            const screenGeometry = new THREE.PlaneGeometry(16, 8);  // 16:8 aspect ratio
+            const screenMesh = new THREE.Mesh(screenGeometry, materials.screen);
+            gridGroup.add(screenMesh);
+
+            // Create grid lines
+            const gridMaterial = new THREE.LineBasicMaterial({ 
+                color: 0x00ff00,
+                transparent: true,
+                opacity: 0.3
+            });
+
+            // Vertical lines (160 columns)
+            for (let i = 0; i <= 160; i++) {
+                const x = (i / 160) * 16 - 8;  // Map to -8 to 8
+                const geometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(x, -4, 0.01),
+                    new THREE.Vector3(x, 4, 0.01)
+                ]);
+                const line = new THREE.Line(geometry, gridMaterial);
+                gridGroup.add(line);
+            }
+
+            // Horizontal lines (80 rows)
+            for (let i = 0; i <= 80; i++) {
+                const y = (i / 80) * 8 - 4;  // Map to -4 to 4
+                const geometry = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(-8, y, 0.01),
+                    new THREE.Vector3(8, y, 0.01)
+                ]);
+                const line = new THREE.Line(geometry, gridMaterial);
+                gridGroup.add(line);
+            }
+
+            // Position the grid
+            gridGroup.position.set(0, 0, 0.1);  // Slight offset to prevent z-fighting
+            return gridGroup;
+        }
+
         // Load the STL file
         const loader = new STLLoader();
         loader.load('MCT.stl', function(geometry) {
@@ -264,14 +623,14 @@
             // Create base mesh with glossy black material
             const baseMaterial = new THREE.MeshPhongMaterial({
                 color: 0x000000,
-                specular: 0x666666,
-                shininess: 100,
+                specular: 0x111111,  // Reduced specular highlight
+                shininess: 10,       // Reduced shininess for less glare
                 side: THREE.DoubleSide
             });
 
             // Create base model and store it in the global scope
             window.mctMesh = new THREE.Mesh(geometry, baseMaterial);
-            mctMesh.rotation.x = -Math.PI / 2;
+            mctMesh.rotation.x = -Math.PI / 2;  // Base rotation
             rotatingGroup.add(mctMesh);
 
             // Log total number of faces for debugging
@@ -321,12 +680,12 @@
                 color: 0xffffff,
                 metalness: 0.0,
                 roughness: 0.1,
-                transmission: 0.9,  // Very high transmission
-                thickness: 0.2,     // Thinner material
+                transmission: 0.9,
+                thickness: 0.2,
                 envMapIntensity: 0.5,
-                clearcoat: 0.0,     // Remove clearcoat for better transmission
+                clearcoat: 0.0,
                 transparent: true,
-                opacity: 0.3,       // Very transparent
+                opacity: 0.3,
                 side: THREE.DoubleSide
             });
 
@@ -465,6 +824,10 @@
             
             // Add highlight overlays to the scene
             rotatingGroup.add(highlightOverlays);
+
+            // Create and add screen grid
+            const screenGrid = createScreenGrid();
+            rotatingGroup.add(screenGrid);
         });
 
         // Orbit controls setup
@@ -473,6 +836,11 @@
         orbitControls.dampingFactor = 0.05;
         orbitControls.minDistance = 50;
         orbitControls.maxDistance = 300;
+
+        // Add change event listener for orbit controls
+        orbitControls.addEventListener('change', () => {
+            // Removed position logging
+        });
 
         // Animation loop
         function animate() {
@@ -483,693 +851,22 @@
             starfield.rotation.y += 0.0002;
             starfield.rotation.x += 0.0001;
 
-            // Update effects
-            updateEffects();
-
             renderer.render(scene, camera);
         }
 
-        // Mouse and raycaster setup for all interactions
-        const mouse = new THREE.Vector2();
-        const raycaster = new THREE.Raycaster();
+        // Handle window resizing
+        window.addEventListener('resize', onWindowResize, false);
 
-        // Mouse position tracking
-        function updateMousePosition(event) {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera);
-            return new THREE.Vector3(mouse.x, mouse.y, 0).unproject(camera);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        // Add info display for surface IDs
-        const infoDiv = document.getElementById('info');
-        infoDiv.style.display = 'none';  // Hide the info div completely
-
-        // Function to find surface ID from face index
-        function getSurfaceInfo(faceIndex) {
-            for (const [key, surfaces] of Object.entries(keySurfaces)) {
-                if (surfaces.includes(faceIndex)) {
-                    return `Surface ID: ${faceIndex} (${key.toUpperCase()} key)`;
-                }
-            }
-            return `Surface ID: ${faceIndex}`;
-        }
-
-        // Surface recording state
-        const surfaceRecording = {
-            'r': new Set([
-                // Original pairs
-                27963, 27962,                    // First pair
-                22009, 22010,                    // Second pair
-                23201, 23200,                    // Third pair
-                
-                // 21987-22008 sequence
-                21987, 21988, 21989, 21990, 21991, 21992, 21993,
-                21994, 21995, 21996, 21997, 21998, 21999, 22000,
-                22001, 22002, 22003, 22004, 22005, 22006, 22007, 22008,
-                
-                // 23202-23223 sequence
-                23202, 23203, 23204, 23205, 23206, 23207, 23208, 23209, 23210,
-                23211, 23212, 23213, 23214, 23215, 23216, 23217, 23218, 23219,
-                23220, 23221, 23222, 23223,
-                
-                // 26626-26707 sequence
-                26626, 26627, 26628, 26629,    // First group
-                26631, 26632, 26633, 26634, 26635, 26636,    // Second group
-                26637, 26638, 26639, 26640, 26641, 26642, 26643,  // Third group
-                26644, 26645, 26646, 26647, 26648, 26649,  // Fourth group
-                26650, 26651, 26652, 26653, 26654,    // Fifth group
-                26655, 26656, 26657, 26658, 26659,    // Sixth group
-                26660, 26661, 26662, 26663, 26664, 26665,  // Seventh group
-                26666, 26667, 26668, 26669, 26670,    // Eighth group
-                26671, 26672, 26673, 26674, 26675, 26676,  // Ninth group
-                26677, 26678, 26679, 26680, 26681, 26682, 26683, 26684,  // Tenth group
-                26685, 26686, 26687, 26688, 26689,  // Eleventh group
-                26690, 26691, 26692, 26693, 26694, 26695, 26696, 26697, 26698, 26699,  // Twelfth group
-                26700, 26701, 26702, 26703, 26704, 26705, 26706, 26707,  // Final group
-                
-                // Additional surfaces
-                82100, 82146,                  // 82xxx group
-                25951                          // Single
-            ]),
-            currentFace: null
-        };
-
-        // Function to update the display of recorded surfaces
-        function updateSurfaceDisplay() {
-            // Empty function - we no longer need to display surface info
-        }
-
-        // Function to find key from surface ID
-        function findKeyForSurface(faceIndex) {
-            for (const [key, surfaces] of Object.entries(keySurfaces)) {
-                if (surfaces.includes(faceIndex)) {
-                    return key;
-                }
-            }
-            return null;
-        }
-
-        // Materials for different states
-        const mctMaterial = new THREE.MeshPhongMaterial({
-            color: 0x333333,
-            specular: 0x444444,
-            shininess: 30,
-            side: THREE.DoubleSide,
-            transparent: false,
-            opacity: 1.0
-        });
-
-        // Track active buttons
-        const activeButtons = new Set();
-
-        // Function to highlight button - updated to work with mesh surfaces
-        function highlightButton(key, highlight) {
-            if (!window.mctMesh) return;
-            
-            const surfaces = keySurfaces[key];
-            if (!surfaces) return;
-
-            // Get the material array if it exists
-            const materials = Array.isArray(window.mctMesh.material) ? 
-                window.mctMesh.material : 
-                [window.mctMesh.material];
-
-            // Update materials for the key's surfaces
-            surfaces.forEach(faceIndex => {
-                const materialIndex = window.mctMesh.geometry.groups ? 
-                    window.mctMesh.geometry.groups[faceIndex]?.materialIndex || 0 : 
-                    0;
-
-                // Create new material if needed
-                if (!materials[materialIndex]) {
-                    materials[materialIndex] = new THREE.MeshPhongMaterial({
-                        color: buttonProperties[key].color,
-                        specular: 0x666666,
-                        shininess: 100,
-                        side: THREE.DoubleSide
-                    });
-                }
-
-                // Update material properties
-                if (highlight) {
-                    materials[materialIndex].color.setHex(buttonProperties[key].hoverColor);
-                    materials[materialIndex].emissive.setHex(buttonProperties[key].hoverColor);
-                    materials[materialIndex].emissiveIntensity = 0.5;
-                    activeButtons.add(key);
-                } else {
-                    materials[materialIndex].color.setHex(buttonProperties[key].color);
-                    materials[materialIndex].emissive.setHex(0x000000);
-                    materials[materialIndex].emissiveIntensity = 0;
-                    activeButtons.delete(key);
-                }
-            });
-
-            // Update the mesh material
-            window.mctMesh.material = materials.length === 1 ? materials[0] : materials;
-        }
-
-        // Mouse event handlers for button interaction - updated
-        window.addEventListener('mousemove', (event) => {
-            updateMousePosition(event);
-            if (!window.mctMesh) return;
-
-            const intersects = raycaster.intersectObject(window.mctMesh);
-            if (intersects.length > 0) {
-                const faceIndex = Math.floor(intersects[0].faceIndex);
-                surfaceRecording.currentFace = faceIndex;
-                updateSurfaceDisplay();
-                
-                // Check if this face belongs to a key
-                let foundKey = null;
-                for (const [key, surfaces] of Object.entries(keySurfaces)) {
-                    if (surfaces.includes(faceIndex)) {
-                        foundKey = key;
-                        break;
-                    }
-                }
-
-                // Update button highlights
-                Object.keys(keySurfaces).forEach(key => {
-                    highlightButton(key, key === foundKey);
-                });
-            } else {
-                // Reset all buttons when not hovering
-                Object.keys(keySurfaces).forEach(key => {
-                    highlightButton(key, false);
-                });
-                surfaceRecording.currentFace = null;
-                updateSurfaceDisplay();
-            }
-        });
-
-        window.addEventListener('mousedown', (event) => {
-            updateMousePosition(event);
-            if (!window.mctMesh) return;
-
-            const intersects = raycaster.intersectObject(window.mctMesh);
-            if (intersects.length > 0) {
-                const faceIndex = Math.floor(intersects[0].faceIndex);
-                for (const [key, surfaces] of Object.entries(keySurfaces)) {
-                    if (surfaces.includes(faceIndex)) {
-                    highlightButton(key, true);
-                        break;
-                    }
-                }
-            }
-        });
-
-        window.addEventListener('mouseup', (event) => {
-            activeButtons.forEach(key => {
-                highlightButton(key, false);
-            });
-        });
-
-        // Create a canvas texture for the 80x160 pixel grid
-        const createPixelGridTexture = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 80;
-            canvas.height = 160;
-            const ctx = canvas.getContext('2d');
-            
-            // Fill background
-            ctx.fillStyle = '#000000';
-            ctx.fillRect(0, 0, 80, 160);
-            
-            // Draw grid
-            ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 0.5;
-            
-            // Draw vertical lines
-            for (let x = 0; x <= 80; x += 10) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, 160);
-                ctx.stroke();
-            }
-            
-            // Draw horizontal lines
-            for (let y = 0; y <= 160; y += 10) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(80, y);
-                ctx.stroke();
-            }
-
-            // Add pixel coordinates at corners
-            ctx.fillStyle = '#00ff00';
-            ctx.font = '8px monospace';
-            ctx.fillText('0,0', 2, 8);
-            ctx.fillText('80,0', 50, 8);
-            ctx.fillText('0,160', 2, 158);
-            ctx.fillText('80,160', 50, 158);
-            
-            return new THREE.CanvasTexture(canvas);
-        };
-
-        // Screen rectangle setup
-        let screenWidth = 6.2;  // Physical width
-        let screenHeight = 11.5;  // Physical height to maintain aspect ratio of 80x160
-        const screenGeometry = new THREE.PlaneGeometry(screenWidth, screenHeight);
-        const texture = createPixelGridTexture();
-        texture.minFilter = THREE.NearestFilter;
-        texture.magFilter = THREE.NearestFilter;
-        
-        const screenMaterial = new THREE.MeshBasicMaterial({
-            color: 0x00ff00,
-            transparent: true,
-            opacity: 0.5,
-            side: THREE.DoubleSide,
-            map: texture
-        });
-
-        const screenMesh = new THREE.Mesh(screenGeometry, screenMaterial);
-        screenMesh.position.set(0.1, 3.2, 9.5);  // Keep existing position
-        scene.add(screenMesh);  // Add screen to scene immediately
-
-        // Create coordinates div
-        const coordsDiv = document.createElement('div');
-        coordsDiv.id = 'coordinates';
-        coordsDiv.style.position = 'absolute';
-        coordsDiv.style.top = '10px';
-        coordsDiv.style.left = '10px';
-        coordsDiv.style.color = '#00ff00';
-        coordsDiv.style.fontFamily = 'monospace';
-        coordsDiv.style.whiteSpace = 'pre';
-        coordsDiv.style.background = 'rgba(0,0,0,0.7)';
-        coordsDiv.style.padding = '10px';
-        coordsDiv.style.borderRadius = '5px';
-        coordsDiv.style.zIndex = '1000';
-        coordsDiv.style.display = 'none';
-        document.body.appendChild(coordsDiv);
-
-        // Update coordinates display function
-        function updateCoordinates(event) {
-            if (coordsDiv.style.display === 'none') return;
-
-            let coordsText = '';
-            
-            // Add red dot position
-            coordsText += `Red Dot: (${redDot.position.x.toFixed(2)}, ${redDot.position.y.toFixed(2)}, ${redDot.position.z.toFixed(2)})\n\n`;
-            
-            // Add saved LED positions
-            coordsText += 'Saved LED Positions:\n';
-            Object.entries(savedLedPositions).forEach(([led, pos]) => {
-                coordsText += `${led}: (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)})\n`;
-            });
-            coordsText += '\n';
-
-            // Add mouse position if event provided
-            if (event) {
-                const worldPos = updateMousePosition(event);
-                coordsText += `Mouse: (${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)})\n\n`;
-            }
-
-            // Add screen position
-            coordsText += `Screen: (${screenMesh.position.x.toFixed(2)}, ${screenMesh.position.y.toFixed(2)}, ${screenMesh.position.z.toFixed(2)})\n`;
-            coordsText += `Screen Size: ${screenWidth.toFixed(1)} x ${screenHeight.toFixed(1)}\n\n`;
-
-            // Add button positions
-            Object.entries(keySurfaces).forEach(([key, _]) => {
-                const buttonMesh = highlightOverlays.userData[key];
-                if (buttonMesh) {
-                    const worldPos = new THREE.Vector3();
-                    const worldRot = new THREE.Euler();
-                    
-                    buttonMesh.getWorldPosition(worldPos);
-                    worldRot.setFromRotationMatrix(buttonMesh.matrixWorld);
-                    
-                    coordsText += `${key.toUpperCase()} Key:\n`;
-                    coordsText += `  Pos: (${worldPos.x.toFixed(2)}, ${worldPos.y.toFixed(2)}, ${worldPos.z.toFixed(2)})\n`;
-                    coordsText += `  Rot: (${(worldRot.x * 180/Math.PI).toFixed(1)}°, ${(worldRot.y * 180/Math.PI).toFixed(1)}°, ${(worldRot.z * 180/Math.PI).toFixed(1)}°)\n\n`;
-                }
-            });
-
-            coordsDiv.innerHTML = coordsText;
-        }
-
-        // Add mousemove listener for coordinate updates
-        window.addEventListener('mousemove', updateCoordinates);
-
-        // Function to create light control UI
-        function createLightControl(name, light, maxIntensity) {
-            const container = document.createElement('div');
-            container.className = 'toggle-container';
-            
-            const button = document.createElement('button');
-            button.className = 'toggle-button active';
-            button.textContent = name;
-            
-            const slider = document.createElement('input');
-            slider.type = 'range';
-            slider.className = 'intensity-slider';
-            slider.min = '0';
-            slider.max = '100';
-            slider.value = (light.intensity / maxIntensity) * 100;
-            
-            button.addEventListener('click', () => {
-                button.classList.toggle('active');
-                light.visible = button.classList.contains('active');
-            });
-            
-            slider.addEventListener('input', () => {
-                light.intensity = (slider.value / 100) * maxIntensity;
-            });
-            
-            container.appendChild(button);
-            container.appendChild(slider);
-            return container;
-        }
-
-        // Create light controls
-        const lightControls = {
-            key: createLightControl('Key Light', directionalLight, 12.0),
-            lowKey: createLightControl('Low Key', ambientLight, 8.0),
-            rim: createLightControl('Rim Light', directionalLight, 8.0),
-            left: createLightControl('Left Light', directionalLight, 8.0),
-            right: createLightControl('Right Light', directionalLight, 8.0)
-        };
-
-        // Add controls to toggles div
-        Object.values(lightControls).forEach(control => {
-            togglesDiv.appendChild(control);
-        });
-
-        // Create coordinates toggle in controls panel
-        const coordsControl = document.createElement('div');
-        coordsControl.className = 'toggle-container';
-        coordsControl.style.borderTop = '1px solid #666';
-        coordsControl.style.marginTop = '10px';
-        coordsControl.style.paddingTop = '10px';
-
-        const coordsButton = document.createElement('button');
-        coordsButton.className = 'toggle-button';  // Start inactive
-        coordsButton.textContent = 'Show Coordinates';
-        coordsButton.addEventListener('click', () => {
-            coordsButton.classList.toggle('active');
-            coordsDiv.style.display = coordsButton.classList.contains('active') ? 'block' : 'none';
-        });
-
-        coordsControl.appendChild(coordsButton);
-        togglesDiv.appendChild(coordsControl);
-
-        // Create environment map from starfield
-        function createStarfieldEnvMap(renderer, scene, stars) {
-            const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(512);
-            const cubeCamera = new THREE.CubeCamera(1, 100000, cubeRenderTarget);
-            scene.add(cubeCamera);
-            
-            // Update the environment map
-            function updateEnvMap() {
-                if (stars.visible) {
-                    // Temporarily hide the model and other objects
-                    const visibleObjects = scene.children.filter(obj => obj.visible && obj !== stars);
-                    visibleObjects.forEach(obj => obj.visible = false);
-                    
-                    // Update the environment map
-                    cubeCamera.update(renderer, scene);
-                    
-                    // Restore visibility
-                    visibleObjects.forEach(obj => obj.visible = true);
-                }
-                requestAnimationFrame(updateEnvMap);
-            }
-            updateEnvMap();
-            
-            return cubeRenderTarget.texture;
-        }
-
-        // Create WiFi effect
-        function createWiFiEffect() {
-            // Create smaller, more intense central sphere
-            const wifiGeometry = new THREE.SphereGeometry(0.5, 32, 32);  // Smaller radius
-            const wifiMaterial = new THREE.MeshPhongMaterial({
-                color: 0x00ff00,
-                transparent: true,
-                opacity: 0.8,  // More opaque
-                emissive: 0x00ff00,
-                emissiveIntensity: 2.0,  // Much stronger emission
-                side: THREE.DoubleSide
-            });
-            const wifiSphere = new THREE.Mesh(wifiGeometry, wifiMaterial);
-            wifiSphere.position.set(0, -15, 0);
-            wifiSphere.visible = false;
-            
-            // Create outer wave spheres with more dramatic effect
-            const waveCount = 5;  // More waves for continuous effect
-            const waves = [];
-            for (let i = 0; i < waveCount; i++) {
-                const waveGeometry = new THREE.SphereGeometry(0.5, 32, 32);  // Start small
-                const waveMaterial = new THREE.MeshPhongMaterial({
-                    color: 0x00ff00,
-                    transparent: true,
-                    opacity: 0,
-                    emissive: 0x00ff00,
-                    emissiveIntensity: 0,
-                    side: THREE.DoubleSide
-                });
-                const wave = new THREE.Mesh(waveGeometry, waveMaterial);
-                wave.position.copy(wifiSphere.position);
-                wave.scale.set(1, 1, 1);
-                wave.visible = false;
-                waves.push(wave);
-                rotatingGroup.add(wave);
-            }
-            
-            rotatingGroup.add(wifiSphere);
-            return { sphere: wifiSphere, waves };
-        }
-
-        // Create Bluetooth effect
-        function createBluetoothEffect() {
-            // Create smaller, more intense central sphere
-            const bluetoothGeometry = new THREE.SphereGeometry(0.5, 32, 32);  // Smaller radius
-            const bluetoothMaterial = new THREE.MeshPhongMaterial({
-                color: 0x0088ff,
-                transparent: true,
-                opacity: 0.8,  // More opaque
-                emissive: 0x0088ff,
-                emissiveIntensity: 2.0,  // Much stronger emission
-                side: THREE.DoubleSide
-            });
-            const bluetoothSphere = new THREE.Mesh(bluetoothGeometry, bluetoothMaterial);
-            bluetoothSphere.position.set(0, -15, 0);
-            bluetoothSphere.visible = false;
-            
-            // Create outer wave spheres with more dramatic effect
-            const waveCount = 5;  // More waves for continuous effect
-            const waves = [];
-            for (let i = 0; i < waveCount; i++) {
-                const waveGeometry = new THREE.SphereGeometry(0.5, 32, 32);  // Start small
-                const waveMaterial = new THREE.MeshPhongMaterial({
-                    color: 0x0088ff,
-                    transparent: true,
-                    opacity: 0,
-                    emissive: 0x0088ff,
-                    emissiveIntensity: 0,
-                    side: THREE.DoubleSide
-                });
-                const wave = new THREE.Mesh(waveGeometry, waveMaterial);
-                wave.position.copy(bluetoothSphere.position);
-                wave.scale.set(1, 1, 1);
-                wave.visible = false;
-                waves.push(wave);
-                rotatingGroup.add(wave);
-            }
-            
-            rotatingGroup.add(bluetoothSphere);
-            return { sphere: bluetoothSphere, waves };
-        }
-
-        // Create USB power stream effect
-        function createUSBStreamEffect() {
-            // Create curve pointing towards USB port at bottom
-            const curve = new THREE.CatmullRomCurve3([
-                new THREE.Vector3(0, -8, 9.5),     // Start at USB port
-                new THREE.Vector3(0, -10, 9.5),    // Middle point
-                new THREE.Vector3(0, -12, 9.5)     // End point
-            ]);
-
-            const points = curve.getPoints(50);
-            const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            const material = new THREE.LineBasicMaterial({ 
-                color: 0x00ff00,
-                transparent: true,
-                opacity: 0.5
-            });
-            const streamLine = new THREE.Line(geometry, material);
-            streamLine.visible = false;
-            rotatingGroup.add(streamLine);  // Add to rotating group instead of scene
-
-            // Create particles
-            const particleCount = 50;
-            const particleGeometry = new THREE.BufferGeometry();
-            const particlePositions = new Float32Array(particleCount * 3);
-            
-            // Initialize particle positions along the curve
-            for (let i = 0; i < particleCount; i++) {
-                const t = i / particleCount;
-                const point = curve.getPoint(t);
-                particlePositions[i * 3] = point.x;
-                particlePositions[i * 3 + 1] = point.y;
-                particlePositions[i * 3 + 2] = point.z;
-            }
-            
-            particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particlePositions, 3));
-            
-            const particleMaterial = new THREE.PointsMaterial({
-                color: 0x00ff00,
-                size: 0.05,
-                transparent: true,
-                opacity: 0.8
-            });
-            
-            const particles = new THREE.Points(particleGeometry, particleMaterial);
-            particles.visible = false;
-            rotatingGroup.add(particles);  // Add to rotating group instead of scene
-
-            return { streamLine, particles, curve };
-        }
-
-        // Create effects
-        const wifiEffect = createWiFiEffect();
-        const bluetoothEffect = createBluetoothEffect();
-        const usbStreamEffect = createUSBStreamEffect();
-
-        // Effect states
-        const effects = {
-            wifi: { active: false, ...createWiFiEffect() },
-            bluetooth: { active: false, ...createBluetoothEffect() },
-            power: { active: false, stream: usbStreamEffect }
-        };
-
-        // Update effects in animation loop
-        let time = 0;
-        function updateEffects() {
-            time += 0.01;
-
-            // WiFi effect
-            if (effects.wifi.active) {
-                const intensity = (Math.sin(time * 8) * 0.5 + 0.5) * 5.0;  // Much faster and more intense pulsing
-                effects.wifi.sphere.material.emissiveIntensity = intensity * 2;  // Double the emission
-                effects.wifi.sphere.material.opacity = 0.8 + intensity * 0.2;  // More consistently visible
-                effects.wifi.sphere.visible = true;
-                
-                // Update wave animations with more dramatic scaling
-                effects.wifi.waves.forEach((wave, index) => {
-                    const waveTime = (time + index * 0.15) % 1;  // Even faster wave sequence
-                    wave.visible = true;
-                    wave.scale.setScalar(1 + waveTime * 10);  // Larger expansion
-                    wave.material.opacity = Math.max(0, 0.6 * (1 - waveTime));  // More visible waves
-                    wave.material.emissiveIntensity = Math.max(0, 2.0 * (1 - waveTime));  // Much stronger glow
-                });
-            } else {
-                effects.wifi.sphere.visible = false;
-                effects.wifi.waves.forEach(wave => wave.visible = false);
-            }
-
-            // Bluetooth effect
-            if (effects.bluetooth.active) {
-                const intensity = (Math.sin(time * 4) * 0.5 + 0.5) * 3.0;
-                effects.bluetooth.sphere.material.emissiveIntensity = intensity;
-                effects.bluetooth.sphere.material.opacity = 0.6 + intensity * 0.4;
-                effects.bluetooth.sphere.visible = true;
-                
-                effects.bluetooth.waves.forEach((wave, index) => {
-                    const waveTime = (time + index * 0.2) % 1;
-                    wave.visible = true;
-                    wave.scale.setScalar(1 + waveTime * 8);
-                    wave.material.opacity = Math.max(0, 0.4 * (1 - waveTime));
-                    wave.material.emissiveIntensity = Math.max(0, 1.0 * (1 - waveTime));
-                });
-            } else {
-                effects.bluetooth.sphere.visible = false;
-                effects.bluetooth.waves.forEach(wave => wave.visible = false);
-            }
-
-            // USB power stream effect
-            if (effects.power.active) {
-                const { streamLine, particles, curve } = effects.power.stream;
-                streamLine.visible = true;
-                particles.visible = true;
-
-                // Update particle positions
-                const positions = particles.geometry.attributes.position.array;
-                for (let i = 0; i < positions.length; i += 3) {
-                    const t = ((time + i / positions.length) % 1);
-                    const point = curve.getPoint(1 - t); // Reverse direction to flow into USB
-                    positions[i] = point.x;
-                    positions[i + 1] = point.y;
-                    positions[i + 2] = point.z;
-                }
-                particles.geometry.attributes.position.needsUpdate = true;
-            } else {
-                effects.power.stream.streamLine.visible = false;
-                effects.power.stream.particles.visible = false;
-            }
-        }
-
-        // Add effect controls to toggles div
-        const effectControl = document.createElement('div');
-        effectControl.className = 'toggle-container';
-        effectControl.style.borderTop = '1px solid #666';
-        effectControl.style.marginTop = '10px';
-        effectControl.style.paddingTop = '10px';
-
-        // WiFi toggle
-        const wifiButton = document.createElement('button');
-        wifiButton.className = 'toggle-button';
-        wifiButton.textContent = 'WiFi Effect';
-        wifiButton.addEventListener('click', () => {
-            wifiButton.classList.toggle('active');
-            effects.wifi.active = wifiButton.classList.contains('active');
-        });
-
-        // Bluetooth toggle
-        const bluetoothButton = document.createElement('button');
-        bluetoothButton.className = 'toggle-button';
-        bluetoothButton.textContent = 'Bluetooth Effect';
-        bluetoothButton.addEventListener('click', () => {
-            bluetoothButton.classList.toggle('active');
-            effects.bluetooth.active = bluetoothButton.classList.contains('active');
-        });
-
-        // USB Power toggle
-        const powerButton = document.createElement('button');
-        powerButton.className = 'toggle-button';
-        powerButton.textContent = 'USB Power Stream';
-        powerButton.addEventListener('click', () => {
-            powerButton.classList.toggle('active');
-            effects.power.active = powerButton.classList.contains('active');
-        });
-
-        // Add effect controls to toggles div
-        effectControl.appendChild(wifiButton);
-        effectControl.appendChild(bluetoothButton);
-        effectControl.appendChild(powerButton);
-        togglesDiv.appendChild(effectControl);
-
-        // Add keyboard controls for effects
-        window.addEventListener('keydown', (event) => {
-            const key = event.key.toLowerCase();
-            switch(key) {
-                case 'w':
-                    effects.wifi.active = !effects.wifi.active;
-                    wifiButton.classList.toggle('active');
-                    break;
-                case 'b':
-                    effects.bluetooth.active = !effects.bluetooth.active;
-                    bluetoothButton.classList.toggle('active');
-                    break;
-                case 'p':
-                    effects.power.active = !effects.power.active;
-                    powerButton.classList.toggle('active');
-                    break;
-            }
-        });
-
-        // Start the animation loop
+        // Initialize
         animate();
     </script>
 </body>
 </html> 
+
+
