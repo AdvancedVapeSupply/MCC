@@ -14,11 +14,13 @@
             "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
             "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
             "three/examples/jsm/controls/OrbitControls": "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js",
-            "three/examples/jsm/renderers/CSS3DRenderer": "https://unpkg.com/three@0.160.0/examples/jsm/renderers/CSS3DRenderer.js"
+            "three/examples/jsm/renderers/CSS3DRenderer": "https://unpkg.com/three@0.160.0/examples/jsm/renderers/CSS3DRenderer.js",
+            "esp-web-tools": "https://unpkg.com/esp-web-tools@9.4.3/dist/web/install-button.js?module"
         }
     }
     </script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script type="module" src="js/serial-manager.js"></script>
     <style>
         * {
             margin: 0;
@@ -44,6 +46,16 @@
             --neon-yellow-intense: 0 0 20px rgba(255, 212, 59, 0.8), 0 0 30px rgba(255, 212, 59, 0.6);
             --tile-background: #1a1a1a;
             --border-color: rgba(0, 255, 0, 0.3);
+        }
+
+        /* Hide conditional tiles by default */
+        #esp32-tile, #python-tile {
+            opacity: 0.5;
+            filter: grayscale(70%);
+        }
+
+        #esp32-icon, #python-icon {
+            opacity: 0.3;
         }
 
         body { 
@@ -303,6 +315,30 @@
             opacity: 1;
         }
 
+        .terminal-line.progress-line {
+            position: relative;
+            padding-right: 20px;
+        }
+
+        .terminal-line.progress-line::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--neon-green);
+            border-radius: 50%;
+            border-right-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: translateY(-50%) rotate(0deg); }
+            100% { transform: translateY(-50%) rotate(360deg); }
+        }
+
         .terminal-line.error {
             color: #ff4444;
             text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
@@ -396,6 +432,7 @@
 
         .usb-icon.connected {
             opacity: 1;
+            color: var(--neon-green);
             text-shadow: var(--neon-green-intense);
         }
 
@@ -549,6 +586,12 @@
             flex-direction: column;
             align-items: flex-end;
             gap: 8px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
         }
 
         .settings-button {
@@ -1215,6 +1258,45 @@
             background: var(--neon-yellow);
             box-shadow: var(--neon-yellow-glow);
         }
+
+        /* Add these CSS rules in the style section */
+        .progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(0, 40, 0, 0.4);
+            display: none;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0%;
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-glow);
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            position: absolute;
+            top: -18px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+        }
+
+        .action-button {
+            position: relative;
+            overflow: visible;
+        }
     </style>
 </head>
 <body>
@@ -1223,12 +1305,12 @@
         <div id="iphone-status-bar">
             <div class="status-left">9:08</div>
             <div class="status-right">
+                <span id="avs-icon" class="status-icon" data-tile="avs-tile"><i class="fas fa-atom"></i></span>
+                <span id="python-icon" class="status-icon" data-tile="python-tile"><i class="fa-brands fa-python"></i></span>
+                <span id="esp32-icon" class="status-icon" data-tile="esp32-tile"><i class="fas fa-microchip"></i></span>
                 <span class="status-icon" data-tile="wifi-tile"><i class="fas fa-wifi"></i></span>
                 <span class="status-icon" data-tile="ble-tile"><i class="fa-brands fa-bluetooth-b"></i></span>
                 <span id="usb-icon" class="status-icon" data-tile="serial-tile"><i class="fa-brands fa-usb"></i></span>
-                <span id="esp32-icon" class="status-icon" data-tile="esp32-tile" style="display: none;"><i class="fas fa-microchip"></i></span>
-                <span id="python-icon" class="status-icon" data-tile="python-tile" style="display: none;"><i class="fa-brands fa-python"></i></span>
-                <span id="avs-icon" class="status-icon" data-tile="avs-tile"><i class="fas fa-atom"></i></span>
                 <div class="battery-icon" data-tile="power-tile">
                     <div class="battery-level"></div>
                 </div>
@@ -1252,87 +1334,26 @@
                             </div>
                         </div>
                         <div class="tile-header-right">
-                            <button class="settings-button">
-                                <i class="fas fa-cog"></i>
-                            </button>
+                            <div class="header-actions">
+                                <button class="action-button" id="download-files-btn" title="Download Python Files">
+                                    <i class="fas fa-download"></i>
+                                    <div class="progress"></div>
+                                </button>
+                                <button class="action-button" id="firmware-update-btn" title="Update MCT Firmware">
+                                    <i class="fas fa-microchip"></i>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill"></div>
+                                        <div class="progress-text">0%</div>
+                                    </div>
+                                </button>
+                                <button class="settings-button">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                            </div>
                             <div class="connection-toggle" id="avs-toggle"></div>
                         </div>
                     </div>
                     <div class="tile-content">
-                        <div class="endpoint-info">
-                            <div class="endpoint-row">
-                                <span class="endpoint-label">VID:</span>
-                                <span class="endpoint-value" id="usb-vid">-</span>
-                            </div>
-                            <div class="endpoint-row">
-                                <span class="endpoint-label">PID:</span>
-                                <span class="endpoint-value" id="usb-pid">-</span>
-                            </div>
-                            <div class="endpoint-row">
-                                <span class="endpoint-label">PORT:</span>
-                                <span class="endpoint-value" id="usb-port">-</span>
-                            </div>
-                        </div>
-                        <div class="small-tile-carousel">
-                            <div class="small-tile">
-                                <div class="small-tile-icon">
-                                    <i class="fas fa-microchip"></i>
-                                </div>
-                                <div class="small-tile-content">
-                                    <h4 class="small-tile-title">CPU</h4>
-                                    <div class="small-tile-value" id="cpu-usage">0%</div>
-                                    <div class="small-tile-subtitle">Usage</div>
-                                    <div class="small-tile-chart">
-                                        <canvas id="cpu-chart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="small-tile">
-                                <div class="small-tile-icon">
-                                    <i class="fas fa-memory"></i>
-                                </div>
-                                <div class="small-tile-content">
-                                    <h4 class="small-tile-title">RAM</h4>
-                                    <div class="small-tile-value" id="ram-usage">0%</div>
-                                    <div class="small-tile-subtitle">Usage</div>
-                                    <div class="small-tile-chart">
-                                        <canvas id="ram-chart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="small-tile">
-                                <div class="small-tile-icon">
-                                    <i class="fas fa-temperature-high"></i>
-                                </div>
-                                <div class="small-tile-content">
-                                    <h4 class="small-tile-title">Temp</h4>
-                                    <div class="small-tile-value" id="temp-value">0°C</div>
-                                    <div class="small-tile-subtitle">CPU Temperature</div>
-                                    <div class="small-tile-chart">
-                                        <canvas id="temp-chart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="small-tile">
-                                <div class="small-tile-icon">
-                                    <i class="fas fa-battery-full"></i>
-                                </div>
-                                <div class="small-tile-content">
-                                    <h4 class="small-tile-title">Battery</h4>
-                                    <div class="small-tile-value" id="battery-level">0%</div>
-                                    <div class="small-tile-subtitle">Level</div>
-                                    <div class="small-tile-chart">
-                                        <canvas id="battery-chart"></canvas>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="tile-actions">
-                            <button class="action-button" id="download-files-btn" title="Download Python Files">
-                                <i class="fas fa-download"></i>
-                                <div class="progress"></div>
-                            </button>
-                        </div>
                     </div>
                 </div>
 
@@ -1359,15 +1380,92 @@
                         <div class="endpoint-info">
                             <div class="endpoint-row">
                                 <span class="endpoint-label">VID:</span>
-                                <span class="endpoint-value" id="usb-vid">-</span>
+                                <span class="endpoint-value" id="serial-usb-vid">-</span>
                             </div>
                             <div class="endpoint-row">
                                 <span class="endpoint-label">PID:</span>
-                                <span class="endpoint-value" id="usb-pid">-</span>
+                                <span class="endpoint-value" id="serial-usb-pid">-</span>
                             </div>
                             <div class="endpoint-row">
                                 <span class="endpoint-label">PORT:</span>
-                                <span class="endpoint-value" id="usb-port">-</span>
+                                <span class="endpoint-value" id="serial-usb-port">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ESP32 Tile -->
+                <div class="tile" id="esp32-tile">
+                    <div class="tile-header">
+                        <div class="tile-header-left">
+                            <div class="tile-icon disconnected">
+                                <i class="fas fa-microchip"></i>
+                            </div>
+                            <h3 class="tile-title">ESP32</h3>
+                            <button class="settings-button">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="tile-content">
+                        <div class="info-section">
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">CHIP TYPE:</span>
+                                <span class="endpoint-value" id="esp32-chip-type">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">FLASH:</span>
+                                <span class="endpoint-value" id="esp32-flash">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">PSRAM:</span>
+                                <span class="endpoint-value" id="esp32-psram">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">MAC:</span>
+                                <span class="endpoint-value" id="esp32-mac">-</span>
+                            </div>
+                            <div class="action-row">
+                                <button id="esp32-retry" class="action-button">
+                                    <i class="fas fa-redo"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Python Tile -->
+                <div class="tile" id="python-tile">
+                    <div class="tile-header">
+                        <div class="tile-header-left">
+                            <div class="tile-icon">
+                                <i class="fa-brands fa-python"></i>
+                            </div>
+                            <div class="tile-title-container">
+                                <h3 class="tile-title">Python</h3>
+                                <p class="tile-subtitle">MicroPython Runtime</p>
+                            </div>
+                        </div>
+                        <div class="tile-header-right">
+                            <button class="settings-button">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <div class="connection-toggle" id="python-toggle"></div>
+                        </div>
+                    </div>
+                    <div class="tile-content">
+                        <div class="endpoint-info">
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">VERSION:</span>
+                                <span class="endpoint-value" id="python-version">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">RUNTIME:</span>
+                                <span class="endpoint-value" id="python-runtime">MicroPython</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">MEMORY:</span>
+                                <span class="endpoint-value" id="python-memory">-</span>
                             </div>
                         </div>
                     </div>
@@ -1476,10 +1574,296 @@
             wifi: false
         };
 
+        // Initialize UI
+        function initializeUI() {
+            // Gray out conditional elements
+            const esp32Tile = document.getElementById('esp32-tile');
+            const esp32Icon = document.getElementById('esp32-icon');
+            const pythonTile = document.getElementById('python-tile');
+            const pythonIcon = document.getElementById('python-icon');
+            
+            if (esp32Tile) esp32Tile.style.opacity = '0.5';
+            if (esp32Icon) esp32Icon.style.opacity = '0.3';
+            if (pythonTile) pythonTile.style.opacity = '0.5';
+            if (pythonIcon) pythonIcon.style.opacity = '0.3';
+        }
+
+        // Call initialization on load
+        document.addEventListener('DOMContentLoaded', initializeUI);
+
+        // USB port management
+        let activePort = null;
+        let portReader = null;
+        let portWriter = null;
+
+        // Initialize WebSerial
+        async function initializeWebSerial() {
+            try {
+                if (!hasWebSerial) {
+                    logToTerminal('WebSerial API not supported in this browser', true);
+                    return false;
+                }
+
+                // Request port access
+                const port = await navigator.serial.requestPort({
+                    filters: [
+                        { usbVendorId: 0x303a }, // ESP32-S3
+                        { usbVendorId: 0x10c4 }  // CP210x
+                    ]
+                });
+
+                // Open port
+                await port.open({ baudRate: 115200 });
+                activePort = port;
+
+                // Set up reader
+                portReader = port.readable.getReader();
+                portWriter = port.writable.getWriter();
+
+                // Update USB info
+                await updateUSBInfo(port);
+
+                // Update connection state
+                updateConnectionStatus(true, 'serial');
+                updateUSBConnectionState(true);
+
+                // Start reading
+                readSerialData();
+
+                return true;
+            } catch (error) {
+                logToTerminal(`Failed to initialize WebSerial: ${error.message}`, true);
+                return false;
+            }
+        }
+
+        // Read serial data
+        async function readSerialData() {
+            try {
+                while (true) {
+                    const { value, done } = await portReader.read();
+                    if (done) {
+                        logToTerminal('Serial port closed', true);
+                        break;
+                    }
+
+                    // Convert to text
+                    const text = new TextDecoder().decode(value);
+                    
+                    // Check for ESP32 detection
+                    if (text.includes('ESP32-S3')) {
+                        updateConnectionStatus(true, 'esp32');
+                        logToTerminal('ESP32-S3 detected', false, 'esp32');
+                    }
+                    
+                    // Check for MicroPython detection
+                    if (text.includes('MicroPython')) {
+                        updateConnectionStatus(true, 'python');
+                        logToTerminal('MicroPython detected', false, 'python');
+                    }
+
+                    // Log to terminal
+                    logToTerminal(text);
+                }
+            } catch (error) {
+                logToTerminal(`Error reading serial data: ${error.message}`, true);
+            } finally {
+                portReader.releaseLock();
+            }
+        }
+
+        // Update USB connection state
+        function updateUSBConnectionState(connected) {
+            const toggle = document.getElementById('serial-toggle');
+            const usbIcon = document.getElementById('usb-icon');
+            
+            if (toggle) {
+                toggle.classList.toggle('active', connected);
+            }
+            
+            if (usbIcon) {
+                usbIcon.classList.toggle('connected', connected);
+            }
+        }
+
+        // Update connection status
+        function updateConnectionStatus(connected, type) {
+            // Update internal state
+            connectionState[type] = connected;
+            
+            // Update UI elements
+            const icon = document.querySelector(`.status-icon[data-tile="${type}-tile"]`);
+            const tileIcon = document.querySelector(`#${type}-tile .tile-icon`);
+            const toggle = document.getElementById(`${type}-toggle`);
+            
+            if (icon) {
+                icon.classList.toggle('connected', connected);
+                icon.style.opacity = connected ? '1' : '0.3';
+            }
+            
+            if (tileIcon) {
+                tileIcon.classList.toggle('disconnected', !connected);
+            }
+            
+            if (toggle) {
+                toggle.classList.toggle('active', connected);
+            }
+
+            // Update specific elements based on type
+            switch(type) {
+                case 'serial':
+                    const usbIcon = document.getElementById('usb-icon');
+                    if (usbIcon) {
+                        usbIcon.classList.toggle('connected', connected);
+                        usbIcon.style.opacity = connected ? '1' : '0.3';
+                        if (connected) {
+                            usbIcon.style.color = 'var(--neon-green)';
+                            usbIcon.style.textShadow = 'var(--neon-green-intense)';
+                        } else {
+                            usbIcon.style.color = '';
+                            usbIcon.style.textShadow = 'none';
+                        }
+                    }
+                    
+                    if (activePort) {
+                        USBManager.updateUSBInfo(activePort);
+                    } else {
+                        // Clear USB info if disconnected
+                        document.getElementById('serial-usb-vid').textContent = '-';
+                        document.getElementById('serial-usb-pid').textContent = '-';
+                        document.getElementById('serial-usb-port').textContent = '-';
+                    }
+                    break;
+                case 'esp32':
+                    const esp32Icon = document.getElementById('esp32-icon');
+                    const esp32Tile = document.getElementById('esp32-tile');
+                    if (connected) {
+                        if (esp32Icon) {
+                            esp32Icon.style.opacity = '1';
+                            esp32Icon.style.color = 'var(--neon-red)';
+                            esp32Icon.style.textShadow = 'var(--neon-red-intense)';
+                        }
+                        if (esp32Tile) {
+                            esp32Tile.style.opacity = '1';
+                            esp32Tile.style.filter = 'grayscale(0%)';
+                        }
+                    } else {
+                        if (esp32Icon) esp32Icon.style.opacity = '0.3';
+                        if (esp32Tile) {
+                            esp32Tile.style.opacity = '0.5';
+                            esp32Tile.style.filter = 'grayscale(70%)';
+                        }
+                    }
+                    break;
+                case 'python':
+                    const pythonIcon = document.getElementById('python-icon');
+                    const pythonTile = document.getElementById('python-tile');
+                    if (connected) {
+                        if (pythonIcon) {
+                            pythonIcon.style.opacity = '1';
+                            pythonIcon.style.color = 'var(--neon-yellow)';
+                            pythonIcon.style.textShadow = 'var(--neon-yellow-intense)';
+                        }
+                        if (pythonTile) {
+                            pythonTile.style.opacity = '1';
+                            pythonTile.style.filter = 'grayscale(0%)';
+                        }
+                    } else {
+                        if (pythonIcon) pythonIcon.style.opacity = '0.3';
+                        if (pythonTile) {
+                            pythonTile.style.opacity = '0.5';
+                            pythonTile.style.filter = 'grayscale(70%)';
+                        }
+                    }
+                    break;
+            }
+            
+            // Log status with appropriate color
+            logToTerminal(
+                `${type.toUpperCase()} ${connected ? 'connected' : 'disconnected'}`,
+                false,
+                type
+            );
+        }
+
+        // Toggle serial connection
+        async function toggleSerialConnection() {
+            const toggle = document.getElementById('serial-toggle');
+            if (!toggle) return;
+
+            try {
+                if (toggle.classList.contains('active')) {
+                    // Disconnect
+                    try {
+                        const ports = await navigator.serial.getPorts();
+                        if (ports.length > 0) {
+                            await USBManager.cleanupPort(ports[0]);
+                            toggle.classList.remove('active');
+                            updateConnectionStatus(false, 'serial');
+                            updateConnectionStatus(false, 'esp32');
+                            updateConnectionStatus(false, 'python');
+                            logToTerminal('USB disconnected', false, 'serial');
+                        }
+                    } catch (error) {
+                        logToTerminal(`USB disconnect failed: ${error.message}`, true, 'serial');
+                    }
+                } else {
+                    // Connect
+                    try {
+                        logToTerminal('Connecting to USB device...', false, 'serial');
+                        const port = await navigator.serial.requestPort({
+                            filters: [
+                                // Current device
+                                { usbVendorId: 0x303a, usbProductId: 0x0420 },
+                                // Additional supported device
+                                { usbVendorId: 0x3031, usbProductId: 0x0420 }
+                            ]
+                        });
+                        await USBManager.connectToPort(port);
+                        toggle.classList.add('active');
+                        updateConnectionStatus(true, 'serial');
+                        
+                        // Ensure USB icon is properly lit
+                        const usbIcon = document.getElementById('usb-icon');
+                        if (usbIcon) {
+                            usbIcon.classList.add('connected');
+                            usbIcon.style.opacity = '1';
+                            usbIcon.style.color = 'var(--neon-green)';
+                            usbIcon.style.textShadow = 'var(--neon-green-intense)';
+                        }
+                        
+                        logToTerminal('USB connected successfully', false, 'serial');
+                    } catch (error) {
+                        toggle.classList.remove('active');
+                        logToTerminal(`USB connect failed: ${error.message}`, true, 'serial');
+                    }
+                }
+            } catch (error) {
+                logToTerminal(`USB operation failed: ${error.message}`, true);
+                // Ensure clean state on error
+                updateConnectionStatus(false, 'serial');
+                updateConnectionStatus(false, 'esp32');
+                updateConnectionStatus(false, 'python');
+            }
+        }
+
         // Terminal logging helper
-        function logToTerminal(message, isError = false, type = 'default') {
+        function logToTerminal(message, isError = false, type = 'default', overwrite = false) {
             const terminal = document.getElementById('terminal-panel');
             if (!terminal) return;
+
+            // If overwrite is true and there's a previous line, update it instead of creating a new one
+            if (overwrite && terminal.lastElementChild) {
+                const lastLine = terminal.lastElementChild;
+                lastLine.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                if (type !== 'default') {
+                    lastLine.classList.add(type);
+                }
+                if (isError) {
+                    lastLine.classList.add('error');
+                }
+                return;
+            }
 
             const line = document.createElement('p');
             line.className = 'terminal-line';
@@ -1494,7 +1878,67 @@
                 line.classList.add('error');
             }
             
-            line.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            // Handle ANSI escape codes
+            let processedMessage = message;
+            if (message.includes('\x1b[')) {
+                // Replace ANSI color codes with CSS classes
+                processedMessage = message
+                    .replace(/\x1b\[0m/g, '') // Reset
+                    .replace(/\x1b\[32m/g, '') // Green
+                    .replace(/\x1b\[31m/g, '') // Red
+                    .replace(/\x1b\[33m/g, '') // Yellow
+                    .replace(/\x1b\[36m/g, '') // Cyan
+                    .replace(/\x1b\[34m/g, '') // Blue
+                    .replace(/\x1b\[35m/g, '') // Magenta
+                    .replace(/\x1b\[37m/g, '') // White
+                    .replace(/\x1b\[1m/g, '') // Bold
+                    .replace(/\x1b\[4m/g, '') // Underline
+                    .replace(/\x1b\[5m/g, '') // Blink
+                    .replace(/\x1b\[7m/g, '') // Inverse
+                    .replace(/\x1b\[8m/g, '') // Hidden
+                    .replace(/\x1b\[K/g, '') // Clear line
+                    .replace(/\x1b\[2K/g, '') // Clear entire line
+                    .replace(/\x1b\[1K/g, '') // Clear from cursor to beginning
+                    .replace(/\x1b\[0K/g, '') // Clear from cursor to end
+                    .replace(/\x1b\[?25l/g, '') // Hide cursor
+                    .replace(/\x1b\[?25h/g, '') // Show cursor
+                    .replace(/\x1b\[\d+;\d+H/g, '') // Move cursor
+                    .replace(/\x1b\[\d+[ABCD]/g, '') // Move cursor up/down/left/right
+                    .replace(/\x1b\[\d+[JK]/g, '') // Clear screen
+                    .replace(/\x1b\[\d+[G]/g, '') // Move cursor to column
+                    .replace(/\x1b\[\d+;\d+f/g, '') // Move cursor to position
+                    .replace(/\x1b\[\d+[ST]/g, '') // Scroll up/down
+                    .replace(/\x1b\[\d+[XY]/g, '') // Move cursor to position
+                    .replace(/\x1b\[\d+[Z]/g, '') // Move cursor back
+                    .replace(/\x1b\[\d+[a]/g, '') // Move cursor right
+                    .replace(/\x1b\[\d+[b]/g, '') // Move cursor down
+                    .replace(/\x1b\[\d+[c]/g, '') // Move cursor left
+                    .replace(/\x1b\[\d+[d]/g, '') // Move cursor up
+                    .replace(/\x1b\[\d+[e]/g, '') // Move cursor down
+                    .replace(/\x1b\[\d+[f]/g, '') // Move cursor to position
+                    .replace(/\x1b\[\d+[g]/g, '') // Clear tab stop
+                    .replace(/\x1b\[\d+[h]/g, '') // Set mode
+                    .replace(/\x1b\[\d+[l]/g, '') // Reset mode
+                    .replace(/\x1b\[\d+[m]/g, '') // Set attributes
+                    .replace(/\x1b\[\d+[n]/g, '') // Device status report
+                    .replace(/\x1b\[\d+[p]/g, '') // Set character set
+                    .replace(/\x1b\[\d+[q]/g, '') // Set cursor style
+                    .replace(/\x1b\[\d+[r]/g, '') // Set scroll region
+                    .replace(/\x1b\[\d+[s]/g, '') // Save cursor position
+                    .replace(/\x1b\[\d+[u]/g, '') // Restore cursor position
+                    .replace(/\x1b\[\d+[v]/g, '') // Set scrolling region
+                    .replace(/\x1b\[\d+[w]/g, '') // Set window title
+                    .replace(/\x1b\[\d+[x]/g, '') // Request terminal parameters
+                    .replace(/\x1b\[\d+[y]/g, '') // Set terminal parameters
+                    .replace(/\x1b\[\d+[z]/g, '') // Set terminal parameters
+                    .replace(/\x1b\[\d+[{|}]/g, '') // Set character set
+                    .replace(/\x1b\[\d+[~]/g, '') // Set character set
+                    .replace(/\x1b\[\d+[^_`]/g, '') // Set character set
+                    .replace(/\x1b\[\d+[a-z]/g, '') // Set character set
+                    .replace(/\x1b\[\d+[A-Z]/g, ''); // Set character set
+            }
+            
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${processedMessage}`;
             terminal.appendChild(line);
             
             // Ensure scroll to bottom
@@ -1506,1149 +1950,88 @@
             }
         }
 
-        // Update connection status function
-        function updateConnectionStatus(connected, type) {
-            const icon = document.querySelector(`.status-icon[data-tile="${type}-tile"]`);
-            const tileIcon = document.querySelector(`#${type}-tile .tile-icon`);
-            const toggle = document.getElementById(`${type}-toggle`);
+        // Initialize 3D Portal
+        function init3DPortal() {
+            const container = document.getElementById('canvas-container');
+            if (!container) return;
             
-            if (icon) {
-                icon.classList.toggle('connected', connected);
-            }
+            // Clear any existing content
+            container.innerHTML = '';
             
-            if (tileIcon) {
-                tileIcon.classList.toggle('disconnected', !connected);
-            }
+            // Create iframe to load mct.html
+            const iframe = document.createElement('iframe');
+            iframe.src = 'mct.html';
+            iframe.style.width = '100%';
+            iframe.style.height = '100%';
+            iframe.style.border = 'none';
+            iframe.style.borderRadius = '8px';
+            iframe.style.backgroundColor = 'transparent';
             
-            if (toggle) {
-                toggle.classList.toggle('active', connected);
-            }
-
-            // Update connection state
-            connectionState[type] = connected;
+            // Add iframe to container
+            container.appendChild(iframe);
             
-            // Log status with appropriate color
-            logToTerminal(
-                `${type.toUpperCase()} ${connected ? 'connected' : 'disconnected'}`,
-                false,
-                type
-            );
+            // Log success
+            logToTerminal('3D portal loaded', false, 'avs');
         }
+        
+        // Initialize 3D portal when document is loaded
+        init3DPortal();
 
-        // USB Connection Management
-        const USBManager = {
-            async connectToPort(port) {
-                try {
-                    // First, check if we need to clean up any existing connections
-                    if (port.readable || port.writable) {
-                        logToTerminal('Port is already open, closing first...');
-                        try {
-                            await this.cleanupPort(port);
-                            await new Promise(resolve => setTimeout(resolve, 100)); // Small delay after closing
-                        } catch (closeError) {
-                            console.warn('Error while closing port:', closeError);
-                        }
-                    }
-
-                    // Open the port first
-                    logToTerminal('Opening port...');
-                    await port.open({ 
-                        baudRate: 115200,
-                        dataBits: 8,
-                        stopBits: 1,
-                        parity: "none",
-                        flowControl: "none"
-                    });
-
-                    // Create ESPLoader instance
-                    const loader = new ESPLoader({
-                        transport: new Transport(port),
-                        baudrate: 115200,
-                        debug: true,
-                        portImplementation: port
-                    });
-                    
-                    // Try to detect ESP32
-                    try {
-                        await this.resetESP32ToBootloader(port);
-                        await loader.connect();
-                        const chipType = await loader.detectChip();
-                        
-                        logToTerminal(`Detected ${chipType.name}`);
-                        
-                        // Show ESP32 tile and icon
-                        const esp32Tile = document.getElementById('esp32-tile');
-                        const esp32Icon = document.getElementById('esp32-icon');
-                        if (esp32Tile) esp32Tile.style.display = 'flex';
-                        if (esp32Icon) esp32Icon.style.display = 'inline';
-                        
-                        // Update connection state
-                        connectionState.esp32 = true;
-                        updateConnectionStatus(true, 'esp32');
-                        
-                        // Get additional chip info
-                        const features = await loader.getChipFeatures();
-                        const mac = await loader.readMac();
-                        
-                        // Update UI with chip info
-                        document.getElementById('esp32-chip-type').textContent = chipType.name;
-                        document.getElementById('esp32-flash').textContent = `${features.flash_size}MB`;
-                        document.getElementById('esp32-psram').textContent = features.psram ? 'Yes' : 'No';
-                        document.getElementById('esp32-mac').textContent = mac.map(b => b.toString(16).padStart(2, '0')).join(':');
-                        
-                        // Try to detect MicroPython
-                        await this.detectMicroPython(port);
-                    } catch (error) {
-                        logToTerminal(`ESP32 detection failed: ${error.message}`, true);
-                        // Continue with normal serial connection
-                    }
-                
-                // Update USB icon and connection status
-                updateConnectionStatus(true, 'serial');
-                connectionState.serial = true;
-                    this.updateToggleState(true);
-                    
-                    // Get port info safely
-                    try {
-                        const info = await port.getInfo();
-                        if (info && info.usbVendorId && info.usbProductId) {
-                logToTerminal(`Connected to USB device (VID: ${info.usbVendorId}, PID: ${info.usbProductId})`);
-                        } else {
-                            logToTerminal('Connected to port (detailed info not available)');
-                        }
-                    } catch (infoError) {
-                        logToTerminal('Connected to port (could not get device info)');
-                        console.warn('Could not get port info:', infoError);
-                    }
-                    
-                    // Update USB info
-                    await this.updateUSBInfo(port);
-                
-                return true;
-            } catch (error) {
-                logToTerminal(`Failed to open port: ${error.message}`, true);
-                    this.updateToggleState(false);
-                    
-                    // Clean up if port was opened
-                    try {
-                        if (port.readable || port.writable) {
-                            await this.cleanupPort(port);
-                        }
-                    } catch (closeError) {
-                        console.warn('Error while cleaning up port:', closeError);
-                    }
-                    
-                throw error;
+        // Add event listener to toggle USB connection manually
+        document.getElementById('serial-toggle').addEventListener('click', toggleSerialConnection);
+        
+        // Add click handler for USB icon to scroll to serial tile
+        document.getElementById('usb-icon').addEventListener('click', () => {
+            const serialTile = document.getElementById('serial-tile');
+            if (serialTile) {
+                serialTile.scrollIntoView({ behavior: 'smooth' });
             }
-            },
+        });
 
-            async cleanupPort(port) {
-                if (!port) return;
+        // Initialize serial manager - do this only once
+        USBManager.autoConnectToStoredPorts().then(connected => {
+            if (connected) {
+                // Make sure USB icon is properly lit
+                const usbIcon = document.getElementById('usb-icon');
+                if (usbIcon) {
+                    usbIcon.classList.add('connected');
+                    usbIcon.style.opacity = '1';
+                    usbIcon.style.color = 'var(--neon-green)';
+                    usbIcon.style.textShadow = 'var(--neon-green-intense)';
+                }
                 
-                try {
-                    // Cancel any ongoing reads
-                    const reader = port.readable?.getReader();
-                    if (reader) {
-                        await reader.cancel();
-                        reader.releaseLock();
-                    }
-                    
-                    // Close any writers
-                    const writer = port.writable?.getWriter();
-                    if (writer) {
-                        await writer.close();
-                        writer.releaseLock();
-                    }
-                    
-                    // Close the port
-                    if (port.readable || port.writable) {
-                        await port.close();
-                        logToTerminal('Port closed successfully');
-                    }
-                } catch (error) {
-                    console.warn('Error during port cleanup:', error);
-                    logToTerminal('Error during port cleanup: ' + error.message, true);
-                }
-            },
-
-            async resetESP32ToBootloader(port) {
-                try {
-                    logToTerminal('Resetting ESP32 into bootloader mode...');
-                    
-                    try {
-                        // First try DTR/RTS reset sequence
-                        await port.setSignals({ dataTerminalReady: false, requestToSend: true });
-                        await new Promise(r => setTimeout(r, 100));
-                        await port.setSignals({ dataTerminalReady: true, requestToSend: false });
-                        await new Promise(r => setTimeout(r, 50));
-                        await port.setSignals({ dataTerminalReady: false });
-                        logToTerminal('DTR/RTS reset sequence completed');
-                    } catch (signalError) {
-                        logToTerminal('DTR/RTS reset failed, trying alternative reset...', true);
-                        
-                        // If DTR/RTS fails, try break sequence
-                        const writer = port.writable.getWriter();
-                        try {
-                            // Send break
-                            await writer.write(new Uint8Array([0x00]));
-                            await new Promise(r => setTimeout(r, 100));
-                            
-                            // Send sync sequence
-                            const syncSequence = new Uint8Array([
-                                0xc0, 0x00, 0x08, 0x24, 0x00, 0x00, 0x00, 0x00, 
-                                0x00, 0x00, 0x07, 0x07, 0x12, 0x20, 0xc0
-                            ]);
-                            await writer.write(syncSequence);
-                        } finally {
-                            writer.releaseLock();
-                        }
-                        logToTerminal('Break sequence completed');
-                    }
-                    
-                    // Wait for bootloader
-                    await new Promise(r => setTimeout(r, 500));
-                    logToTerminal('Reset sequence completed');
-                    
-                } catch (error) {
-                    logToTerminal(`Reset sequence failed: ${error.message}`, true);
-                    throw error;
-                }
-            },
-
-            async detectMicroPython(port) {
-                try {
-                    logToTerminal('Checking for MicroPython...');
-                    
-                    // Create a writer
-                    const writer = port.writable.getWriter();
-                    const reader = port.readable.getReader();
-                    
-                    try {
-                        // Send Ctrl+C to interrupt any running program
-                        await writer.write(new Uint8Array([0x03]));
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        
-                        // Send Enter and wait for prompt
-                        await writer.write(new Uint8Array([0x0D]));
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        
-                        // Send version check command
-                        const cmd = new TextEncoder().encode('import sys\r\nprint(sys.implementation.name, sys.implementation.version)\r\n');
-                        await writer.write(cmd);
-                        
-                        // Read response with timeout
-                        let response = '';
-                        const startTime = Date.now();
-                        const timeout = 2000; // 2 second timeout
-                        
-                        while (Date.now() - startTime < timeout) {
-                            const {value, done} = await reader.read();
-                            if (done) break;
-                            
-                            response += new TextDecoder().decode(value);
-                            if (response.includes('micropython')) {
-                                // Show Python tile and icon
-                                const pythonTile = document.getElementById('python-tile');
-                                const pythonIcon = document.getElementById('python-icon');
-                                if (pythonTile) pythonTile.style.display = 'flex';
-                                if (pythonIcon) pythonIcon.style.display = 'inline';
-                                
-                                // Update connection state
-                                connectionState.python = true;
-                                updateConnectionStatus(true, 'python');
-                                
-                                // Extract version
-                                const version = response.split('\r\n')[1];
-                                document.getElementById('python-version').textContent = version;
-                                
-                                logToTerminal(`MicroPython detected: ${version}`);
-                                break;
-                            }
-                        }
-                    } finally {
-                        writer.releaseLock();
-                        reader.releaseLock();
-                    }
-            } catch (error) {
-                    logToTerminal(`MicroPython detection failed: ${error.message}`, true);
-                }
-            },
-
-            async updateUSBInfo(port) {
-                try {
-                    const info = await port.getInfo();
-                    if (info) {
-                        document.getElementById('usb-vid').textContent = info.usbVendorId ? `0x${info.usbVendorId.toString(16).padStart(4, '0')}` : '-';
-                        document.getElementById('usb-pid').textContent = info.usbProductId ? `0x${info.usbProductId.toString(16).padStart(4, '0')}` : '-';
-                        document.getElementById('usb-port').textContent = port.getInfo().path || '-';
-                    }
-                } catch (error) {
-                    console.warn('Could not get USB info:', error);
-                }
-            },
-
-            updateToggleState(connected) {
+                // Make sure toggle is active
                 const toggle = document.getElementById('serial-toggle');
                 if (toggle) {
-                    toggle.classList.toggle('active', connected);
+                    toggle.classList.add('active');
                 }
-            },
-
-            async autoConnectToStoredPorts() {
-            logToTerminal('Checking for stored ports...');
-            
-            try {
-                const ports = await navigator.serial.getPorts();
                 
-                if (ports.length > 0) {
-                    logToTerminal(`Found ${ports.length} stored port(s)`);
+                // If ESP32 detection failed but USB is connected, show proper status
+                if (connectionState.serial && !connectionState.esp32) {
+                    logToTerminal('ESP32 detection did not succeed, but USB connection is established', false, 'serial');
                     
-                        // Clean up any existing connections first
-                    for (const port of ports) {
-                            await this.cleanupPort(port);
-                        }
-                        
-                        // Small delay before reconnecting
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        
-                        // Try to connect to the first available port
-                        try {
-                            await this.connectToPort(ports[0]);
-                            logToTerminal('Successfully connected to stored port');
-                            this.updateToggleState(true);
-                            return true;
-                        } catch (error) {
-                            logToTerminal(`Failed to connect to stored port: ${error.message}`, true);
-                            this.updateToggleState(false);
-                            throw error;
-                    }
-                } else {
-                    logToTerminal('No stored ports found');
-                        this.updateToggleState(false);
-                        return false;
-                }
-            } catch (error) {
-                logToTerminal(`Error checking stored ports: ${error.message}`, true);
-                    this.updateToggleState(false);
-                throw error;
-            }
-        }
-        };
-
-        // Toggle button functionality
-        async function toggleSerialConnection() {
-            const toggle = document.getElementById('serial-toggle');
-            const isConnected = toggle.classList.contains('active');
-            
-            if (isConnected) {
-                try {
-                    const ports = await navigator.serial.getPorts();
-                    if (ports.length > 0) {
-                        await USBManager.cleanupPort(ports[0]);
-                        toggle.classList.remove('active');
-                        updateConnectionStatus(false, 'serial');
-                        updateConnectionStatus(false, 'esp32');
-                        updateConnectionStatus(false, 'python');
-                        logToTerminal('USB disconnected', false, 'serial');
-                    }
-                } catch (error) {
-                    logToTerminal(`USB disconnect failed: ${error.message}`, true, 'serial');
-                }
-            } else {
-                try {
-                    logToTerminal('Connecting to USB device...', false, 'serial');
-                    const port = await navigator.serial.requestPort();
-                    await USBManager.connectToPort(port);
-                    toggle.classList.add('active');
-                    updateConnectionStatus(true, 'serial');
-                    logToTerminal('USB connected successfully', false, 'serial');
-                } catch (error) {
-                    toggle.classList.remove('active');
-                    logToTerminal(`USB connect failed: ${error.message}`, true, 'serial');
-                }
-            }
-        }
-
-        async function toggleBLEConnection() {
-            const toggle = document.getElementById('ble-toggle');
-            const isConnected = toggle.classList.contains('active');
-            
-            if (isConnected) {
-                try {
-                    if (window.bleDevice && window.bleDevice.gatt.connected) {
-                        await window.bleDevice.gatt.disconnect();
-                    }
-                    window.bleDevice = null;
-                    toggle.classList.remove('active');
-                    updateConnectionStatus(false, 'ble');
-                    document.getElementById('ble-service').textContent = '-';
-                    document.getElementById('ble-characteristic').textContent = '-';
-                    logToTerminal('BLE disconnected', false, 'ble');
-                } catch (error) {
-                    logToTerminal(`BLE disconnect failed: ${error.message}`, true, 'ble');
-                }
-            } else {
-                try {
-                    logToTerminal('Scanning for BLE devices...', false, 'ble');
-                    const mctServiceUUID = '0000181c-0000-1000-8000-00805f9b34fb';
-                    window.bleDevice = await navigator.bluetooth.requestDevice({
-                        filters: [
-                            { services: [mctServiceUUID] },
-                            { namePrefix: 'MCT' }
-                        ],
-                        optionalServices: ['battery_service']
-                    });
-                    
-                    logToTerminal(`Found device: ${window.bleDevice.name}`, false, 'ble');
-                    
-                    const server = await window.bleDevice.gatt.connect();
-                    logToTerminal('Connected to GATT server', false, 'ble');
-                    
-                    const service = await server.getPrimaryService(mctServiceUUID);
-                    document.getElementById('ble-service').textContent = mctServiceUUID;
-                    
-                    const characteristic = await service.getCharacteristic('00002a56-0000-1000-8000-00805f9b34fb');
-                    document.getElementById('ble-characteristic').textContent = characteristic.uuid;
-                    
-                    await characteristic.startNotifications();
-                    characteristic.addEventListener('characteristicvaluechanged', handleBLEData);
-                    
-                    toggle.classList.add('active');
-                    updateConnectionStatus(true, 'ble');
-                    logToTerminal('Successfully connected via BLE', false, 'ble');
-                    
-                    window.bleDevice.addEventListener('gattserverdisconnected', () => {
-                        toggle.classList.remove('active');
-                        updateConnectionStatus(false, 'ble');
-                        document.getElementById('ble-service').textContent = '-';
-                        document.getElementById('ble-characteristic').textContent = '-';
-                        logToTerminal('BLE device disconnected', false, 'ble');
-                    });
-                    
-                } catch (error) {
-                    window.bleDevice = null;
-                    toggle.classList.remove('active');
-                    updateConnectionStatus(false, 'ble');
-                    logToTerminal(`BLE connect failed: ${error.message}`, true, 'ble');
-                }
-            }
-        }
-
-        async function toggleWiFiConnection() {
-            const toggle = document.getElementById('wifi-toggle');
-            const isConnected = toggle.classList.contains('active');
-            
-            if (isConnected) {
-                // Disconnect WiFi
-                try {
-                    if (window.wifiCheckInterval) {
-                        clearInterval(window.wifiCheckInterval);
-                        window.wifiCheckInterval = null;
-                    }
-                    toggle.classList.remove('active');
-                    updateConnectionStatus(false, 'wifi');
-                    logToTerminal('WiFi disconnected');
-                } catch (error) {
-                    logToTerminal(`WiFi disconnect failed: ${error.message}`, true);
-                }
-            } else {
-                // Connect WiFi
-                try {
-                    toggle.classList.add('active');
-                    logToTerminal('Checking WiFi connection...');
-                    
-                    // Try to ping mct.local
-                    const startTime = Date.now();
-                    const response = await fetch('http://mct.local/status', {
-                        method: 'GET',
-                        mode: 'no-cors',
-                        timeout: 5000
-                    }).catch(() => null);
-                    
-                    const pingTime = Date.now() - startTime;
-                    
-                    if (response !== null) {
-                        updateConnectionStatus(true, 'wifi');
-                        logToTerminal(`WiFi connected (ping: ${pingTime}ms)`);
-                        
-                        // Start periodic connection check
-                        if (window.wifiCheckInterval) {
-                            clearInterval(window.wifiCheckInterval);
-                        }
-                        
-                        window.wifiCheckInterval = setInterval(async () => {
-                            try {
-                                const checkStartTime = Date.now();
-                                const checkResponse = await fetch('http://mct.local/status', {
-                                    method: 'GET',
-                                    mode: 'no-cors',
-                                    timeout: 5000
-                                }).catch(() => null);
-                                
-                                const checkPingTime = Date.now() - checkStartTime;
-                                
-                                if (checkResponse === null) {
-                                    toggle.classList.remove('active');
-                                    updateConnectionStatus(false, 'wifi');
-                                    logToTerminal('WiFi connection lost - cannot reach mct.local', true);
-                                    clearInterval(window.wifiCheckInterval);
-                                    window.wifiCheckInterval = null;
-                                } else {
-                                    logToTerminal(`WiFi connection active (ping: ${checkPingTime}ms)`);
-                                }
-                            } catch (error) {
-                                toggle.classList.remove('active');
-                                updateConnectionStatus(false, 'wifi');
-                                logToTerminal(`WiFi connection check failed: ${error.message}`, true);
-                                clearInterval(window.wifiCheckInterval);
-                                window.wifiCheckInterval = null;
-                            }
-                        }, 5000); // Check every 5 seconds
-                        
-                    } else {
-                        toggle.classList.remove('active');
-                        updateConnectionStatus(false, 'wifi');
-                        logToTerminal('mct.local not found', true);
-                    }
-                } catch (error) {
-                    toggle.classList.remove('active');
-                    updateConnectionStatus(false, 'wifi');
-                    logToTerminal(`WiFi connect failed: ${error.message}`, true);
-                }
-            }
-        }
-
-        // Add BLE data handler
-        function handleBLEData(event) {
-            const value = event.target.value;
-            const decoder = new TextDecoder();
-            const data = decoder.decode(value);
-            logToTerminal(`BLE data received: ${data}`);
-        }
-
-        // Add event listeners for toggle buttons
-        document.getElementById('serial-toggle').addEventListener('click', toggleSerialConnection);
-        document.getElementById('ble-toggle').addEventListener('click', toggleBLEConnection);
-        document.getElementById('wifi-toggle').addEventListener('click', toggleWiFiConnection);
-
-        // Initialize when DOM is loaded
-        document.addEventListener('DOMContentLoaded', async () => {
-            logToTerminal('Initializing...');
-            
-            // Initialize 3D portal
-            const portal = initPortal();
-            
-            // Setup navigation
-            setupStatusIconClickHandlers();
-            setupTileCarousel();
-
-            // Start connection sequence
-            try {
-                // 1. WiFi starts disconnected
-                logToTerminal('WiFi initialized in disconnected state');
-                const wifiToggle = document.getElementById('wifi-toggle');
-                if (wifiToggle) {
-                    wifiToggle.classList.remove('active');
-                    updateConnectionStatus(false, 'wifi');
-                }
-
-                // 2. Scan for BLE devices
-                logToTerminal('Scanning for BLE devices...');
-                const bleToggle = document.getElementById('ble-toggle');
-                if (bleToggle) {
-                    bleToggle.classList.add('active');
-                    updateConnectionStatus(true, 'ble');
-                    logToTerminal('BLE scan started');
-                }
-
-                // 3. Check for USB/Serial connections
-            if (hasWebSerial) {
-                    logToTerminal('Checking for USB connections...');
-                try {
-                        await USBManager.autoConnectToStoredPorts();
-                } catch (error) {
-                        logToTerminal('USB auto-connect error: ' + error.message, true);
-                }
-            } else {
-                logToTerminal('Web Serial API not supported in this browser', true);
-            }
-            
-                // Update connection states after scans complete
-                setTimeout(() => {
-                    // Reset WiFi toggle if no connection found
-                    if (!connectionState.wifi) {
-                        wifiToggle?.classList.remove('active');
-                        updateConnectionStatus(false, 'wifi');
-                        logToTerminal('No WiFi networks found');
-                    }
-
-                    // Reset BLE toggle if no connection found
-                    if (!connectionState.ble) {
-                        bleToggle?.classList.remove('active');
-                        updateConnectionStatus(false, 'ble');
-                        logToTerminal('No BLE devices found');
-                    }
-                }, 5000); // Give 5 seconds for scans to complete
-
-            } catch (error) {
-                logToTerminal('Initialization error: ' + error.message, true);
-            }
-        });
-
-        // Add copy button functionality
-        document.querySelector('.terminal-copy-btn').addEventListener('click', async () => {
-            const terminal = document.getElementById('terminal-panel');
-            const text = Array.from(terminal.children)
-                .map(line => line.textContent)
-                .join('\n');
-            
-            try {
-                await navigator.clipboard.writeText(text);
-                const copyBtn = document.querySelector('.terminal-copy-btn');
-                copyBtn.classList.add('copied');
-                setTimeout(() => copyBtn.classList.remove('copied'), 1000);
-                logToTerminal('Terminal output copied to clipboard');
-            } catch (err) {
-                logToTerminal('Failed to copy terminal output: ' + err.message, true);
-            }
-        });
-
-        // Add reset sequence function
-        async function resetESP32ToBootloader(port) {
-            try {
-                logToTerminal('Resetting ESP32 into bootloader mode...');
-                
-                // Get the output signals interface
-                try {
-                    // First try DTR/RTS reset sequence
-                    await port.setSignals({ dataTerminalReady: false, requestToSend: true });
-                    await new Promise(r => setTimeout(r, 100));
-                    await port.setSignals({ dataTerminalReady: true, requestToSend: false });
-                    await new Promise(r => setTimeout(r, 50));
-                    await port.setSignals({ dataTerminalReady: false });
-                    logToTerminal('DTR/RTS reset sequence completed');
-                } catch (signalError) {
-                    logToTerminal('DTR/RTS reset failed, trying alternative reset...', true);
-                    
-                    // If DTR/RTS fails, try break sequence
-                    const writer = port.writable.getWriter();
+                    // Try to set up readers/writers directly
                     try {
-                        // Send break
-                        await writer.write(new Uint8Array([0x00]));
-                        await new Promise(r => setTimeout(r, 100));
-                        
-                        // Send sync sequence
-                        const syncSequence = new Uint8Array([
-                            0xc0, 0x00, 0x08, 0x24, 0x00, 0x00, 0x00, 0x00, 
-                            0x00, 0x00, 0x07, 0x07, 0x12, 0x20, 0xc0
-                        ]);
-                        await writer.write(syncSequence);
-                    } finally {
-                        writer.releaseLock();
-                    }
-                    logToTerminal('Break sequence completed');
-                }
-                
-                // Wait for bootloader
-                await new Promise(r => setTimeout(r, 500));
-                logToTerminal('Reset sequence completed');
-                
-            } catch (error) {
-                logToTerminal(`Reset sequence failed: ${error.message}`, true);
-                throw error;
-            }
-        }
-
-        async function detectMicroPython(port) {
-            try {
-                logToTerminal('Checking for MicroPython...');
-                
-                // Create a writer
-                const writer = port.writable.getWriter();
-                const reader = port.readable.getReader();
-                
-                try {
-                    // Send Ctrl+C to interrupt any running program
-                    await writer.write(new Uint8Array([0x03]));
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    // Send Enter and wait for prompt
-                    await writer.write(new Uint8Array([0x0D]));
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    // Send version check command
-                    const cmd = new TextEncoder().encode('import sys\r\nprint(sys.implementation.name, sys.implementation.version)\r\n');
-                    await writer.write(cmd);
-                    
-                    // Read response with timeout
-                    let response = '';
-                    const startTime = Date.now();
-                    const timeout = 2000; // 2 second timeout
-                    
-                    while (Date.now() - startTime < timeout) {
-                        const {value, done} = await reader.read();
-                        if (done) break;
-                        
-                        response += new TextDecoder().decode(value);
-                        if (response.includes('micropython')) {
-                            // Show Python tile and icon
-                            const pythonTile = document.getElementById('python-tile');
-                            const pythonIcon = document.getElementById('python-icon');
-                            if (pythonTile) pythonTile.style.display = 'flex';
-                            if (pythonIcon) pythonIcon.style.display = 'inline';
-                            
-                            // Update connection state
-                            connectionState.python = true;
-                            updateConnectionStatus(true, 'python');
-                            
-                            // Extract version
-                            const version = response.split('\r\n')[1];
-                            document.getElementById('python-version').textContent = version;
-                            
-                            logToTerminal(`MicroPython detected: ${version}`);
-                            break;
-                        }
-                    }
-                } finally {
-                    writer.releaseLock();
-                    reader.releaseLock();
-                }
-            } catch (error) {
-                logToTerminal(`MicroPython detection failed: ${error.message}`, true);
-            }
-        }
-
-        // Add periodic WiFi connection check
-        function startWiFiConnectionCheck() {
-            setInterval(async () => {
-                const toggle = document.getElementById('wifi-toggle');
-                if (!toggle || !toggle.classList.contains('active')) return;
-                
-                try {
-                    const startTime = Date.now();
-                    const response = await fetch('http://mct.local/status', {
-                        method: 'GET',
-                        mode: 'no-cors',
-                        timeout: 5000
-                    }).catch(() => null);
-                    
-                    const pingTime = Date.now() - startTime;
-                    
-                    if (response === null) {
-                        toggle.classList.remove('active');
-                        updateConnectionStatus(false, 'wifi');
-                        logToTerminal('WiFi connection lost - cannot reach mct.local', true);
-                    } else {
-                        logToTerminal(`WiFi connection active (ping: ${pingTime}ms)`, false);
-                    }
-                } catch (error) {
-                    toggle.classList.remove('active');
-                    updateConnectionStatus(false, 'wifi');
-                    logToTerminal('WiFi connection check failed', true);
-                }
-            }, 5000); // Check every 5 seconds
-        }
-
-        // Update USB connection info
-        async function updateUSBInfo(port) {
-            try {
-                const info = await port.getInfo();
-                if (info) {
-                    document.getElementById('usb-vid').textContent = info.usbVendorId ? `0x${info.usbVendorId.toString(16).padStart(4, '0')}` : '-';
-                    document.getElementById('usb-pid').textContent = info.usbProductId ? `0x${info.usbProductId.toString(16).padStart(4, '0')}` : '-';
-                    document.getElementById('usb-port').textContent = port.getInfo().path || '-';
-                }
-            } catch (error) {
-                console.warn('Could not get USB info:', error);
-            }
-        }
-
-        // Add download files functionality
-        async function downloadPythonFiles() {
-            const downloadBtn = document.getElementById('download-files-btn');
-            if (!downloadBtn) return;
-
-            try {
-                // Show loading state
-                downloadBtn.classList.add('loading');
-                logToTerminal('Starting Python files download...');
-
-                // Get the current port
-                const ports = await navigator.serial.getPorts();
-                if (ports.length === 0) {
-                    throw new Error('No USB device connected');
-                }
-
-                const port = ports[0];
-                if (!port.readable || !port.writable) {
-                    throw new Error('Port is not open');
-                }
-
-                // Create writer and reader
-                const writer = port.writable.getWriter();
-                const reader = port.readable.getReader();
-
-                try {
-                    // Send Ctrl+C multiple times to ensure we interrupt any running program
-                    for (let i = 0; i < 3; i++) {
-                    await writer.write(new Uint8Array([0x03]));
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-
-                    // Files to download
-                    const files = [
-                        { name: 'ble.py', content: await fetch('ble.py').then(r => r.text()) },
-                        { name: 'wifi.py', content: await fetch('wifi.py').then(r => r.text()) },
-                        { name: 'boot.py', content: await fetch('boot.py').then(r => r.text()) }
-                    ];
-
-                    let totalBytes = 0;
-                    files.forEach(file => totalBytes += new TextEncoder().encode(file.content).length);
-                    let bytesTransferred = 0;
-
-                    // Download each file
-                    for (const file of files) {
-                        logToTerminal(`Downloading ${file.name}...`);
-                        const fileData = new TextEncoder().encode(file.content);
-                        
-                        // Delete existing file first
-                        const deleteCmd = new TextEncoder().encode(
-                            `try:\n    import os\n    os.remove('${file.name}')\nexcept: pass\n`
-                        );
-                        await writer.write(deleteCmd);
-                        await new Promise(resolve => setTimeout(resolve, 200));
-
-                        // Create new file
-                        const createCmd = new TextEncoder().encode(
-                            `f = open('${file.name}', 'wb')\n`
-                        );
-                        await writer.write(createCmd);
-                        await new Promise(resolve => setTimeout(resolve, 100));
-
-                        // Write in smaller chunks with acknowledgment
-                        const CHUNK_SIZE = 256; // Smaller chunks
-                        for (let offset = 0; offset < fileData.length; offset += CHUNK_SIZE) {
-                            const chunk = fileData.slice(offset, offset + CHUNK_SIZE);
-                            
-                            // Write chunk with explicit flush
-                            const writeCmd = new TextEncoder().encode(
-                                `f.write(bytes(${Array.from(chunk)}))\nf.flush()\n`
-                            );
-                            await writer.write(writeCmd);
-
-                            // Wait for acknowledgment with timeout
-                            let ackReceived = false;
-                            const ackTimeout = Date.now() + 2000; // 2 second timeout per chunk
-                            
-                            while (!ackReceived && Date.now() < ackTimeout) {
-                                const {value, done} = await reader.read();
-                                if (done) break;
-                                
-                                const response = new TextDecoder().decode(value);
-                                if (response.includes('>>>')) {
-                                    ackReceived = true;
-                                    break;
-                                }
-                                await new Promise(resolve => setTimeout(resolve, 10));
+                        if (activePort && activePort.readable && activePort.writable) {
+                            if (!portReader) {
+                                portReader = activePort.readable.getReader();
                             }
-
-                            if (!ackReceived) {
-                                throw new Error(`Timeout waiting for chunk acknowledgment in ${file.name}`);
+                            if (!portWriter) {
+                                portWriter = activePort.writable.getWriter();
                             }
-
-                            // Update progress
-                            bytesTransferred += chunk.length;
-                            const progress = (bytesTransferred / totalBytes) * 100;
-                            downloadBtn.querySelector('.progress').style.width = `${progress}%`;
-                            logToTerminal(`${file.name}: ${Math.round(progress)}% (${bytesTransferred} bytes)`);
+                            
+                            // Start reading data
+                            readSerialData();
                         }
-
-                        // Close file
-                        await writer.write(new TextEncoder().encode('f.close()\n'));
-                        await new Promise(resolve => setTimeout(resolve, 200));
-
-                        // Verify file size
-                        const verifyCmd = new TextEncoder().encode(
-                            `import os\nsize = os.stat('${file.name}')[6]\nprint(f'size={size}')\n`
-                        );
-                        await writer.write(verifyCmd);
-
-                        // Read verification response with timeout
-                        let response = '';
-                        let verifyTimeout = Date.now() + 3000; // 3 second timeout
-                        while (Date.now() < verifyTimeout) {
-                            const {value, done} = await reader.read();
-                            if (done) break;
-                            response += new TextDecoder().decode(value);
-                            if (response.includes('size=')) {
-                                const match = response.match(/size=(\d+)/);
-                                if (match && parseInt(match[1]) === fileData.length) {
-                                    logToTerminal(`${file.name} verified (${fileData.length} bytes)`);
-                                break;
-                                } else {
-                                    throw new Error(`File size mismatch for ${file.name}`);
-                                }
-                            }
-                            await new Promise(resolve => setTimeout(resolve, 50));
-                        }
-
-                        if (!response.includes('size=')) {
-                            throw new Error(`Verification timeout for ${file.name}`);
-                        }
+                    } catch (error) {
+                        logToTerminal(`Error setting up port: ${error.message}`, true);
                     }
-
-                    // Set progress to 100% when complete
-                    downloadBtn.querySelector('.progress').style.width = '100%';
-                    logToTerminal(`All Python files downloaded successfully (${totalBytes} bytes total)`);
-
-                    // Reset progress bar after a delay
-                    setTimeout(() => {
-                        downloadBtn.querySelector('.progress').style.width = '0%';
-                        downloadBtn.classList.remove('loading');
-                    }, 1000);
-
-                } finally {
-                    writer.releaseLock();
-                    reader.releaseLock();
-                }
-            } catch (error) {
-                logToTerminal(`Failed to download Python files: ${error.message}`, true);
-                // Reset progress bar on error
-                downloadBtn.querySelector('.progress').style.width = '0%';
-                downloadBtn.classList.remove('loading');
-            }
-        }
-
-        // Add ESPLoader writeFile extension for MicroPython files
-        ESPLoader.prototype.writeFile = async function(filename, data, progressCallback) {
-            const CHUNK_SIZE = 1024;
-            let offset = 0;
-            
-            while (offset < data.length) {
-                const chunk = data.slice(offset, offset + CHUNK_SIZE);
-                const cmd = new TextEncoder().encode(
-                    `f=open('${filename}','ab')\n` +
-                    `f.write(${chunk})\n` +
-                    `f.close()\n`
-                );
-                await this.transport.write(cmd);
-                
-                offset += chunk.length;
-                if (progressCallback) {
-                    progressCallback(offset);
                 }
                 
-                // Small delay to prevent overwhelming the device
-                await new Promise(resolve => setTimeout(resolve, 50));
+                logToTerminal('Successfully connected to stored port', false, 'serial');
             }
-            
-            // Verify file was written correctly
-            const verifyCmd = new TextEncoder().encode(
-                `import os\n` +
-                `f=open('${filename}','rb')\n` +
-                `size=os.stat('${filename}')[6]\n` +
-                `print(f'size={size}')\n`
-            );
-            
-            const response = await this.transport.command(verifyCmd);
-            const match = response.match(/size=(\d+)/);
-            if (!match || parseInt(match[1]) !== data.length) {
-                throw new Error(`File verification failed for ${filename}`);
-            }
-        };
-
-        // Add click handler for download button
-        document.getElementById('download-files-btn').addEventListener('click', downloadPythonFiles);
-
-        // Update USB toggle state when connection changes
-        function updateUSBConnectionState(connected) {
-            const toggle = document.getElementById('serial-toggle');
-            if (toggle) {
-                toggle.classList.toggle('active', connected);
-            }
-        }
-
-        // Scene setup
-        function initPortal() {
-        const scene = new THREE.Scene();
-        const cssScene = new THREE.Scene();
-        
-        const container = document.getElementById('canvas-container');
-        const width = container.clientWidth;
-        const height = container.clientHeight;
-
-        // Camera setup
-        const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
-        camera.position.z = 8;
-
-            // WebGL renderer for background
-            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(width, height);
-            renderer.setClearColor(0x000000, 0);
-            container.appendChild(renderer.domElement);
-
-        // CSS3D Renderer setup
-        const cssRenderer = new CSS3DRenderer();
-        cssRenderer.setSize(width, height);
-        cssRenderer.domElement.style.position = 'absolute';
-        cssRenderer.domElement.style.top = '0';
-        container.appendChild(cssRenderer.domElement);
-            
-            // Add orbit controls
-            const controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.05;
-
-            // Add lighting
-            const ambientLight = new THREE.AmbientLight(0x404040);
-            scene.add(ambientLight);
-
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-            directionalLight.position.set(1, 1, 1);
-            scene.add(directionalLight);
-
-        // Create iframe
-        const iframe = document.createElement('iframe');
-        iframe.style.width = '1024px';
-        iframe.style.height = '1024px';
-        iframe.style.border = 'none';
-        iframe.src = 'mct.html';
-            iframe.style.pointerEvents = 'auto';
-
-        // Create wrapper div for iframe
-        const wrapper = document.createElement('div');
-        wrapper.style.width = '1024px';
-        wrapper.style.height = '1024px';
-        wrapper.style.overflow = 'hidden';
-        wrapper.appendChild(iframe);
-
-        // Create CSS3D Object with wrapper
-        const cssObject = new CSS3DObject(wrapper);
-        cssObject.scale.multiplyScalar(0.008);
-        cssScene.add(cssObject);
-
-        // Handle keyboard events
-        window.addEventListener('keydown', (event) => {
-                if (['u', 'd', 'f', 'k'].includes(event.key.toLowerCase())) {
-                    iframe.contentWindow.dispatchEvent(new KeyboardEvent('keydown', {
-                key: event.key,
-                code: event.code,
-                bubbles: true
-                    }));
-                    event.preventDefault();
-            }
-        });
-
-        // Animation
-        function animate() {
-            requestAnimationFrame(animate);
-                controls.update();
-                renderer.render(scene, camera);
-            cssRenderer.render(cssScene, camera);
-        }
-        animate();
-
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            const newWidth = container.clientWidth;
-            const newHeight = container.clientHeight;
-            
-            camera.aspect = newWidth / newHeight;
-            camera.updateProjectionMatrix();
-            
-                renderer.setSize(newWidth, newHeight);
-            cssRenderer.setSize(newWidth, newHeight);
-        });
-
-            return { scene, cssScene, camera, renderer, cssRenderer, controls };
-        }
-
-        // Add click handlers for status icons
-        function setupStatusIconClickHandlers() {
-            const statusIcons = document.querySelectorAll('.status-icon');
-            const carousel = document.querySelector('.tile-carousel');
-            
-            statusIcons.forEach(icon => {
-                icon.removeEventListener('click', icon.clickHandler);
-                
-                icon.clickHandler = () => {
-                    const tileId = icon.getAttribute('data-tile');
-                    if (!tileId) return;
-                    
-                    const tile = document.getElementById(tileId);
-                    if (!tile) {
-                        console.error(`Tile ${tileId} not found`);
-                        return;
-                    }
-                    
-                    // Get all visible tiles
-                    const visibleTiles = Array.from(carousel.children).filter(t => 
-                        window.getComputedStyle(t).display !== 'none'
-                    );
-                    
-                    // Find index of target tile
-                    const tileIndex = visibleTiles.indexOf(tile);
-                    if (tileIndex === -1) {
-                        console.error(`Tile ${tileId} not visible in carousel`);
-                        return;
-                    }
-                    
-                    // Calculate scroll position
-                    const tileWidth = tile.offsetWidth;
-                    const gap = parseInt(window.getComputedStyle(carousel).gap) || 5;
-                    const scrollLeft = tileIndex * (tileWidth + gap);
-                    
-                    // Smooth scroll to tile
-                    carousel.scrollTo({
-                        left: scrollLeft,
-                        behavior: 'smooth'
-                    });
-                    
-                    // Visual feedback
-                    tile.style.transition = 'transform 0.3s ease';
-                    tile.style.transform = 'scale(1.02)';
-                    setTimeout(() => {
-                        tile.style.transform = '';
-                    }, 300);
-                };
-                
-                icon.addEventListener('click', icon.clickHandler);
-            });
-        }
-
-        // Setup tile carousel scrolling
-        function setupTileCarousel() {
-            const carousel = document.querySelector('.tile-carousel');
-            if (!carousel) return;
-            
-            // Enable smooth scrolling
-            carousel.style.scrollBehavior = 'smooth';
-            
-            // Add scroll snap
-            carousel.style.scrollSnapType = 'x mandatory';
-            
-            // Make tiles snap align
-            const tiles = carousel.querySelectorAll('.tile');
-            tiles.forEach(tile => {
-                tile.style.scrollSnapAlign = 'start';
-                tile.style.scrollSnapStop = 'always';
-            });
-            
-            // Optional: Add mouse wheel horizontal scrolling
-            carousel.addEventListener('wheel', (e) => {
-                if (e.deltaY !== 0) {
-                    e.preventDefault();
-                    carousel.scrollLeft += e.deltaY;
-                }
-            }, { passive: false });
-        }
-
-        // Add disconnect handler
-        window.addEventListener('unload', async () => {
-            const ports = await navigator.serial.getPorts();
-            for (const port of ports) {
-                await USBManager.cleanupPort(port);
-            }
+        }).catch(error => {
+            logToTerminal(`Error during auto-connect: ${error.message}`, true);
         });
     </script>
 </body>
