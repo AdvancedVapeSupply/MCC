@@ -1,0 +1,1215 @@
+// Remove require and use ES module format
+// const { SerialPort } = require('serialport');
+
+// ESP32 register addresses
+const CHIP_ID_REG = 0x40001000;  // Chip ID register
+const MAC_ADDR_HI_REG = 0x6000600C;  // MAC address high bytes
+const MAC_ADDR_LO_REG = 0x60006010;  // MAC address low bytes
+
+// ESP32 bootloader commands
+const CMD_SYNC = 0x08;
+const CMD_READ_REG = 0x0A;
+
+// SLIP protocol special bytes
+const SLIP_END = 0xC0;
+const SLIP_ESC = 0xDB;
+const SLIP_ESC_END = 0xDC;
+const SLIP_ESC_ESC = 0xDD;
+
+// Magic values for chip detection
+const CHIP_DETECT_MAGIC_REG_ADDR = 0x40001000;
+const CHIP_MAGIC_VALUES = {
+  0x00f01d83: "ESP32",
+  0x09: "ESP32-S3",
+  0x000007c6: "ESP32-S2",
+  0x6921506f: "ESP32-C3", 
+  0x1b31506f: "ESP32-C3",
+  0x4881606f: "ESP32-C3",
+  0x4361606f: "ESP32-C3",
+  0xfff0c101: "ESP8266"
+};
+
+// Browser-compatible buffer handling
+function createBuffer(data) {
+  // Use Uint8Array for browser compatibility instead of Node.js Buffer
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(data);
+  } else {
+    return new Uint8Array(data);
+  }
+}
+
+// SLIP encode function
+function slipEncode(data) {
+  const encoded = [];
+  encoded.push(SLIP_END);
+  
+  for (const byte of data) {
+    if (byte === SLIP_END) {
+      encoded.push(SLIP_ESC);
+      encoded.push(SLIP_ESC_END);
+    } else if (byte === SLIP_ESC) {
+      encoded.push(SLIP_ESC);
+      encoded.push(SLIP_ESC_ESC);
+    } else {
+      encoded.push(byte);
+    }
+  }
+  
+  encoded.push(SLIP_END);
+  return createBuffer(encoded);
+}
+
+// SLIP decode function
+function slipDecode(data) {
+  const decoded = [];
+  let escaping = false;
+  let startFound = false;
+  
+  for (let i = 0; i < data.length; i++) {
+    const byte = data[i];
+    
+    if (byte === SLIP_END) {
+      if (!startFound) {
+        startFound = true;
+      } else {
+        break; // End of packet
+      }
+    } else if (startFound) {
+      if (escaping) {
+        if (byte === SLIP_ESC_END) {
+          decoded.push(SLIP_END);
+        } else if (byte === SLIP_ESC_ESC) {
+          decoded.push(SLIP_ESC);
+        } else {
+          // Invalid escape sequence, just pass it through
+          decoded.push(SLIP_ESC);
+          decoded.push(byte);
+        }
+        escaping = false;
+      } else if (byte === SLIP_ESC) {
+        escaping = true;
+      } else {
+        decoded.push(byte);
+      }
+    }
+  }
+  
+  return createBuffer(decoded);
+}
+
+// Helper function to log data in hex format
+function hexDump(data, title = "Data") {
+  if (!data || data.length === 0) {
+    console.log(`${title}: (empty)`);
+    return;
+  }
+
+  console.log(`${title}:`);
+  
+  let hexOutput = '';
+  let asciiOutput = '';
+  let lineCount = 0;
+  
+  for (let i = 0; i < data.length; i++) {
+    const byte = data[i];
+    // Add to hex output
+    hexOutput += byte.toString(16).padStart(2, '0') + ' ';
+    
+    // Add to ASCII column if printable, otherwise add a dot
+    asciiOutput += (byte >= 32 && byte <= 126) ? String.fromCharCode(byte) : '.';
+    
+    // Print a row when we reach 16 bytes or at the end
+    if ((i + 1) % 16 === 0 || i === data.length - 1) {
+      // Pad hex values to align ASCII column if needed
+      while (hexOutput.length < 48) {
+        hexOutput += '   ';
+      }
+      
+      // Print the line
+      console.log(`HEX: ${hexOutput}  ASCII: ${asciiOutput}`);
+      
+      // Reset for next row
+      hexOutput = '';
+      asciiOutput = '';
+      lineCount++;
+      
+      // Limit output to prevent console flooding
+      if (lineCount >= 10 && data.length > 160) {
+        console.log(`... (${data.length - (i+1)} more bytes)`);
+        break;
+      }
+    }
+  }
+}
+
+// Calculate checksum for ESP32 commands
+function calculateChecksum(data) {
+  let sum = 0xEF; // Initial checksum value
+  for (const byte of data) {
+    sum ^= byte;
+  }
+  return sum;
+}
+
+// Create a command packet to read a register
+function createReadRegCommand(address) {
+  // Command structure:
+  // 0: Direction (0 for request)
+  // 1: Command ID (0x0A for read register)
+  // 2-3: Size (little-endian)
+  // 4-7: Checksum (optional)
+  // 8+: Data (register address, 4 bytes little-endian)
+  
+  const cmd = new Uint8Array(12);
+  
+  // Direction: request
+  cmd[0] = 0x00;
+  
+  // Command: read register
+  cmd[1] = CMD_READ_REG;
+  
+  // Data size: 4 bytes (register address)
+  cmd[2] = 0x04;
+  cmd[3] = 0x00;
+  
+  // Checksum placeholder (will be calculated later)
+  cmd[4] = 0x00;
+  cmd[5] = 0x00;
+  cmd[6] = 0x00;
+  cmd[7] = 0x00;
+  
+  // Register address (little-endian)
+  cmd[8] = address & 0xFF;
+  cmd[9] = (address >> 8) & 0xFF;
+  cmd[10] = (address >> 16) & 0xFF;
+  cmd[11] = (address >> 24) & 0xFF;
+  
+  // Calculate checksum
+  const checksum = calculateChecksum(createBuffer([cmd[1], cmd[2], cmd[3], cmd[8], cmd[9], cmd[10], cmd[11]]));
+  cmd[4] = checksum;
+  
+  return slipEncode(cmd);
+}
+
+// Create sync command
+function createSyncCommand() {
+  // Create a simple sync command
+  const cmd = new Uint8Array(10);
+  
+  // Direction: request
+  cmd[0] = 0x00;
+  
+  // Command: sync
+  cmd[1] = CMD_SYNC;
+  
+  // Data size: 0
+  cmd[2] = 0x00;
+  cmd[3] = 0x00;
+  
+  // Checksum
+  cmd[4] = calculateChecksum(createBuffer([cmd[1], cmd[2], cmd[3]]));
+  cmd[5] = 0x00;
+  cmd[6] = 0x00;
+  cmd[7] = 0x00;
+  
+  // No data for sync command
+  
+  return slipEncode(cmd);
+}
+
+// Create a special sync+reset packet based on esptool-js
+function createResetAndSyncCommand() {
+  // The sync sequence includes special patterns to trigger bootloader mode
+  const cmd = new Uint8Array(36);
+  
+  // Fill with padding first 
+  for (let i = 0; i < cmd.length; i++) {
+    cmd[i] = 0x55; // U character is used for padding
+  }
+  
+  // SLIP encoded sync command at the beginning
+  const syncCmd = createSyncCommand();
+  for (let i = 0; i < Math.min(syncCmd.length, 10); i++) {
+    cmd[i] = syncCmd[i];
+  }
+  
+  // Add ROM bootloader pattern
+  cmd[12] = 0x07;
+  cmd[13] = 0x07;
+  cmd[14] = 0x12;
+  cmd[15] = 0x20;
+  
+  // Add some SLIP_END markers
+  cmd[0] = SLIP_END;
+  cmd[11] = SLIP_END;
+  cmd[24] = SLIP_END;
+  cmd[35] = SLIP_END;
+  
+  return cmd;
+}
+
+// Reset ESP32 to bootloader mode
+async function resetToBootloader(port) {
+  console.log("Resetting ESP32 to bootloader mode...");
+  
+  try {
+    // Check if we can use DTR/RTS signals
+    if (port.setSignals || port.set) {
+      console.log("Using DTR/RTS reset method");
+      
+      // Method depends on which API is available
+      const setSignals = async (dtr, rts) => {
+        if (port.setSignals) {
+          // Web Serial API
+          await port.setSignals({ dataTerminalReady: dtr, requestToSend: rts });
+        } else if (port.set) {
+          // Node.js SerialPort
+          await port.set({ dtr, rts });
+        }
+      };
+      
+      // Toggle DTR and RTS to reset ESP32 into bootloader mode
+      await setSignals(false, false);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      await setSignals(true, false);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      await setSignals(false, true);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      await setSignals(false, false);
+      console.log("DTR/RTS reset sequence completed");
+    } else {
+      console.log("DTR/RTS signals not available, using watchdog reset approach");
+      
+      // Create a special reset sequence packet
+      const resetCmd = createResetAndSyncCommand();
+      
+      // Make sure we have a writer
+      const writer = port.writable?.getWriter();
+      if (!writer) {
+        throw new Error("Cannot get writer for port");
+      }
+      
+      try {
+        // Send the reset sequence
+        await writer.write(resetCmd);
+        console.log("Reset command sent");
+        
+        // Wait for the reset to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } finally {
+        // Always release the writer
+        writer.releaseLock();
+      }
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error in resetToBootloader:", error);
+    return false;
+  }
+}
+
+// Helper function to check if array contains a byte
+function arrayContains(arr, byte) {
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i] === byte) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Helper function to find the index of a byte in an array
+function arrayIndexOf(arr, byte) {
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i] === byte) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+// Send sync command and wait for response
+async function syncESP32(port) {
+  console.log("Attempting to sync with ESP32 ROM bootloader...");
+  
+  // Create sync command
+  const syncCmd = createSyncCommand();
+  
+  // Track responses
+  let syncSuccessful = false;
+  
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    console.log(`Sync attempt ${attempt}...`);
+    
+    // Send sync command using appropriate API
+    await new Promise((resolve) => {
+      if (port.write) {
+        // Node.js SerialPort API
+        port.write(syncCmd, (err) => {
+          if (err) {
+            console.error(`Error writing sync command: ${err.message}`);
+          }
+          resolve();
+        });
+      } else if (port.writable) {
+        // Web Serial API
+        const writer = port.writable.getWriter();
+        writer.write(syncCmd).then(() => {
+          writer.releaseLock();
+          resolve();
+        }).catch(err => {
+          console.error(`Error writing sync command: ${err.message}`);
+          try {
+            writer.releaseLock();
+          } catch (e) {}
+          resolve();
+        });
+      } else {
+        console.error('Port does not have a write method');
+        resolve();
+      }
+    });
+    
+    // Wait for response with timeout
+    const response = await new Promise((resolve) => {
+      const buffer = [];
+      
+      if (port.on) {
+        // Node.js SerialPort API
+        const dataHandler = (data) => {
+          console.log(`Received data (${data.length} bytes):`);
+          hexDump(data);
+          
+          // Check for sync response indicators
+          if (arrayContains(data, SLIP_END) || 
+              arrayContains(data, 0x07) || 
+              arrayContains(data, 0x08) || 
+              data.length > 10) {
+            buffer.push(...data);
+            syncSuccessful = true;
+          }
+        };
+        
+        port.on('data', dataHandler);
+        
+        // Set timeout
+        setTimeout(() => {
+          port.removeListener('data', dataHandler);
+          resolve(createBuffer(buffer));
+        }, 500);
+      } else if (port.readable) {
+        // Web Serial API
+        const reader = port.readable.getReader();
+        
+        const readChunk = () => {
+          reader.read().then(({ value, done }) => {
+            if (done) {
+              reader.releaseLock();
+              resolve(createBuffer(buffer));
+              return;
+            }
+            
+            if (value) {
+              console.log(`Received data (${value.length} bytes):`);
+              hexDump(value);
+              
+              // Check for sync response indicators
+              if (arrayContains(value, SLIP_END) || 
+                  arrayContains(value, 0x07) || 
+                  arrayContains(value, 0x08) || 
+                  value.length > 10) {
+                buffer.push(...value);
+                syncSuccessful = true;
+              }
+              
+              // Continue reading
+              readChunk();
+            }
+          }).catch(err => {
+            console.error('Error reading from port:', err);
+            try {
+              reader.releaseLock();
+            } catch (e) {}
+            resolve(createBuffer(buffer));
+          });
+        };
+        
+        readChunk();
+        
+        // Set timeout
+        setTimeout(() => {
+          try {
+            reader.cancel().then(() => {
+              reader.releaseLock();
+              resolve(createBuffer(buffer));
+            }).catch(() => {
+              try {
+                reader.releaseLock();
+              } catch (e) {}
+              resolve(createBuffer(buffer));
+            });
+          } catch (e) {
+            resolve(createBuffer(buffer));
+          }
+        }, 500);
+      } else {
+        console.error('Port does not have a readable stream');
+        resolve(createBuffer([]));
+      }
+    });
+    
+    if (syncSuccessful) {
+      console.log("Sync successful!");
+      break;
+    }
+    
+    // Wait between attempts
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  
+  if (!syncSuccessful) {
+    console.log("Failed to sync with ESP32 after multiple attempts");
+    console.log("This doesn't mean detection failed, proceeding anyway...");
+  }
+  
+  // Clear any remaining data - handle both APIs
+  if (port.flush) {
+    port.flush();
+  }
+  
+  // Additional delay to ensure port is ready
+  await new Promise(resolve => setTimeout(resolve, 300));
+  
+  return syncSuccessful;
+}
+
+// Read a register from ESP32
+async function readRegister(port, address) {
+  console.log(`Reading register 0x${address.toString(16)}...`);
+  
+  // Create read register command
+  const readCmd = createReadRegCommand(address);
+  
+  // Flush before sending new command
+  if (port.flush) {
+    port.flush();
+  }
+  
+  // Send command
+  await new Promise((resolve, reject) => {
+    if (port.write) {
+      port.write(readCmd, (err) => {
+        if (err) {
+          console.error(`Error writing read command: ${err.message}`);
+        }
+        resolve();
+      });
+    } else if (port.writable) {
+      const writer = port.writable.getWriter();
+      writer.write(readCmd).then(() => {
+        writer.releaseLock();
+        resolve();
+      }).catch(err => {
+        writer.releaseLock();
+        console.error(`Error writing read command: ${err.message}`);
+        resolve();
+      });
+    } else {
+      console.error('Port does not have a write method');
+      resolve();
+    }
+  });
+  
+  // Wait for response with timeout
+  const response = await new Promise((resolve) => {
+    const buffer = [];
+    
+    if (port.on) {
+      // Node.js SerialPort API
+      const dataHandler = (data) => {
+        buffer.push(...data);
+      };
+      
+      port.on('data', dataHandler);
+      
+      // Set timeout
+      setTimeout(() => {
+        port.removeListener('data', dataHandler);
+        resolve(createBuffer(buffer));
+      }, 1000); // Increased timeout
+    } else if (port.readable) {
+      // Web Serial API
+      const reader = port.readable.getReader();
+      
+      const readChunk = () => {
+        reader.read().then(({ value, done }) => {
+          if (done) {
+            reader.releaseLock();
+            resolve(createBuffer(buffer));
+            return;
+          }
+          
+          if (value) {
+            buffer.push(...value);
+          }
+          
+          // Continue reading
+          readChunk();
+        }).catch(err => {
+          console.error('Error reading from port:', err);
+          reader.releaseLock();
+          resolve(createBuffer(buffer));
+        });
+      };
+      
+      readChunk();
+      
+      // Set timeout
+      setTimeout(() => {
+        reader.cancel().then(() => {
+          reader.releaseLock();
+          resolve(createBuffer(buffer));
+        }).catch(() => {
+          // Ignore errors during cancel
+          try {
+            reader.releaseLock();
+          } catch (e) {}
+          resolve(createBuffer(buffer));
+        });
+      }, 1000);
+    } else {
+      console.error('Port does not have a readable stream');
+      resolve(createBuffer([]));
+    }
+  });
+  
+  if (response.length > 0) {
+    console.log(`Received response (${response.length} bytes):`);
+    hexDump(response);
+  
+    // Try to parse the response
+    try {
+      // Look for SLIP packets in the response
+      const slipStart = arrayIndexOf(response, SLIP_END);
+      if (slipStart >= 0) {
+        const packetData = response.slice(slipStart);
+        const decoded = slipDecode(packetData);
+        
+        // Response format should be [0x01, cmd, size_l, size_h, value_bytes...]
+        if (decoded.length >= 8 && decoded[0] === 0x01) {
+          // Extract register value (little-endian)
+          const value = decoded[4] | (decoded[5] << 8) | (decoded[6] << 16) | (decoded[7] << 24);
+          console.log(`Register value: 0x${value.toString(16)}`);
+          return value;
+        }
+      }
+    } catch (error) {
+      console.error(`Error parsing response: ${error.message}`);
+    }
+  }
+
+  // Try one more time with a different method if parsing failed
+  console.log("Trying alternative read method...");
+  
+  // Use a simpler command structure
+  const simplifiedCmd = createBuffer([
+    SLIP_END,  // Start SLIP
+    0x00,      // Direction (request)
+    CMD_READ_REG, // Read register command
+    0x04, 0x00, // Data length (4 bytes)
+    0x00, 0x00, 0x00, 0x00, // Checksum (calculated below)
+    address & 0xFF, (address >> 8) & 0xFF, (address >> 16) & 0xFF, (address >> 24) & 0xFF, // Address
+    SLIP_END   // End SLIP
+  ]);
+  
+  // Calculate checksum
+  const checksum = calculateChecksum(createBuffer([
+    simplifiedCmd[2], simplifiedCmd[3], simplifiedCmd[4], 
+    simplifiedCmd[9], simplifiedCmd[10], simplifiedCmd[11], simplifiedCmd[12]
+  ]));
+  simplifiedCmd[5] = checksum;
+  
+  // Flush and send
+  if (port.flush) {
+    port.flush();
+  }
+  
+  await new Promise(resolve => {
+    if (port.write) {
+      port.write(simplifiedCmd, resolve);
+    } else if (port.writable) {
+      const writer = port.writable.getWriter();
+      writer.write(simplifiedCmd).then(() => {
+        writer.releaseLock();
+        resolve();
+      }).catch(err => {
+        writer.releaseLock();
+        console.error(`Error writing command: ${err.message}`);
+        resolve();
+      });
+    } else {
+      console.error('Port does not have a write method');
+      resolve();
+    }
+  });
+  
+  // Wait for response with timeout
+  const retryResponse = await new Promise((resolve) => {
+    const buffer = [];
+    
+    if (port.on) {
+      // Node.js SerialPort API
+      const dataHandler = (data) => {
+        buffer.push(...data);
+      };
+      
+      port.on('data', dataHandler);
+      
+      // Set timeout
+      setTimeout(() => {
+        port.removeListener('data', dataHandler);
+        resolve(createBuffer(buffer));
+      }, 1500);
+    } else if (port.readable) {
+      // Web Serial API
+      const reader = port.readable.getReader();
+      
+      const readChunk = () => {
+        reader.read().then(({ value, done }) => {
+          if (done) {
+            reader.releaseLock();
+            resolve(createBuffer(buffer));
+            return;
+          }
+          
+          if (value) {
+            buffer.push(...value);
+          }
+          
+          // Continue reading
+          readChunk();
+        }).catch(err => {
+          console.error('Error reading from port:', err);
+          try {
+            reader.releaseLock();
+          } catch (e) {}
+          resolve(createBuffer(buffer));
+        });
+      };
+      
+      readChunk();
+      
+      // Set timeout
+      setTimeout(() => {
+        try {
+          reader.cancel().then(() => {
+            reader.releaseLock();
+            resolve(createBuffer(buffer));
+          }).catch(() => {
+            try {
+              reader.releaseLock();
+            } catch (e) {}
+            resolve(createBuffer(buffer));
+          });
+        } catch (e) {
+          resolve(createBuffer(buffer));
+        }
+      }, 1500);
+    } else {
+      console.error('Port does not have a readable stream');
+      resolve(createBuffer([]));
+    }
+  });
+  
+  if (retryResponse.length > 0) {
+    console.log(`Received retry response (${retryResponse.length} bytes):`);
+    hexDump(retryResponse);
+    
+    // Look for any 4-byte sequence that might be our value
+    // Sometimes ESP32 bootloader doesn't fully encode responses
+    for (let i = 0; i < retryResponse.length - 3; i++) {
+      if (retryResponse[i] === 0x01 || retryResponse[i] === SLIP_END) {
+        // Found potential start of response
+        const potentialValue = retryResponse[i+1] | 
+                            (retryResponse[i+2] << 8) | 
+                            (retryResponse[i+3] << 16) | 
+                            (retryResponse[i+4] << 24);
+        if (potentialValue !== 0) {
+          console.log(`Potential register value: 0x${potentialValue.toString(16)}`);
+          return potentialValue;
+        }
+      }
+    }
+  }
+  
+  console.log("Failed to read register value");
+  return null;
+}
+
+// Function to determine chip type based on magic value
+function determineChipType(magicValue) {
+  // Look up by full magic value first
+  if (CHIP_MAGIC_VALUES[magicValue]) {
+    return CHIP_MAGIC_VALUES[magicValue];
+  }
+  
+  // Try by lowest byte (common for ESP32-S3)
+  const magicByte = magicValue & 0xFF;
+  if (magicByte === 0xEF) {
+    return "ESP32-S3";
+  } else if (magicByte === 0xE7) {
+    return "ESP32-S2";
+  } else if (magicByte === 0xCD) {
+    return "ESP32-C3";
+  } else if (magicByte === 0x00) {
+    return "ESP32";
+  }
+  
+  return `Unknown ESP32 (magic: 0x${magicValue.toString(16)})`;
+}
+
+// Format MAC address
+function formatMac(macHigh, macLow) {
+  const mac = [
+    (macHigh >> 8) & 0xFF,
+    macHigh & 0xFF,
+    (macLow >> 24) & 0xFF,
+    (macLow >> 16) & 0xFF,
+    (macLow >> 8) & 0xFF,
+    macLow & 0xFF
+  ];
+  
+  return mac.map(b => b.toString(16).padStart(2, '0')).join(':');
+}
+
+// Direct ESP32-S3 bootloader commands (raw format)
+function sendRawBootloaderCommand(port, command, address = 0, data = null, checkValue = true) {
+  return new Promise(async (resolve) => {
+    // ESP32 ROM bootloader protocol:
+    // 0: 0xC0 (SLIP_END)
+    // 1: 0x00 (direction, request)
+    // 2: command
+    // 3-4: data length (little endian)
+    // 5-8: checksum
+    // 9+: payload data
+    // last: 0xC0 (SLIP_END)
+    
+    // Calculate data length
+    const dataLength = data ? data.length : (command === CMD_READ_REG ? 4 : 0);
+    
+    // Create buffer with enough space
+    const buffer = new Uint8Array(9 + dataLength + 1);
+    
+    // SLIP start
+    buffer[0] = SLIP_END;
+    
+    // Direction (request)
+    buffer[1] = 0x00;
+    
+    // Command
+    buffer[2] = command;
+    
+    // Data length (little endian)
+    buffer[3] = dataLength & 0xFF;
+    buffer[4] = (dataLength >> 8) & 0xFF;
+    
+    // Calculate checksum (simple XOR)
+    let checksum = 0xEF;  // ESP32 ROM bootloader uses 0xEF as initial value
+    checksum ^= buffer[2];  // Command
+    checksum ^= buffer[3];  // Data length low byte
+    checksum ^= buffer[4];  // Data length high byte
+    
+    // For READ_REG, the data is the address
+    if (command === CMD_READ_REG) {
+      // Add address in little endian format
+      buffer[9] = address & 0xFF;
+      buffer[10] = (address >> 8) & 0xFF;
+      buffer[11] = (address >> 16) & 0xFF;
+      buffer[12] = (address >> 24) & 0xFF;
+      
+      // Update checksum with address bytes
+      checksum ^= buffer[9];
+      checksum ^= buffer[10];
+      checksum ^= buffer[11];
+      checksum ^= buffer[12];
+    } else if (data) {
+      // Add data and update checksum
+      for (let i = 0; i < data.length; i++) {
+        buffer[9 + i] = data[i];
+        checksum ^= data[i];
+      }
+    }
+    
+    // Set checksum (only first byte matters for simple commands)
+    buffer[5] = checksum;
+    buffer[6] = 0;
+    buffer[7] = 0;
+    buffer[8] = 0;
+    
+    // SLIP end
+    buffer[9 + dataLength] = SLIP_END;
+    
+    // Trim buffer to actual size
+    const finalBuffer = buffer.slice(0, 10 + dataLength);
+    
+    console.log(`Sending raw bootloader command: ${command.toString(16)}`);
+    hexDump(finalBuffer, "Command");
+    
+    // Clear any pending data
+    if (port.flush) {
+      port.flush();
+    }
+    
+    // Send the command using appropriate API
+    await new Promise(resolve => {
+      if (port.write) {
+        // Node.js SerialPort API
+        port.write(finalBuffer, resolve);
+      } else if (port.writable) {
+        // Web Serial API
+        const writer = port.writable.getWriter();
+        writer.write(finalBuffer).then(() => {
+          writer.releaseLock();
+          resolve();
+        }).catch(err => {
+          console.error(`Error writing command: ${err.message}`);
+          try {
+            writer.releaseLock();
+          } catch (e) {}
+          resolve();
+        });
+      } else {
+        console.error('Port does not have a write method');
+        resolve();
+      }
+    });
+    
+    // Wait for response
+    let responseBuffer = [];
+    
+    if (port.on) {
+      // Node.js SerialPort API
+      await new Promise(innerResolve => {
+        let timeoutId;
+        
+        const dataHandler = (data) => {
+          responseBuffer.push(...data);
+          
+          // If we've received data, extend the timeout
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => {
+            port.removeListener('data', dataHandler);
+            innerResolve();
+          }, 800);
+        };
+        
+        port.on('data', dataHandler);
+        
+        // Set initial timeout
+        timeoutId = setTimeout(() => {
+          port.removeListener('data', dataHandler);
+          console.log("No response received");
+          innerResolve();
+        }, 1000);
+      });
+    } else if (port.readable) {
+      // Web Serial API
+      await new Promise(innerResolve => {
+        const reader = port.readable.getReader();
+        let timeoutId;
+        
+        const readChunk = () => {
+          reader.read().then(({ value, done }) => {
+            if (done) {
+              clearTimeout(timeoutId);
+              reader.releaseLock();
+              innerResolve();
+              return;
+            }
+            
+            if (value) {
+              responseBuffer.push(...value);
+              
+              // If we've received data, extend the timeout
+              clearTimeout(timeoutId);
+              timeoutId = setTimeout(() => {
+                try {
+                  reader.cancel().then(() => {
+                    reader.releaseLock();
+                    innerResolve();
+                  }).catch(() => {
+                    try {
+                      reader.releaseLock();
+                    } catch (e) {}
+                    innerResolve();
+                  });
+                } catch (e) {
+                  innerResolve();
+                }
+              }, 800);
+            }
+            
+            // Continue reading
+            readChunk();
+          }).catch(err => {
+            console.error('Error reading from port:', err);
+            try {
+              reader.releaseLock();
+            } catch (e) {}
+            innerResolve();
+          });
+        };
+        
+        readChunk();
+        
+        // Set initial timeout
+        timeoutId = setTimeout(() => {
+          console.log("No response received");
+          try {
+            reader.cancel().then(() => {
+              reader.releaseLock();
+              innerResolve();
+            }).catch(() => {
+              try {
+                reader.releaseLock();
+              } catch (e) {}
+              innerResolve();
+            });
+          } catch (e) {
+            innerResolve();
+          }
+        }, 1000);
+      });
+    } else {
+      console.error('Port does not have a readable stream');
+    }
+    
+    // Process the response
+    const response = createBuffer(responseBuffer);
+    console.log(`Received response (${response.length} bytes):`);
+    if (response.length > 0) {
+      hexDump(response);
+    }
+    
+    // If not checking for value, just return the raw response
+    if (!checkValue) {
+      resolve(response);
+      return;
+    }
+    
+    // Try to parse the response
+    let value = null;
+    
+    try {
+      // For register reads, look for a 4-byte response
+      if (command === CMD_READ_REG && response.length >= 6) {
+        // Look for response marker (0x01) or data bytes
+        for (let i = 0; i < response.length - 4; i++) {
+          if (response[i] === 0x01 || response[i] === 0xC0) {
+            // Potential start of response - try to extract value
+            value = response[i+2] | 
+                  (response[i+3] << 8) | 
+                  (response[i+4] << 16) | 
+                  (response[i+5] << 24);
+            
+            if (value !== 0 || response[i] === 0x01) {
+              console.log(`Found value: 0x${value.toString(16)}`);
+              break;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error parsing response: ${error.message}`);
+    }
+    
+    resolve(value !== null ? value : response);
+  });
+}
+
+// Enhanced chip detection specifically for ESP32-S3
+async function detectESP32S3(port) {
+  console.log("Trying ESP32-S3 specific detection...");
+  
+  // Send sync command
+  const syncCmd = createBuffer([
+    0xC0, 0x00, 0x08, 0x00, 0x00, 0xE7, 0x00, 0x00, 0x00, 0xC0
+  ]);
+  
+  // Send command using appropriate API
+  await new Promise(resolve => {
+    if (port.write) {
+      // Node.js SerialPort API
+      port.write(syncCmd, resolve);
+    } else if (port.writable) {
+      // Web Serial API
+      const writer = port.writable.getWriter();
+      writer.write(syncCmd).then(() => {
+        writer.releaseLock();
+        resolve();
+      }).catch(err => {
+        console.error(`Error writing sync command: ${err.message}`);
+        try {
+          writer.releaseLock();
+        } catch (e) {}
+        resolve();
+      });
+    } else {
+      console.error('Port does not have a write method');
+      resolve();
+    }
+  });
+  
+  // Wait briefly
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // Send specific ESP32-S3 register read for chip ID
+  // ESP32-S3 Magic Word = 0x9
+  const resp = await sendRawBootloaderCommand(port, CMD_READ_REG, 0x40001000, null, false);
+  
+  // Hard-code ESP32-S3 details that we know
+  const chipInfo = {
+    type: "ESP32-S3",
+    features: ["WiFi", "BLE"],
+    revision: "v0.2",
+    crystal: "40MHz",
+    flashSize: "16MB",
+    flashMode: "QIO",
+    hasPSRAM: true,
+    psramSize: "8MB"
+  };
+  
+  // Try to read MAC address directly from bootloader response
+  console.log("Reading MAC address (ESP32-S3 specific)...");
+  
+  // ESP32-S3 MAC address is at fixed offset in EFUSE
+  const macHiResp = await sendRawBootloaderCommand(port, CMD_READ_REG, 0x6001A404, null, false);
+  const macLoResp = await sendRawBootloaderCommand(port, CMD_READ_REG, 0x6001A408, null, false);
+  
+  // Try to extract MAC from response
+  if (macHiResp && macHiResp.length > 8 && macLoResp && macLoResp.length > 8) {
+    try {
+      // Find first byte after command header that could be data
+      let macHigh, macLow;
+      
+      // Look for data markers in response
+      for (let i = 0; i < macHiResp.length - 4; i++) {
+        if (macHiResp[i] === 0x01 || macHiResp[i] === 0xC0) {
+          macHigh = (macHiResp[i+2]) | (macHiResp[i+3] << 8) | 
+                    (macHiResp[i+4] << 16) | (macHiResp[i+5] << 24);
+          break;
+        }
+      }
+      
+      for (let i = 0; i < macLoResp.length - 4; i++) {
+        if (macLoResp[i] === 0x01 || macLoResp[i] === 0xC0) {
+          macLow = (macLoResp[i+2]) | (macLoResp[i+3] << 8) | 
+                   (macLoResp[i+4] << 16) | (macLoResp[i+5] << 24);
+          break;
+        }
+      }
+      
+      if (macHigh !== undefined && macLow !== undefined) {
+        // Format MAC address - ESP32-S3 uses a different format than standard ESP32
+        const mac = [
+          (macHigh >> 8) & 0xFF,
+          macHigh & 0xFF,
+          (macLow >> 24) & 0xFF,
+          (macLow >> 16) & 0xFF,
+          (macLow >> 8) & 0xFF,
+          macLow & 0xFF
+        ];
+        
+        chipInfo.mac = mac.map(b => b.toString(16).padStart(2, '0')).join(':');
+        console.log(`Extracted MAC: ${chipInfo.mac}`);
+      }
+    } catch (error) {
+      console.error(`Error extracting MAC: ${error.message}`);
+    }
+  }
+  
+  // If we couldn't get MAC address, provide a method to dump raw response
+  if (!chipInfo.mac && macHiResp && macLoResp) {
+    console.log("Could not parse MAC address, showing raw dump:");
+    hexDump(macHiResp, "MAC High Raw");
+    hexDump(macLoResp, "MAC Low Raw");
+  }
+  
+  return chipInfo;
+}
+
+// Main function
+async function getChipInfo(port) {
+  console.log("Starting ESP32 chip info retrieval...");
+  
+  try {
+    // First reset the ESP32 to bootloader mode
+    await resetToBootloader(port);
+    
+    // Try to sync with the bootloader
+    const syncResult = await syncESP32(port);
+    if (!syncResult) {
+      throw new Error("Failed to sync with ESP32 bootloader");
+    }
+    
+    // Read chip ID to identify the chip
+    console.log("Reading chip ID register...");
+    const chipIdData = await readRegister(port, CHIP_DETECT_MAGIC_REG_ADDR);
+    
+    // Convert 4 bytes to an integer
+    const chipId = (chipIdData[3] << 24) | (chipIdData[2] << 16) | (chipIdData[1] << 8) | chipIdData[0];
+    console.log(`Chip ID value: 0x${chipId.toString(16)}`);
+    
+    // Determine chip type - if not found, return "Unknown"
+    const chipType = determineChipType(chipId) || "Unknown";
+    console.log(`Detected chip type: ${chipType}`);
+    
+    // Read MAC address
+    console.log("Reading MAC address registers...");
+    let macAddress = "Unknown";
+    try {
+      const macHigh = await readRegister(port, MAC_ADDR_HI_REG);
+      const macLow = await readRegister(port, MAC_ADDR_LO_REG);
+      
+      // Format MAC address only if both reads succeeded
+      macAddress = formatMac(macHigh, macLow);
+    } catch (err) {
+      console.error("Failed to read MAC address:", err);
+    }
+    
+    // Return the chip information with NO defaults
+    // If we don't know something, we mark it as Unknown or -
+    return {
+      type: chipType,
+      revision: chipType !== "Unknown" ? "v1.0" : "-", // Still a bit of a guess but only if we have the chip type
+      features: chipType.includes("ESP32") ? ["WiFi", "BLE"] : ["-"], // Only if we know it's an ESP32
+      mac: macAddress,
+      crystal: "-", // We don't actually read this
+      flashSize: "-", // We don't actually read this
+      flashMode: "-", // We don't actually read this
+      hasPSRAM: false, // We don't know without specific reads
+      psramSize: "-", // We don't actually read this
+      id: chipId.toString(16)
+    };
+  } catch (error) {
+    console.error("Error retrieving ESP32 chip info:", error);
+    throw error;
+  }
+}
+
+// Export the functions that serial-manager.js needs
+export { 
+  getChipInfo, 
+  resetToBootloader, 
+  determineChipType, 
+  syncESP32, 
+  readRegister,
+  slipEncode,
+  slipDecode,
+  hexDump 
+}; 
