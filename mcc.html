@@ -977,6 +977,122 @@
                 box-shadow: 0 0 5px rgba(255, 212, 59, 0.3);
             }
         }
+
+        .terminal-container .terminal-copy-btn:hover {
+            opacity: 1;
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+        }
+        
+        /* Animation for real-time parameter updates */
+        @keyframes value-update-glow {
+            0% { 
+                text-shadow: none;
+                color: inherit;
+                background-color: transparent;
+            }
+            30% { 
+                text-shadow: 0 0 8px var(--neon-red), 0 0 12px var(--neon-red);
+                color: #fff;
+                background-color: rgba(227, 24, 55, 0.2);
+            }
+            70% {
+                text-shadow: 0 0 8px var(--neon-red), 0 0 12px var(--neon-red);
+                color: #fff;
+                background-color: rgba(227, 24, 55, 0.2);
+            }
+            100% { 
+                text-shadow: none;
+                color: inherit;
+                background-color: transparent;
+            }
+        }
+        
+        .value-updated {
+            animation: value-update-glow 1.2s ease-out;
+            border-radius: 4px;
+            padding: 0 4px;
+            position: relative;
+        }
+        
+        /* ESP32 specific animations for parameter updates */
+        #esp32-tile .info-value.value-updated {
+            animation: value-update-glow 1.2s ease-out;
+        }
+        
+        /* Add progress animations for ESP32 detection */
+        @keyframes detecting-pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
+
+        #esp32-tile.detecting .tile-icon i {
+            animation: detecting-pulse 1s infinite;
+        }
+
+        /* Show a progress bar during detection */
+        #esp32-tile.detecting::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: linear-gradient(to right, transparent, var(--neon-red), transparent);
+            animation: progress-scan 2s ease-in-out infinite;
+            width: 30%;
+            z-index: 1;
+        }
+
+        @keyframes progress-scan {
+            0% { left: 0; width: 0; }
+            50% { width: 30%; }
+            100% { left: 100%; width: 0; }
+        }
+        
+        /* Status bar animations */
+        @keyframes highlight-pulse {
+            0% { 
+                transform: scale(1);
+                text-shadow: var(--neon-green-glow);
+            }
+            50% { 
+                transform: scale(1.1);
+                text-shadow: var(--neon-green-intense);
+            }
+            100% { 
+                transform: scale(1);
+                text-shadow: var(--neon-green-glow);
+            }
+        }
+
+        /* Detection indicator styles */
+        .detection-indicator {
+            display: inline-block;
+            color: var(--neon-green);
+            margin-right: 5px;
+            animation: fade-in-out 1.5s forwards;
+        }
+
+        .detecting-now {
+            display: inline-block;
+            color: var(--neon-red);
+            margin-right: 5px;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes fade-in-out {
+            0% { opacity: 0; transform: scale(0.5); }
+            30% { opacity: 1; transform: scale(1.2); }
+            70% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.8); }
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.7; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0.7; transform: scale(0.8); }
+        }
     </style>
 </head>
 <body>
