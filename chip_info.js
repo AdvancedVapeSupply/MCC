@@ -1,5 +1,21 @@
-// Remove require and use ES module format
-// const { SerialPort } = require('serialport');
+// ES module format for browser compatibility
+// Define variables that will be initialized differently based on environment
+let SerialPort;
+let DelimiterParser;
+let ReadlineParser;
+
+// Only require these in Node.js environment
+if (typeof window === 'undefined') {
+  // Node.js environment
+  try {
+    const serialPortModule = require('serialport');
+    SerialPort = serialPortModule.SerialPort;
+    DelimiterParser = require('@serialport/parser-delimiter').DelimiterParser;
+    ReadlineParser = require('@serialport/parser-readline').ReadlineParser;
+  } catch (e) {
+    console.warn("SerialPort modules not available:", e.message);
+  }
+}
 
 // ESP32 register addresses
 const CHIP_ID_REG = 0x40001000;  // Chip ID register

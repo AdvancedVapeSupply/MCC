@@ -66,6 +66,145 @@ function updateConnectionStatus(isConnected, type) {
 // Modified function to consistently format log messages for ESP32
 function logESP32Message(message, isError = false) {
     logToTerminal(message, isError, 'esp32');
+    
+    // Also update ESP32 tile parameters based on message content
+    if (!isError) {
+        // Extract parameter values from common message patterns
+        let match;
+        
+        // Check for chip type detection
+        if ((match = message.match(/Chip Type: ([^\s]+)/i)) || 
+            (match = message.match(/Detected chip type: ([^\s]+)/i))) {
+            const chipType = match[1];
+            updateESP32Parameter('chip-type', chipType);
+            
+            // When chip type is identified, set default values
+            if (chipType === 'ESP32-S3') {
+                updateESP32Parameter('features', 'WiFi, BLE 5, USB');
+                updateESP32Parameter('flash', '16MB');
+                updateESP32Parameter('psram', '8MB');
+                updateESP32Parameter('crystal', '40MHz');
+            } else if (chipType === 'ESP32') {
+                updateESP32Parameter('features', 'WiFi, BLE 4.2, Dual Core');
+                updateESP32Parameter('flash', '4MB');
+                updateESP32Parameter('psram', 'Not Present');
+                updateESP32Parameter('crystal', '40MHz');
+            }
+        }
+        
+        // Check for chip ID
+        if ((match = message.match(/Chip ID.*: (0x[0-9a-f]+)/i)) ||
+            (match = message.match(/ID.*: (0x[0-9a-f]+)/i))) {
+            updateESP32Parameter('chip-id', match[1]);
+        }
+        
+        // Check for MAC address
+        if ((match = message.match(/MAC Address: ([0-9a-f:]+)/i))) {
+            updateESP32Parameter('mac', match[1]);
+        }
+        
+        // Check for features
+        if ((match = message.match(/Features: (.*)/i))) {
+            updateESP32Parameter('features', match[1]);
+        }
+        
+        // Check for flash size
+        if ((match = message.match(/Flash Size: (.*)/i))) {
+            updateESP32Parameter('flash', match[1]);
+        }
+        
+        // Check for flash mode
+        if ((match = message.match(/Flash Mode: (.*)/i))) {
+            // We don't directly display mode in the tile
+        }
+        
+        // Check for PSRAM
+        if ((match = message.match(/PSRAM: (.*)/i))) {
+            updateESP32Parameter('psram', match[1]);
+        }
+        
+        // Check for Crystal
+        if ((match = message.match(/Crystal: (.*)/i))) {
+            updateESP32Parameter('crystal', match[1]);
+        }
+        
+        // Progress message updates
+        if ((match = message.match(/Progress: (.*?) - (.*)/i))) {
+            const step = match[1].toLowerCase();
+            const value = match[2];
+            
+            if (step.includes('chip') && step.includes('type')) {
+                updateESP32Parameter('chip-type', value);
+            } else if (step.includes('chip') && step.includes('id')) {
+                updateESP32Parameter('chip-id', value);
+            } else if (step.includes('mac')) {
+                updateESP32Parameter('mac', value);
+            } else if (step.includes('feature')) {
+                updateESP32Parameter('features', value);
+            } else if (step.includes('flash')) {
+                updateESP32Parameter('flash', value);
+            } else if (step.includes('psram')) {
+                updateESP32Parameter('psram', value);
+            } else if (step.includes('crystal')) {
+                updateESP32Parameter('crystal', value);
+            }
+        }
+    }
+}
+
+// Helper to update ESP32 tile parameters with animation
+function updateESP32Parameter(param, value) {
+    const fieldId = `esp32-${param}`;
+    const field = document.getElementById(fieldId);
+    
+    if (field && value) {
+        // Only update if the value is different and not empty
+        if (field.textContent !== value && value.trim() !== '') {
+            // Save old value for animation
+            const oldValue = field.textContent;
+            
+            // Update the text content
+            field.textContent = value;
+            
+            // Add animation if the value actually changed
+            if (oldValue !== 'Unknown' && oldValue !== 'Detecting...' && oldValue !== 'Reading...') {
+                // Add indicator
+                field.innerHTML = `<span class="detection-indicator"><i class="fas fa-check"></i></span> ${value}`;
+                
+                // Add animation class
+                field.classList.add('value-updated');
+                
+                // Remove animation after a delay
+                setTimeout(() => {
+                    field.classList.remove('value-updated');
+                    
+                    // Remove the indicator after the animation
+                    setTimeout(() => {
+                        field.textContent = value;
+                    }, 1000);
+                }, 1000);
+            }
+            
+            // Also update the ESP32 tile visuals
+            const esp32Tile = document.getElementById('esp32-tile');
+            if (esp32Tile) {
+                // Ensure it's visible
+                esp32Tile.style.opacity = '1';
+                esp32Tile.style.filter = 'none';
+                esp32Tile.classList.add('detected');
+                esp32Tile.classList.remove('detecting');
+                
+                // Also update the ESP32 icon in status bar
+                const esp32Icon = document.getElementById('esp32-icon');
+                if (esp32Icon) {
+                    esp32Icon.classList.remove('detecting');
+                    esp32Icon.classList.add('connected');
+                    esp32Icon.style.opacity = '1';
+                    esp32Icon.style.color = 'var(--neon-red)';
+                }
+            }
+        }
+    }
 }
 
 // Improved hex dump helper function
@@ -431,95 +570,172 @@ const USBManager = {
         try {
             logToTerminal('Checking for MicroPython...');
             
-            // Create a writer
-            const writer = port.writable.getWriter();
-            const reader = port.readable.getReader();
+            // Add detecting class to Python tile
+            const pythonTile = document.getElementById('python-tile');
+            if (pythonTile) {
+                pythonTile.classList.add('detecting');
+            }
             
-            try {
+            // Determine if we're in a browser or Node environment
+            const isNode = typeof window === 'undefined' && 
+                typeof process !== 'undefined' && 
+                process.versions && 
+                process.versions.node && 
+                typeof require === 'function';
+            
+            let response = '';
+            
+            if (isNode) {
+                // Node.js SerialPort implementation
+                if (!port.isOpen) {
+                    logToTerminal('Port not open for MicroPython detection');
+                    return false;
+                }
+                
                 // Send Ctrl+C to interrupt any running program
-                await writer.write(new Uint8Array([0x03]));
+                await port.write(Buffer.from([0x03]));
                 await new Promise(resolve => setTimeout(resolve, 100));
                 
                 // Send Enter and wait for prompt
-                await writer.write(new Uint8Array([0x0D]));
+                await port.write(Buffer.from([0x0D]));
                 await new Promise(resolve => setTimeout(resolve, 100));
                 
                 // Send version check command
-                const cmd = new TextEncoder().encode('import sys\r\nprint(sys.implementation.name, sys.implementation.version)\r\n');
-                await writer.write(cmd);
+                const cmd = Buffer.from('import sys\r\nprint(sys.implementation.name, sys.implementation.version)\r\n');
+                await port.write(cmd);
                 
                 // Read response with timeout
-                let response = '';
                 const startTime = Date.now();
                 const timeout = 2000; // 2 second timeout
                 
-                while (Date.now() - startTime < timeout) {
-                    const {value, done} = await reader.read();
-                    if (done) break;
-                    
-                    response += new TextDecoder().decode(value);
-                    if (response.includes('micropython')) {
-                        // Show Python tile and icon
-                        const pythonTile = document.getElementById('python-tile');
-                        const pythonIcon = document.getElementById('python-icon');
-                        if (pythonTile) pythonTile.style.display = 'flex';
-                        if (pythonIcon) pythonIcon.style.display = 'inline';
+                // Setup parser for this specific operation
+                let parser;
+                try {
+                    // Only use require in Node.js environment
+                    const ReadlineParser = require('@serialport/parser-readline').ReadlineParser;
+                    parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+                } catch (e) {
+                    console.error('Error creating parser:', e);
+                    // Fallback for browser environment - shouldn't get here but just in case
+                    return resolve(false);
+                }
+                
+                return new Promise((resolve, reject) => {
+                    const onData = (data) => {
+                        response += data + '\r\n';
                         
-                        // Update connection state
-                        connectionState.python = true;
-                        updateConnectionStatus(true, 'python');
-                        
-                        // Extract version and update UI
-                        const versionMatch = response.match(/micropython\s+([\d.]+)/i);
-                        const version = versionMatch ? versionMatch[1] : 'Unknown';
-                        const versionEl = document.getElementById('python-version');
-                        if (versionEl) versionEl.textContent = version;
-                        
-                        // Get memory info
-                        const memoryCmd = new TextEncoder().encode('import gc\r\nprint(f"Free: {gc.mem_free()}, Allocated: {gc.mem_alloc()}")\r\n');
-                        await writer.write(memoryCmd);
-                        
-                        // Read memory info with timeout
-                        let memoryResponse = '';
-                        const memoryStartTime = Date.now();
-                        const memoryTimeout = 1000;
-                        
-                        while (Date.now() - memoryStartTime < memoryTimeout) {
-                            const {value, done} = await reader.read();
-                            if (done) break;
-                            
-                            memoryResponse += new TextDecoder().decode(value);
-                            if (memoryResponse.includes('Free:')) {
-                                const memoryMatch = memoryResponse.match(/Free: (\d+), Allocated: (\d+)/);
-                                if (memoryMatch) {
-                                    const freeMem = parseInt(memoryMatch[1]);
-                                    const allocMem = parseInt(memoryMatch[2]);
-                                    const totalMem = freeMem + allocMem;
-                                    const freePercent = Math.round((freeMem / totalMem) * 100);
-                                    const memoryEl = document.getElementById('python-memory');
-                                    if (memoryEl) memoryEl.textContent = `${freePercent}% Free`;
-                                }
-                                break;
-                            }
+                        if (response.toLowerCase().includes('micropython')) {
+                            parser.removeListener('data', onData);
+                            updateMicroPythonUI(response);
+                            resolve(true);
                         }
                         
-                        logToTerminal(`MicroPython detected: ${version}`);
-                        break;
+                        // Check for timeout
+                        if (Date.now() - startTime > timeout) {
+                            parser.removeListener('data', onData);
+                            logToTerminal('MicroPython detection timed out', true);
+                            resolve(false);
+                        }
+                    };
+                    
+                    parser.on('data', onData);
+                    
+                    // Set timeout as fallback
+                    setTimeout(() => {
+                        parser.removeListener('data', onData);
+                        logToTerminal('MicroPython detection timed out', true);
+                        resolve(false);
+                    }, timeout);
+                });
+            } else {
+                // Browser Web Serial API implementation
+                // Create a writer
+                const writer = port.writable.getWriter();
+                const reader = port.readable.getReader();
+                
+                try {
+                    // Send Ctrl+C to interrupt any running program
+                    await writer.write(new Uint8Array([0x03]));
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Send Enter and wait for prompt
+                    await writer.write(new Uint8Array([0x0D]));
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Send version check command
+                    const cmd = new TextEncoder().encode('import sys\r\nprint(sys.implementation.name, sys.implementation.version)\r\n');
+                    await writer.write(cmd);
+                    
+                    // Read response with timeout
+                    let response = '';
+                    const startTime = Date.now();
+                    const timeout = 2000; // 2 second timeout
+                    
+                    while (Date.now() - startTime < timeout) {
+                        const {value, done} = await reader.read();
+                        if (done) break;
+                        
+                        response += new TextDecoder().decode(value);
+                        if (response.toLowerCase().includes('micropython')) {
+                            updateMicroPythonUI(response);
+                            break;
+                        }
                     }
+                } finally {
+                    writer.releaseLock();
+                    reader.releaseLock();
                 }
-            } finally {
-                writer.releaseLock();
-                reader.releaseLock();
             }
+            
+            return true;
         } catch (error) {
             logToTerminal(`MicroPython detection failed: ${error.message}`, true);
             // Hide Python tile and icon on error
             const pythonTile = document.getElementById('python-tile');
             const pythonIcon = document.getElementById('python-icon');
-            if (pythonTile) pythonTile.style.display = 'none';
+            if (pythonTile) {
+                pythonTile.style.display = 'none';
+                pythonTile.classList.remove('detecting');
+            }
             if (pythonIcon) pythonIcon.style.display = 'none';
             connectionState.python = false;
             updateConnectionStatus(false, 'python');
+            return false;
+        }
+        
+        // Helper function to update UI based on detected MicroPython
+        function updateMicroPythonUI(response) {
+            // Show Python tile and icon
+            const pythonTile = document.getElementById('python-tile');
+            const pythonIcon = document.getElementById('python-icon');
+            if (pythonTile) {
+                pythonTile.style.display = 'flex';
+                pythonTile.style.opacity = '1';
+                pythonTile.style.filter = 'grayscale(0%)';
+                pythonTile.classList.remove('detecting');
+                pythonTile.classList.add('detected');
+            }
+            if (pythonIcon) {
+                pythonIcon.style.display = 'inline';
+                pythonIcon.style.opacity = '1';
+                pythonIcon.style.color = 'var(--neon-yellow)';
+                pythonIcon.style.textShadow = 'var(--neon-yellow-intense)';
+            }
+            
+            // Update connection state
+            connectionState.python = true;
+            updateConnectionStatus(true, 'python');
+            
+            // Extract version and update UI
+            const versionMatch = response.match(/micropython\s+([\d.]+)/i);
+            const version = versionMatch ? versionMatch[1] : 'Unknown';
+            const versionEl = document.getElementById('python-version');
+            if (versionEl) versionEl.textContent = version;
+            
+            logToTerminal(`MicroPython detected: ${version}`);
+            
+            // Note: We're skipping the memory info check for simplicity in this update
+            // That can be added back with similar Node/Browser conditional logic if needed
         }
     },
 
@@ -579,6 +795,33 @@ const USBManager = {
         const toggle = document.getElementById('serial-toggle');
         if (toggle) {
             toggle.classList.toggle('active', connected);
+        }
+    },
+
+    // Add checkPython method that calls detectMicroPython
+    checkPython: async function(port) {
+        try {
+            // Simply call the existing detectMicroPython method
+            return await this.detectMicroPython(port);
+        } catch (error) {
+            // Don't show the error in the terminal if it's a common Node.js module error
+            // which is expected in the browser environment
+            const isCommonNodeError = error.message && (
+                error.message.includes('require is not defined') ||
+                error.message.includes('module is not defined') ||
+                error.message.includes('@serialport')
+            );
+            
+            if (!isCommonNodeError) {
+                logToTerminal(`Python check failed: ${error.message}`, true);
+            } else {
+                console.log("Skipping MicroPython detection in browser environment");
+            }
+            
+            // Update UI to show Python detection failure
+            connectionState.python = false;
+            updateConnectionStatus(false, 'python');
+            return false;
         }
     },
 
@@ -1682,7 +1925,14 @@ const USBManager = {
                 }
                 
                 // Now check if MicroPython is present (after ESP32 is detected)
-                await this.checkPython(port);
+                try {
+                    // Make this non-blocking so it doesn't delay ESP32 detection completion
+                    this.checkPython(port).catch(err => {
+                        console.log("MicroPython detection failed:", err.message);
+                    });
+                } catch (e) {
+                    console.log("Error starting MicroPython detection:", e.message);
+                }
                 
                 return true;
                 
@@ -1774,7 +2024,14 @@ const USBManager = {
                 updateConnectionStatus(true, 'esp32');
                 
                 // Try to check for MicroPython anyway
-                await this.checkPython(port);
+                try {
+                    // Make this non-blocking so it doesn't delay ESP32 detection completion
+                    this.checkPython(port).catch(err => {
+                        console.log("MicroPython detection failed:", err.message);
+                    });
+                } catch (e) {
+                    console.log("Error starting MicroPython detection:", e.message);
+                }
                 
                 return false;
             }
