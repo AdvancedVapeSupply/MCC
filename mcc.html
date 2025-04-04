@@ -1425,8 +1425,12 @@
                                 <span class="endpoint-label">MAC:</span>
                                 <span class="endpoint-value" id="esp32-mac">-</span>
                             </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">CHIP ID:</span>
+                                <span class="endpoint-value" id="esp32-chip-id">-</span>
+                            </div>
                             <div class="action-row">
-                                <button id="esp32-retry" class="action-button">
+                                <button id="esp32-retry" class="action-button" title="Retry ESP32 Detection">
                                     <i class="fas fa-redo"></i>
                                 </button>
                             </div>
@@ -1985,6 +1989,38 @@
             const serialTile = document.getElementById('serial-tile');
             if (serialTile) {
                 serialTile.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+
+        // Add event listener for ESP32 retry button
+        document.getElementById('esp32-retry').addEventListener('click', async () => {
+            try {
+                const retryButton = document.getElementById('esp32-retry');
+                if (!retryButton) return;
+                
+                // Disable button and show loading state
+                retryButton.disabled = true;
+                retryButton.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+                
+                logToTerminal('Retrying ESP32 detection...', false, 'esp32');
+                
+                if (!activePort || (!activePort.readable && !activePort.writable)) {
+                    logToTerminal('No active port available for ESP32 detection', true, 'esp32');
+                    return;
+                }
+                
+                // Use the method from serial-manager.js for detection
+                await USBManager.detectESP32(activePort);
+                
+            } catch (error) {
+                logToTerminal(`ESP32 retry error: ${error.message}`, true, 'esp32');
+            } finally {
+                // Reset button state
+                const retryButton = document.getElementById('esp32-retry');
+                if (retryButton) {
+                    retryButton.disabled = false;
+                    retryButton.innerHTML = '<i class="fas fa-redo"></i>';
+                }
             }
         });
 

@@ -426,30 +426,164 @@ const USBManager = {
         try {
             logToTerminal('Entering bootloader mode...');
             
-            // Get a writer
-            const writer = port.writable.getWriter();
+            // Store existing writer/reader locks
+            let needToReleaseWriterLock = false;
+            let existingWriter = null;
             
-            try {
-                // Use DTR/RTS to reset ESP32 into bootloader
-                await port.setSignals({ dataTerminalReady: false, requestToSend: true });
-                await new Promise(resolve => setTimeout(resolve, 50));
-                await port.setSignals({ dataTerminalReady: true, requestToSend: true });
-                await new Promise(resolve => setTimeout(resolve, 50));
-                await port.setSignals({ dataTerminalReady: false, requestToSend: false });
-                await new Promise(resolve => setTimeout(resolve, 50));
-                await port.setSignals({ dataTerminalReady: false });
-            } finally {
-                writer.releaseLock();
+            if (portWriter) {
+                try {
+                    existingWriter = portWriter;
+                    portWriter = null;
+                    needToReleaseWriterLock = true;
+                    logToTerminal('Using existing writer for reset sequence');
+                } catch (e) {
+                    console.warn('Error handling existing writer:', e);
+                }
             }
             
-            // Wait for bootloader
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Method 1: Try DTR/RTS reset first
+            try {
+                logToTerminal('Attempting DTR/RTS hardware reset...');
+                await port.setSignals({ dataTerminalReady: false, requestToSend: true });
+                await new Promise(resolve => setTimeout(resolve, 100));
+                await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+                await new Promise(resolve => setTimeout(resolve, 100));
+                await port.setSignals({ dataTerminalReady: false, requestToSend: false });
+                await new Promise(resolve => setTimeout(resolve, 250));
+                
+                logToTerminal('DTR/RTS reset completed');
+            } catch (dtrError) {
+                logToTerminal(`DTR/RTS reset failed: ${dtrError.message}. Trying watchdog reset...`, true);
+                
+                // Method 2: Try watchdog reset as fallback
+                try {
+                    const writer = needToReleaseWriterLock ? existingWriter : port.writable.getWriter();
+                    
+                    try {
+                        // Send zeros to trigger watchdog reset
+                        logToTerminal('Sending watchdog reset command...');
+                        await writer.write(new Uint8Array([0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
+                        await new Promise(resolve => setTimeout(resolve, 250));
+                    } finally {
+                        if (!needToReleaseWriterLock) {
+                            writer.releaseLock();
+                        }
+                    }
+                    
+                    logToTerminal('Watchdog reset completed');
+                } catch (watchdogError) {
+                    logToTerminal(`Watchdog reset failed: ${watchdogError.message}`, true);
+                    throw new Error('All reset methods failed');
+                }
+            }
             
-            logToTerminal('Entered bootloader mode');
+            // Wait for bootloader to be ready
+            await new Promise(resolve => setTimeout(resolve, 750));
+            logToTerminal('ESP32 should now be in bootloader mode');
+            
+            return true;
         } catch (error) {
             logToTerminal(`Failed to enter bootloader mode: ${error.message}`, true);
             throw error;
         }
+    },
+
+    // Custom transport class that works with already open ports
+    createESPTransport: function(port, isAlreadyOpen) {
+        class ESPTransport extends Transport {
+            constructor(port, isAlreadyOpen) {
+                super(port);
+                this._isAlreadyOpen = isAlreadyOpen;
+                this._port = port;
+                this._reader = null;
+                this._writer = null;
+            }
+            
+            async connect() {
+                if (this._isAlreadyOpen) {
+                    logToTerminal("Using already open port for ESP32 detection");
+                    
+                    // Create reader and writer but don't open the port
+                    try {
+                        this._reader = this._port.readable.getReader();
+                        this._writer = this._port.writable.getWriter();
+                        return true;
+                    } catch (error) {
+                        logToTerminal(`Failed to create reader/writer on already open port: ${error.message}`, true);
+                        throw error;
+                    }
+                } else {
+                    // Use the parent class implementation to open the port
+                    return super.connect();
+                }
+            }
+            
+            async write(data) {
+                if (!this._writer) {
+                    throw new Error("Port not connected");
+                }
+                return this._writer.write(data);
+            }
+            
+            async read(size = 1) {
+                if (!this._reader) {
+                    throw new Error("Port not connected");
+                }
+                
+                let response = new Uint8Array();
+                let remaining = size;
+                
+                while (remaining > 0) {
+                    try {
+                        const {value, done} = await this._reader.read();
+                        if (done) {
+                            break;
+                        }
+                        
+                        const newResponse = new Uint8Array(response.length + value.length);
+                        newResponse.set(response);
+                        newResponse.set(value, response.length);
+                        response = newResponse;
+                        
+                        remaining -= value.length;
+                    } catch (error) {
+                        console.error("Read error:", error);
+                        throw error;
+                    }
+                }
+                
+                return response;
+            }
+            
+            async disconnect() {
+                if (this._isAlreadyOpen) {
+                    // Just release locks but don't close port
+                    if (this._reader) {
+                        try {
+                            await this._reader.cancel();
+                            this._reader.releaseLock();
+                            this._reader = null;
+                        } catch (e) {
+                            console.warn("Error releasing reader:", e);
+                        }
+                    }
+                    
+                    if (this._writer) {
+                        try {
+                            this._writer.releaseLock();
+                            this._writer = null;
+                        } catch (e) {
+                            console.warn("Error releasing writer:", e);
+                        }
+                    }
+                } else {
+                    // Use parent implementation to close port
+                    return super.disconnect();
+                }
+            }
+        }
+        
+        return new ESPTransport(port, isAlreadyOpen);
     },
 
     // ESP32 detection function
@@ -457,70 +591,98 @@ const USBManager = {
         try {
             logToTerminal('Detecting ESP32...');
             
-            // Release existing readers/writers
+            // Add a retry button to the ESP32 tile if it doesn't exist
+            const esp32Tile = document.getElementById('esp32-tile');
+            if (esp32Tile && !document.getElementById('esp32-retry-btn')) {
+                const retryBtn = document.createElement('button');
+                retryBtn.id = 'esp32-retry-btn';
+                retryBtn.className = 'neon-button red';
+                retryBtn.textContent = 'Retry ESP32 Detection';
+                retryBtn.style.marginTop = '10px';
+                retryBtn.addEventListener('click', () => {
+                    logToTerminal('Retrying ESP32 detection...');
+                    this.detectESP32(activePort);
+                });
+                esp32Tile.appendChild(retryBtn);
+            }
+            
+            // Release existing readers/writers to free up the port for ESPLoader
             if (portReader) {
                 try {
                     await portReader.cancel();
                     portReader.releaseLock();
+                    portReader = null;
                 } catch (e) {
                     console.warn('Error releasing port reader:', e);
                 }
-                portReader = null;
             }
             
             if (portWriter) {
                 try {
                     await portWriter.close();
                     portWriter.releaseLock();
+                    portWriter = null;
                 } catch (e) {
                     console.warn('Error releasing port writer:', e);
                 }
-                portWriter = null;
             }
 
-            // Check if port is already open
+            // Check if port is already open - this is important
             const isPortOpen = port.readable && port.writable;
+            logToTerminal(`Port status before detection: ${isPortOpen ? 'Open' : 'Closed'}`);
             
-            if (!isPortOpen) {
-                try {
-                    // Open port for ESP32 detection if it's not already open
-                    await port.open({ 
-                        baudRate: 115200,
-                        dataBits: 8,
-                        stopBits: 1,
-                        parity: "none",
-                        flowControl: "none"
-                    });
-                } catch (openError) {
-                    if (openError.message.includes('Port is already open')) {
-                        logToTerminal('Port is already open, proceeding with detection');
-                    } else {
-                        throw openError;
-                    }
-                }
-            } else {
-                logToTerminal('Port is already open, using existing connection');
-            }
+            // Create custom transport
+            const transport = this.createESPTransport(port, isPortOpen);
             
-            let chipType, features, mac;
+            let chipType, features, mac, chipId;
             
             try {
-                // Create ESPLoader instance
+                // Create ESPLoader instance with custom transport
                 const loader = new ESPLoader({
-                    transport: new Transport(port),
+                    transport: transport,
                     baudrate: 115200,
                     debug: true
                 });
 
                 // Try to connect and get chip info
+                await this.resetESP32ToBootloader(port);
+                
+                logToTerminal('Connecting to ESP32 bootloader...');
                 await loader.connect();
+                
+                logToTerminal('Detecting chip type...');
                 chipType = await loader.detectChip();
+                
+                logToTerminal('Getting chip features...');
                 features = await loader.getChipFeatures();
+                
+                logToTerminal('Reading MAC address...');
                 mac = await loader.readMac();
                 
+                // Get chip ID if available
+                try {
+                    logToTerminal('Reading chip ID...', false, 'esp32');
+                    chipId = await loader.chipId();
+                    if (chipId) {
+                        const chipIdHex = chipId.toString(16).padStart(8, '0');
+                        logToTerminal(`ESP32 Chip ID: 0x${chipIdHex}`, false, 'esp32');
+                        
+                        // Break down the chip ID parts for more detailed information
+                        const waferX = (chipId >> 9) & 0x1ff;
+                        const waferY = chipId & 0x1ff;
+                        const waferNumber = (chipId >> 18) & 0x3f;
+                        const lotNumber = (chipId >> 24) & 0xff;
+                        
+                        logToTerminal(`├─ Wafer position: X=${waferX}, Y=${waferY}`, false, 'esp32');
+                        logToTerminal(`├─ Wafer number: ${waferNumber}`, false, 'esp32');
+                        logToTerminal(`└─ Lot number: ${lotNumber}`, false, 'esp32');
+                    }
+                } catch (chipIdError) {
+                    logToTerminal(`Could not read chip ID: ${chipIdError.message}`, true, 'esp32');
+                    chipId = null;
+                }
+                
                 // Show ESP32 tile and icon
-                const esp32Tile = document.getElementById('esp32-tile');
-                const esp32Icon = document.getElementById('esp32-icon');
                 if (esp32Tile) {
                     esp32Tile.style.opacity = '1';
                     esp32Tile.style.filter = 'grayscale(0%)';
@@ -530,13 +692,18 @@ const USBManager = {
                     const flashEl = document.getElementById('esp32-flash');
                     const psramEl = document.getElementById('esp32-psram');
                     const macEl = document.getElementById('esp32-mac');
+                    const chipIdEl = document.getElementById('esp32-chip-id');
                     
                     if (chipTypeEl) chipTypeEl.textContent = chipType.name;
                     if (flashEl) flashEl.textContent = features.find(f => f.includes('Flash'))?.split(' ')[2] || 'N/A';
                     if (psramEl) psramEl.textContent = features.find(f => f.includes('PSRAM')) ? 'Yes' : 'No';
                     if (macEl) macEl.textContent = mac.map(b => b.toString(16).padStart(2, '0')).join(':');
+                    if (chipIdEl && chipId) chipIdEl.textContent = `0x${chipId.toString(16).padStart(8, '0')}`;
                 }
+                
+                const esp32Icon = document.getElementById('esp32-icon');
                 if (esp32Icon) {
+                    esp32Icon.style.display = 'inline';
                     esp32Icon.style.opacity = '1';
                     esp32Icon.classList.add('connected');
                     esp32Icon.style.color = 'var(--neon-red)';
@@ -552,26 +719,34 @@ const USBManager = {
                 logToTerminal(`ESP32 detection failed: ${espLoaderError.message}`, true);
                 
                 // Grey out ESP32 tile and icon on error
-                const esp32Tile = document.getElementById('esp32-tile');
-                const esp32Icon = document.getElementById('esp32-icon');
                 if (esp32Tile) {
                     esp32Tile.style.opacity = '0.5';
                     esp32Tile.style.filter = 'grayscale(70%)';
                 }
+                
+                const esp32Icon = document.getElementById('esp32-icon');
                 if (esp32Icon) {
                     esp32Icon.style.opacity = '0.3';
                     esp32Icon.classList.remove('connected');
                 }
+                
                 connectionState.esp32 = false;
                 updateConnectionStatus(false, 'esp32');
                 
                 // Don't throw error, just log it and continue
                 // This prevents reconnection loops
+            } finally {
+                // Ensure transport is disconnected
+                try {
+                    await transport.disconnect();
+                } catch (e) {
+                    console.warn('Error disconnecting transport:', e);
+                }
             }
             
             // Make sure port is open before creating readers/writers
             if (port.readable && port.writable) {
-                // Recreate reader and writer
+                // Create reader and writer
                 try {
                     // Only create new reader/writer if they don't exist
                     if (!portReader) {
