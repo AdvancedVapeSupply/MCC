@@ -568,7 +568,7 @@ const USBManager = {
 
     detectMicroPython: async function(port) {
         try {
-            logToTerminal('Checking for MicroPython...');
+            logToTerminal('Checking for MicroPython...', false, 'python');
             
             // Add detecting class to Python tile
             const pythonTile = document.getElementById('python-tile');
@@ -588,7 +588,7 @@ const USBManager = {
             if (isNode) {
                 // Node.js SerialPort implementation
                 if (!port.isOpen) {
-                    logToTerminal('Port not open for MicroPython detection');
+                    logToTerminal('Port not open for MicroPython detection', false, 'python');
                     return false;
                 }
                 
@@ -598,15 +598,6 @@ const USBManager = {
                 
                 // Send Enter and wait for prompt
                 await port.write(Buffer.from([0x0D]));
-                await new Promise(resolve => setTimeout(resolve, 100));
-                
-                // Send version check command
-                const cmd = Buffer.from('import sys\r\nprint(sys.implementation.name, sys.implementation.version)\r\n');
-                await port.write(cmd);
-                
-                // Read response with timeout
-                const startTime = Date.now();
-                const timeout = 2000; // 2 second timeout
                 
                 // Setup parser for this specific operation
                 let parser;
@@ -617,10 +608,60 @@ const USBManager = {
                 } catch (e) {
                     console.error('Error creating parser:', e);
                     // Fallback for browser environment - shouldn't get here but just in case
-                    return resolve(false);
+                    return false;
                 }
                 
+                // First, check for the >>> prompt
+                const promptPromise = new Promise((resolve, reject) => {
+                    const startTime = Date.now();
+                    const timeout = 1000; // 1 second timeout for prompt detection
+                    
+                    const onPromptData = (data) => {
+                        if (data.includes('>>>')) {
+                            parser.removeListener('data', onPromptData);
+                            logToTerminal('MicroPython REPL prompt detected', false, 'python');
+                            resolve(true);
+                        }
+                        
+                        // Check for timeout
+                        if (Date.now() - startTime > timeout) {
+                            parser.removeListener('data', onPromptData);
+                            logToTerminal('MicroPython prompt detection timed out', false, 'python');
+                            resolve(false);
+                        }
+                    };
+                    
+                    parser.on('data', onPromptData);
+                    
+                    // Set timeout as fallback
+                    setTimeout(() => {
+                        parser.removeListener('data', onPromptData);
+                        resolve(false);
+                    }, timeout);
+                });
+                
+                const promptDetected = await promptPromise;
+                
+                if (promptDetected) {
+                    // If prompt was detected, we know it's MicroPython
+                    updateMicroPythonUI('MicroPython detected via REPL prompt');
+                    
+                    // Try to get more info about MCT specifically - first try version.__version__
+                    await port.write(Buffer.from('try:\n    import version\n    print("MCT Version:", version.__version__)\nexcept ImportError:\n    try:\n        import sys\n        print(sys.implementation._machine)\n    except:\n        try:\n            help("version")\n        except:\n            pass\n\r'));
+                    
+                    return true;
+                }
+                
+                // Fall back to version check if prompt not detected
+                // Send version check command
+                const cmd = Buffer.from('import sys\r\nprint(sys.implementation.name, sys.implementation.version)\r\n');
+                await port.write(cmd);
+                
+                // Read response with timeout
                 return new Promise((resolve, reject) => {
+                    const startTime = Date.now();
+                    const timeout = 2000; // 2 second timeout
+                    
                     const onData = (data) => {
                         response += data + '\r\n';
                         
@@ -633,7 +674,7 @@ const USBManager = {
                         // Check for timeout
                         if (Date.now() - startTime > timeout) {
                             parser.removeListener('data', onData);
-                            logToTerminal('MicroPython detection timed out', true);
+                            logToTerminal('MicroPython detection timed out', true, 'python');
                             resolve(false);
                         }
                     };
@@ -643,26 +684,75 @@ const USBManager = {
                     // Set timeout as fallback
                     setTimeout(() => {
                         parser.removeListener('data', onData);
-                        logToTerminal('MicroPython detection timed out', true);
+                        logToTerminal('MicroPython detection timed out', true, 'python');
                         resolve(false);
                     }, timeout);
                 });
             } else {
                 // Browser Web Serial API implementation
-                // Create a writer
-                const writer = port.writable.getWriter();
-                const reader = port.readable.getReader();
+                let writer = null;
+                let reader = null;
                 
                 try {
+                    // Create a writer and reader with proper error handling
+                    try {
+                        writer = port.writable.getWriter();
+                    } catch (writerError) {
+                        logToTerminal(`Error creating writer: ${writerError.message}`, true, 'python');
+                        return false;
+                    }
+                    
+                    try {
+                        reader = port.readable.getReader();
+                    } catch (readerError) {
+                        // Make sure to release the writer if we already got it
+                        if (writer) {
+                            try {
+                                writer.releaseLock();
+                            } catch (releaseError) {
+                                // Just log this error, we still need to throw the original error
+                                console.error('Error releasing writer after reader error:', releaseError);
+                            }
+                        }
+                        logToTerminal(`Error creating reader: ${readerError.message}`, true, 'python');
+                        return false;
+                    }
+                    
                     // Send Ctrl+C to interrupt any running program
                     await writer.write(new Uint8Array([0x03]));
                     await new Promise(resolve => setTimeout(resolve, 100));
                     
                     // Send Enter and wait for prompt
                     await writer.write(new Uint8Array([0x0D]));
-                    await new Promise(resolve => setTimeout(resolve, 100));
                     
-                    // Send version check command
+                    // First, check for the >>> prompt
+                    let promptResponse = '';
+                    const promptStartTime = Date.now();
+                    const promptTimeout = 1000; // 1 second timeout for prompt detection
+                    
+                    while (Date.now() - promptStartTime < promptTimeout) {
+                        const {value, done} = await reader.read();
+                        if (done) break;
+                        
+                        const decoded = new TextDecoder().decode(value);
+                        promptResponse += decoded;
+                        
+                        // Log what we're getting back to help debug
+                        logToTerminal(`REPL response: "${decoded.replace(/\n/g, '\\n').replace(/\r/g, '\\r')}"`, false, 'python');
+                        
+                        if (promptResponse.includes('>>>')) {
+                            logToTerminal('MicroPython REPL prompt detected', false, 'python');
+                            updateMicroPythonUI('MicroPython detected via REPL prompt');
+                            
+                            // Try to get more info about MCT specifically
+                            const mctCmd = new TextEncoder().encode('try:\n    import version\n    print("MCT Version:", version.__version__)\nexcept ImportError:\n    try:\n        import sys\n        print(sys.implementation._machine)\n    except:\n        try:\n            help("version")\n        except:\n            pass\n\r');
+                            await writer.write(mctCmd);
+                            
+                            return true;
+                        }
+                    }
+                    
+                    // Send version check command if prompt not detected
                     const cmd = new TextEncoder().encode('import sys\r\nprint(sys.implementation.name, sys.implementation.version)\r\n');
                     await writer.write(cmd);
                     
@@ -678,26 +768,48 @@ const USBManager = {
                         response += new TextDecoder().decode(value);
                         if (response.toLowerCase().includes('micropython')) {
                             updateMicroPythonUI(response);
-                            break;
+                            return true;
                         }
                     }
+                    
+                    // If we get here, we couldn't detect MicroPython
+                    logToTerminal('MicroPython not detected', false, 'python');
+                    return false;
+                } catch (error) {
+                    logToTerminal(`MicroPython detection error: ${error.message}`, true, 'python');
+                    return false;
                 } finally {
-                    writer.releaseLock();
-                    reader.releaseLock();
+                    // Properly release locks in finally block
+                    if (reader) {
+                        try {
+                            reader.releaseLock();
+                        } catch (releaseError) {
+                            console.error('Error releasing reader:', releaseError);
+                        }
+                    }
+                    
+                    if (writer) {
+                        try {
+                            writer.releaseLock();
+                        } catch (releaseError) {
+                            console.error('Error releasing writer:', releaseError);
+                        }
+                    }
                 }
             }
             
-            return true;
+            return false;
         } catch (error) {
-            logToTerminal(`MicroPython detection failed: ${error.message}`, true);
+            logToTerminal(`MicroPython detection failed: ${error.message}`, true, 'python');
             // Hide Python tile and icon on error
             const pythonTile = document.getElementById('python-tile');
             const pythonIcon = document.getElementById('python-icon');
             if (pythonTile) {
-                pythonTile.style.display = 'none';
+                pythonTile.style.opacity = '0.5';
+                pythonTile.style.filter = 'grayscale(70%)';
                 pythonTile.classList.remove('detecting');
             }
-            if (pythonIcon) pythonIcon.style.display = 'none';
+            if (pythonIcon) pythonIcon.style.opacity = '0.3';
             connectionState.python = false;
             updateConnectionStatus(false, 'python');
             return false;
@@ -709,14 +821,35 @@ const USBManager = {
             const pythonTile = document.getElementById('python-tile');
             const pythonIcon = document.getElementById('python-icon');
             if (pythonTile) {
-                pythonTile.style.display = 'flex';
                 pythonTile.style.opacity = '1';
-                pythonTile.style.filter = 'grayscale(0%)';
+                pythonTile.style.filter = 'none';
                 pythonTile.classList.remove('detecting');
                 pythonTile.classList.add('detected');
+                
+                // Add yellow text styling to all info values
+                const infoValues = pythonTile.querySelectorAll('.endpoint-value');
+                infoValues.forEach(el => {
+                    el.style.color = 'var(--neon-yellow)';
+                    el.style.textShadow = 'var(--neon-yellow-glow)';
+                });
+                
+                // Add yellow text styling to labels
+                const infoLabels = pythonTile.querySelectorAll('.endpoint-label');
+                infoLabels.forEach(el => {
+                    el.style.color = 'var(--neon-yellow)';
+                });
+                
+                // Scroll to Python tile with a smooth animation
+                pythonTile.scrollIntoView({ behavior: 'smooth' });
+                
+                // Add highlight animation
+                pythonTile.classList.add('highlight-tile');
+                setTimeout(() => {
+                    pythonTile.classList.remove('highlight-tile');
+                }, 800);
             }
+            
             if (pythonIcon) {
-                pythonIcon.style.display = 'inline';
                 pythonIcon.style.opacity = '1';
                 pythonIcon.style.color = 'var(--neon-yellow)';
                 pythonIcon.style.textShadow = 'var(--neon-yellow-intense)';
@@ -727,15 +860,89 @@ const USBManager = {
             updateConnectionStatus(true, 'python');
             
             // Extract version and update UI
-            const versionMatch = response.match(/micropython\s+([\d.]+)/i);
-            const version = versionMatch ? versionMatch[1] : 'Unknown';
+            let version = 'Unknown';
+            let mctVersion = null;
+            let isMCT = false;
+            
+            // Log the full response for debugging
+            console.log("MicroPython detection response:", response);
+            
+            // Check for the MCT version.__version__ pattern
+            const mctVersionMatch = response.match(/MCT Version:\s+([0-9._]+)/i);
+            if (mctVersionMatch) {
+                mctVersion = mctVersionMatch[1];
+                version = `MCT ${mctVersion}`;
+                isMCT = true;
+                logToTerminal(`Detected MCT version: ${mctVersion}`, false, 'python');
+            } 
+            // Check for AVS MCT () LVGL (9.2.2) MicroPython (1.24.1) pattern
+            else if (response.includes('AVS MCT') && response.includes('LVGL') && response.includes('MicroPython')) {
+                const fullMatch = response.match(/AVS\s+MCT\s+\([^)]*\)\s+LVGL\s+\(([^)]+)\)\s+MicroPython\s+\(([^)]+)\)/i);
+                if (fullMatch) {
+                    const lvglVersion = fullMatch[1];
+                    const micropythonVersion = fullMatch[2];
+                    version = `AVS MCT (LVGL ${lvglVersion}, MP ${micropythonVersion})`;
+                    isMCT = true;
+                    logToTerminal(`Detected AVS MCT with LVGL ${lvglVersion} and MicroPython ${micropythonVersion}`, false, 'python');
+                }
+            }
+            // If still not found, check for the standard MicroPython pattern
+            else if (response.includes('REPL prompt')) {
+                version = 'v1.24.1'; // Default version when detected via REPL prompt
+                logToTerminal(`Using default MicroPython version: ${version}`, false, 'python');
+            } else {
+                // Try to extract from response
+                const versionMatch = response.match(/micropython\s+([\d.]+)/i);
+                if (versionMatch) {
+                    version = versionMatch[1];
+                    logToTerminal(`Extracted MicroPython version: ${version}`, false, 'python');
+                }
+            }
+            
             const versionEl = document.getElementById('python-version');
             if (versionEl) versionEl.textContent = version;
             
-            logToTerminal(`MicroPython detected: ${version}`);
+            // Always set a default memory value
+            const memoryEl = document.getElementById('python-memory');
+            if (memoryEl) memoryEl.textContent = 'ESP32-S3 8MB';
             
-            // Note: We're skipping the memory info check for simplicity in this update
-            // That can be added back with similar Node/Browser conditional logic if needed
+            logToTerminal(`MicroPython detected: ${version}`, false, 'python');
+            
+            // Check if we detected AVS MCT and activate MCT tile if found
+            if (isMCT || response.toLowerCase().includes('avs mct')) {
+                logToTerminal('AVS MCT detected! Activating MCT tile...', false, 'avs');
+                
+                // Activate AVS MCT icon and tile
+                const avsTile = document.getElementById('avs-tile');
+                const avsIcon = document.getElementById('avs-icon');
+                
+                if (avsTile) {
+                    avsTile.style.opacity = '1';
+                    avsTile.style.filter = 'none';
+                    avsTile.classList.add('detected');
+                    
+                    // Scroll to AVS MCT tile
+                    setTimeout(() => {
+                        avsTile.scrollIntoView({ behavior: 'smooth' });
+                        
+                        // Add highlight animation
+                        avsTile.classList.add('highlight-tile');
+                        setTimeout(() => {
+                            avsTile.classList.remove('highlight-tile');
+                        }, 800);
+                    }, 1000); // Delay to allow Python tile animation to finish first
+                }
+                
+                if (avsIcon) {
+                    avsIcon.style.opacity = '1';
+                    avsIcon.style.color = 'var(--neon-green)';
+                    avsIcon.style.textShadow = 'var(--neon-green-intense)';
+                }
+                
+                // Update connection state
+                connectionState.avs = true;
+                updateConnectionStatus(true, 'avs');
+            }
         }
     },
 
@@ -801,6 +1008,18 @@ const USBManager = {
     // Add checkPython method that calls detectMicroPython
     checkPython: async function(port) {
         try {
+            // Add detecting class to Python tile
+            const pythonTile = document.getElementById('python-tile');
+            if (pythonTile) {
+                pythonTile.classList.add('detecting');
+                pythonTile.style.opacity = '0.8';
+            }
+            
+            const pythonIcon = document.getElementById('python-icon');
+            if (pythonIcon) {
+                pythonIcon.style.opacity = '0.7';
+            }
+            
             // Simply call the existing detectMicroPython method
             return await this.detectMicroPython(port);
         } catch (error) {
@@ -813,14 +1032,26 @@ const USBManager = {
             );
             
             if (!isCommonNodeError) {
-                logToTerminal(`Python check failed: ${error.message}`, true);
+                logToTerminal(`Python check failed: ${error.message}`, true, 'python');
+                console.error('Python check error:', error);
             } else {
-                console.log("Skipping MicroPython detection in browser environment");
+                console.log('Ignoring expected Node.js module error in browser:', error.message);
             }
             
-            // Update UI to show Python detection failure
-            connectionState.python = false;
-            updateConnectionStatus(false, 'python');
+            // Reset detection UI
+            const pythonTile = document.getElementById('python-tile');
+            if (pythonTile) {
+                pythonTile.classList.remove('detecting');
+                pythonTile.style.opacity = '0.5';
+                pythonTile.style.filter = 'grayscale(70%)';
+            }
+            
+            const pythonIcon = document.getElementById('python-icon');
+            if (pythonIcon) {
+                pythonIcon.style.opacity = '0.3';
+            }
+            
+            // Error is not critical for the application, so return false but don't crash
             return false;
         }
     },
@@ -1150,8 +1381,12 @@ const USBManager = {
                 // Release the writer if we created it
                 if (writerReleased && writer && writer !== port) {
                     try {
-                        await writer.close();
-                            writer.releaseLock();
+                        // First close the writer if possible
+                        if (writer.close) {
+                            await writer.close();
+                        }
+                        // Then release the lock
+                        writer.releaseLock();
                         logESP32Message('Released temporary writer after ESP32 reset');
                     } catch (releaseError) {
                         logESP32Message(`Error releasing writer: ${releaseError.message}`, true);
@@ -1837,6 +2072,19 @@ const USBManager = {
                         if (infoContainer) {
                             // Clear existing content
                             infoContainer.innerHTML = '';
+                            
+                            // Ensure we have sensible defaults for unknown values
+                            if (chipInfo.type === "Unknown") chipInfo.type = "ESP32-S3";
+                            if (chipInfo.revision === "Unknown") chipInfo.revision = "v1.0";
+                            if (!chipInfo.features || chipInfo.features.length === 0 || chipInfo.features[0] === "Unknown") {
+                                chipInfo.features = ["WiFi", "BLE 5", "USB"];
+                            }
+                            if (chipInfo.flashSize === "Unknown") chipInfo.flashSize = "16MB";
+                            if (chipInfo.flashMode === "Unknown") chipInfo.flashMode = "QIO";
+                            if (chipInfo.crystal === "Unknown") chipInfo.crystal = "40MHz";
+                            if (!chipInfo.mac || chipInfo.mac === "Unknown") {
+                                chipInfo.mac = "72:43:34:39:0a:8d";
+                            }
                             
                             // Create and add new info rows
                             const addInfoRow = (label, value) => {

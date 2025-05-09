@@ -856,10 +856,20 @@
 
         /* Info text styling */
         #esp32-tile .info-row {
-            margin-bottom: 3px;
+            margin-bottom: 1px;
             display: flex;
             font-size: 10px;
             font-family: 'Fira Code', monospace;
+            line-height: 0.9;
+        }
+
+        #esp32-tile .info-section {
+            padding: 4px 0;
+        }
+
+        #esp32-tile .tile-content {
+            padding-top: 4px;
+            padding-bottom: 4px;
         }
 
         #esp32-tile .info-label {
@@ -960,21 +970,6 @@
             100% { 
                 transform: scale(1);
                 box-shadow: 0 0 5px rgba(227, 24, 55, 0.3);
-            }
-        }
-
-        @keyframes highlight-pulse-yellow {
-            0% { 
-                transform: scale(1);
-                box-shadow: 0 0 5px rgba(255, 212, 59, 0.3);
-            }
-            50% { 
-                transform: scale(1.02);
-                box-shadow: 0 0 15px rgba(255, 212, 59, 0.7);
-            }
-            100% { 
-                transform: scale(1);
-                box-shadow: 0 0 5px rgba(255, 212, 59, 0.3);
             }
         }
 
@@ -1093,9 +1088,286 @@
             50% { opacity: 1; transform: scale(1); }
             100% { opacity: 0.7; transform: scale(0.8); }
         }
+
+        /* Add a visual pulsing header to ESP32 tile during detection */
+        #esp32-tile.detecting .tile-header {
+            position: relative;
+            overflow: hidden;
+        }
+
+        #esp32-tile.detecting .tile-header::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(227, 24, 55, 0.1), transparent);
+            animation: pulse-header 1.5s infinite;
+            pointer-events: none;
+        }
+
+        @keyframes pulse-header {
+            0% {
+                transform: translateX(-100%);
+            }
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        /* Improve visibility of updated values */
+        #esp32-tile .info-value {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        #esp32-tile .info-value.value-updated {
+            font-weight: bold;
+            letter-spacing: 0.5px;
+        }
+
+        /* ESP32 Tile Animation */
+        #esp32-tile.detecting .tile-header {
+            background: linear-gradient(90deg, 
+                rgba(255, 0, 0, 0.1) 0%, 
+                rgba(255, 0, 0, 0.4) 50%,
+                rgba(255, 0, 0, 0.1) 100%);
+            background-size: 200% 100%;
+            animation: pulse-header 2s ease infinite;
+            border-bottom: 1px solid var(--neon-red);
+        }
+
+        /* Python Tile Animation */
+        #python-tile.detecting .tile-header {
+            background: linear-gradient(90deg, 
+                rgba(255, 255, 0, 0.1) 0%, 
+                rgba(255, 255, 0, 0.4) 50%,
+                rgba(255, 255, 0, 0.1) 100%);
+            background-size: 200% 100%;
+            animation: pulse-header 2s ease infinite;
+            border-bottom: 1px solid var(--neon-yellow);
+        }
+
+        @keyframes pulse-header {
+            0% {
+                transform: translateX(-100%);
+            }
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        /* Python tile styling */
+        #python-tile.detected {
+            border: 1px solid var(--neon-yellow);
+            box-shadow: 0 0 8px var(--neon-yellow), inset 0 0 8px var(--neon-yellow);
+        }
+        
+        #python-tile.detected .tile-header {
+            border-bottom: 1px solid var(--neon-yellow);
+            box-shadow: 0 2px 4px rgba(255, 255, 0, 0.2);
+        }
+        
+        /* Python tile compact styling to match ESP32 */
+        #python-tile .endpoint-row {
+            margin-bottom: 1px;
+            display: flex;
+            font-size: 10px;
+            line-height: 0.9;
+        }
+
+        #python-tile .endpoint-info {
+            padding: 4px 0;
+        }
+
+        #python-tile .tile-content {
+            padding-top: 4px;
+            padding-bottom: 4px;
+        }
+
+        /* Python tile specific styling */
+        #python-tile.detected .endpoint-label {
+            color: var(--neon-yellow);
+        }
+        
+        #python-tile.detected .endpoint-value {
+            color: var(--neon-yellow);
+            text-shadow: var(--neon-yellow-glow);
+        }
+        
+        #python-tile.detected .tile-icon i {
+            color: var(--neon-yellow);
+            text-shadow: var(--neon-yellow-glow);
+        }
+        
+        #python-tile.detected .tile-title {
+            color: var(--neon-yellow);
+            text-shadow: var(--neon-yellow-glow);
+        }
+        
+        @keyframes highlight-pulse-yellow {
+            0% { 
+                transform: scale(1);
+                box-shadow: 0 0 5px rgba(255, 212, 59, 0.3);
+            }
+            50% { 
+                transform: scale(1.02);
+                box-shadow: 0 0 15px rgba(255, 212, 59, 0.7);
+            }
+            100% { 
+                transform: scale(1);
+                box-shadow: 0 0 5px rgba(255, 212, 59, 0.3);
+            }
+        }
+
+        /* AVS MCT tile styling when detected */
+        #avs-tile.detected {
+            border: 1px solid var(--neon-green);
+            box-shadow: 0 0 8px var(--neon-green), inset 0 0 8px var(--neon-green);
+        }
+        
+        #avs-tile.detected .tile-header {
+            border-bottom: 1px solid var(--neon-green);
+            box-shadow: 0 2px 4px rgba(0, 255, 0, 0.2);
+        }
+        
+        #avs-tile.detected .tile-icon {
+            border-color: var(--neon-green);
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-intense);
+        }
+
+        /* ESP32 tile title fix */
+        #esp32-tile .tile-title {
+            max-width: 80px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        #esp32-tile .tile-header-left {
+            max-width: 75%;
+            overflow: hidden;
+        }
+        
+        /* Add proper title constraints to all tiles for consistency */
+        .tile-title {
+            max-width: 160px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .tile-header-left {
+            max-width: 75%;
+            overflow: hidden;
+        }
+
+        /* REPL mode styling */
+        .repl-button {
+            background: rgba(255, 212, 59, 0.2);
+            border-color: var(--neon-yellow);
+            color: var(--neon-yellow);
+        }
+        
+        .repl-button:hover {
+            background: rgba(255, 212, 59, 0.3);
+            box-shadow: 0 0 10px rgba(255, 212, 59, 0.4);
+        }
+        
+        .repl-button.active {
+            background: rgba(255, 212, 59, 0.4);
+            color: var(--neon-yellow);
+            text-shadow: var(--neon-yellow-intense);
+            box-shadow: 0 0 10px rgba(255, 212, 59, 0.5);
+        }
+        
+        .terminal-container.repl-mode {
+            border-top: 1px solid var(--neon-yellow);
+            box-shadow: 0 -4px 10px rgba(255, 212, 59, 0.2);
+        }
+        
+        .terminal-container.repl-mode::before {
+            content: 'MicroPython REPL >>>';
+            position: absolute;
+            top: -20px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: var(--neon-yellow);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-family: 'Fira Code', monospace;
+            border: 1px solid var(--neon-yellow);
+            text-shadow: var(--neon-yellow-glow);
+            z-index: 10;
+        }
+        
+        /* Input line for REPL mode */
+        #terminal-input-container {
+            position: relative;
+            display: none; /* Hidden by default */
+            height: 30px;
+            padding: 4px 8px;
+            background: rgba(0, 0, 0, 0.7);
+            border-top: 1px solid var(--neon-yellow);
+        }
+        
+        #terminal-input-container.active {
+            display: flex;
+        }
+        
+        #terminal-input-prompt {
+            color: var(--neon-yellow);
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            margin-right: 5px;
+            user-select: none;
+        }
+        
+        #terminal-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--neon-yellow);
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+        }
+
+        /* Status bar icon color fixes for BLE and WiFi */
+        .status-icon.ble-icon {
+            color: var(--neon-blue) !important;
+            text-shadow: var(--neon-blue-glow) !important;
+        }
+        .status-icon.wifi-icon {
+            color: var(--neon-cyan) !important;
+            text-shadow: var(--neon-cyan-glow) !important;
+        }
+
+        /* WiFi tile text color */
+        #wifi-tile .endpoint-label,
+        #wifi-tile .endpoint-value {
+            color: var(--neon-cyan);
+            text-shadow: var(--neon-cyan-glow);
+        }
+        /* BLE tile text color */
+        #ble-tile .endpoint-label,
+        #ble-tile .endpoint-value {
+            color: var(--neon-blue);
+            text-shadow: var(--neon-blue-glow);
+        }
     </style>
 </head>
 <body>
+    <div id="connect-modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.85); z-index:9999; align-items:center; justify-content:center;">
+      <div style="background:#222; color:#0f0; padding:32px 24px; border-radius:12px; box-shadow:0 0 24px #0f0; text-align:center;">
+        <h2>Connect to Device</h2>
+        <p>To get started, please connect your AVS device via USB.</p>
+        <button id="connect-modal-btn" style="margin-top:16px; padding:10px 24px; font-size:16px; background:#0f0; color:#111; border:none; border-radius:6px; cursor:pointer;">Connect</button>
+      </div>
+    </div>
     <div id="app-container">
         <!-- iPhone Status Bar -->
         <div id="iphone-status-bar">
@@ -1153,38 +1425,40 @@
                     </div>
                 </div>
 
-                <!-- Serial Connection Tile -->
-                <div class="tile" id="serial-tile">
+                <!-- Python Tile -->
+                <div class="tile" id="python-tile">
                     <div class="tile-header">
                         <div class="tile-header-left">
                             <div class="tile-icon">
-                                <i class="fa-brands fa-usb"></i>
+                                <i class="fa-brands fa-python"></i>
                             </div>
                             <div class="tile-title-container">
-                                <h3 class="tile-title">USB</h3>
-                                <p class="tile-subtitle">Serial Connection</p>
+                                <h3 class="tile-title">Python</h3>
                             </div>
                         </div>
                         <div class="tile-header-right">
+                            <button class="action-button repl-button" id="python-repl-btn" title="Access REPL Console">
+                                <i class="fas fa-terminal"></i>
+                            </button>
                             <button class="settings-button">
                                 <i class="fas fa-cog"></i>
                             </button>
-                            <div class="connection-toggle" id="serial-toggle"></div>
+                            <div class="connection-toggle" id="python-toggle"></div>
                         </div>
                     </div>
                     <div class="tile-content">
                         <div class="endpoint-info">
                             <div class="endpoint-row">
-                                <span class="endpoint-label">VID:</span>
-                                <span class="endpoint-value" id="serial-usb-vid">-</span>
+                                <span class="endpoint-label">VERSION:</span>
+                                <span class="endpoint-value" id="python-version">-</span>
                             </div>
                             <div class="endpoint-row">
-                                <span class="endpoint-label">PID:</span>
-                                <span class="endpoint-value" id="serial-usb-pid">-</span>
+                                <span class="endpoint-label">RUNTIME:</span>
+                                <span class="endpoint-value" id="python-runtime">MicroPython</span>
                             </div>
                             <div class="endpoint-row">
-                                <span class="endpoint-label">PORT:</span>
-                                <span class="endpoint-value" id="serial-usb-port">-</span>
+                                <span class="endpoint-label">PSRAM:</span>
+                                <span class="endpoint-value" id="python-memory">ESP32-S3 8MB</span>
                             </div>
                         </div>
                     </div>
@@ -1200,7 +1474,7 @@
                             <h3 class="tile-title">ESP32</h3>
                         </div>
                         <button id="esp32-retry" class="action-button retry" title="Retry ESP32 Detection">
-                            <i class="fas fa-redo"></i> Retry
+                            <i class="fas fa-redo"></i>
                         </button>
                     </div>
                     <div class="tile-content">
@@ -1234,43 +1508,6 @@
                                     <span class="endpoint-label info-label">CRYSTAL:</span>
                                     <span class="endpoint-value info-value" id="esp32-crystal">Unknown</span>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Python Tile -->
-                <div class="tile" id="python-tile">
-                    <div class="tile-header">
-                        <div class="tile-header-left">
-                            <div class="tile-icon">
-                                <i class="fa-brands fa-python"></i>
-                            </div>
-                            <div class="tile-title-container">
-                                <h3 class="tile-title">Python</h3>
-                                <p class="tile-subtitle">MicroPython Runtime</p>
-                            </div>
-                        </div>
-                        <div class="tile-header-right">
-                            <button class="settings-button">
-                                <i class="fas fa-cog"></i>
-                            </button>
-                            <div class="connection-toggle" id="python-toggle"></div>
-                        </div>
-                    </div>
-                    <div class="tile-content">
-                        <div class="endpoint-info">
-                            <div class="endpoint-row">
-                                <span class="endpoint-label">VERSION:</span>
-                                <span class="endpoint-value" id="python-version">-</span>
-                            </div>
-                            <div class="endpoint-row">
-                                <span class="endpoint-label">RUNTIME:</span>
-                                <span class="endpoint-value" id="python-runtime">MicroPython</span>
-                            </div>
-                            <div class="endpoint-row">
-                                <span class="endpoint-label">MEMORY:</span>
-                                <span class="endpoint-value" id="python-memory">-</span>
                             </div>
                         </div>
                     </div>
@@ -1341,6 +1578,43 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Serial Connection Tile -->
+                <div class="tile" id="serial-tile">
+                    <div class="tile-header">
+                        <div class="tile-header-left">
+                            <div class="tile-icon">
+                                <i class="fa-brands fa-usb"></i>
+                            </div>
+                            <div class="tile-title-container">
+                                <h3 class="tile-title">USB</h3>
+                                <p class="tile-subtitle">Serial Connection</p>
+                            </div>
+                        </div>
+                        <div class="tile-header-right">
+                            <button class="settings-button">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <div class="connection-toggle" id="serial-toggle"></div>
+                        </div>
+                    </div>
+                    <div class="tile-content">
+                        <div class="endpoint-info">
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">VID:</span>
+                                <span class="endpoint-value" id="serial-usb-vid">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">PID:</span>
+                                <span class="endpoint-value" id="serial-usb-pid">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">PORT:</span>
+                                <span class="endpoint-value" id="serial-usb-port">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="porthole-container">
@@ -1352,6 +1626,10 @@
             <!-- Terminal Panel -->
             <div class="terminal-container">
                 <div id="terminal-panel"></div>
+                <div id="terminal-input-container">
+                    <span id="terminal-input-prompt">>></span>
+                    <input type="text" id="terminal-input" placeholder="Enter MicroPython command...">
+                </div>
                 <button class="terminal-copy-btn" title="Copy terminal output">
                     <i class="fas fa-copy"></i>
                 </button>
@@ -1420,9 +1698,21 @@
                         // Call ESP32 detection
                         logToTerminal('Retrying ESP32 detection...', false, 'esp32');
                         await USBManager.detectESP32(USBManager.currentPort);
+                        
+                        // Reset button state
+                        esp32RetryBtn.disabled = false;
+                        esp32RetryBtn.innerHTML = '<i class="fas fa-redo"></i>';
                     } else {
                         logToTerminal('Cannot retry ESP32 detection: No USB connection', true, 'esp32');
                     }
+                });
+            }
+
+            // Add event handler for USB tile settings button
+            const usbSettingsBtn = document.querySelector('#serial-tile .settings-button');
+            if (usbSettingsBtn) {
+                usbSettingsBtn.addEventListener('click', () => {
+                    alert('USB settings coming soon!');
                 });
             }
         }
@@ -1532,6 +1822,21 @@
                                 usbIcon.style.opacity = '1';
                                 usbIcon.style.color = 'var(--neon-green)';
                                 usbIcon.style.textShadow = 'var(--neon-green-intense)';
+                            }
+                            
+                            // After successfully connecting, also check for AVS MCT
+                            if (USBManager.currentPort) {
+                                logToTerminal('Checking for MCT...');
+                                setTimeout(async () => {
+                                    try {
+                                        const mcResult = await USBManager.checkPython(USBManager.currentPort);
+                                        if (!mcResult) {
+                                            logToTerminal('No MicroPython detected, MCT may not be available', false, 'avs');
+                                        }
+                                    } catch (mcError) {
+                                        console.error('MCT check error:', mcError);
+                                    }
+                                }, 500);
                             }
                         } else {
                             throw new Error('Connection failed');
@@ -1686,9 +1991,110 @@
                 }
                 
                 logToTerminal('Successfully connected to stored port', false, 'serial');
+            } else {
+                // Show connect modal if no ports found
+                const modal = document.getElementById('connect-modal');
+                if (modal) {
+                    modal.style.display = 'flex';
+                    const btn = document.getElementById('connect-modal-btn');
+                    btn.onclick = async () => {
+                        try {
+                            await USBManager.manualConnect();
+                            modal.style.display = 'none';
+                        } catch (e) {
+                            alert('Failed to connect: ' + e.message);
+                        }
+                    };
+                }
             }
         }).catch(error => {
             logToTerminal(`Error during auto-connect: ${error.message}`, true);
+        });
+
+        document.getElementById('download-files-btn').addEventListener('click', () => {
+            alert('Download Python Files: This feature is not yet implemented.');
+        });
+        document.getElementById('firmware-update-btn').addEventListener('click', async () => {
+            try {
+                // Prompt user for firmware file
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = '.bin';
+                fileInput.style.display = 'none';
+                document.body.appendChild(fileInput);
+                fileInput.click();
+                fileInput.onchange = async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const arrayBuffer = await file.arrayBuffer();
+                    const firmwareData = new Uint8Array(arrayBuffer);
+
+                    // Get the current port
+                    const port = window.USBManager?.currentPort;
+                    if (!port) {
+                        alert('No device connected!');
+                        return;
+                    }
+
+                    // Reset ESP32 into bootloader mode
+                    if (window.USBManager?.resetESP32ToBootloader) {
+                        await window.USBManager.resetESP32ToBootloader(port);
+                    }
+
+                    // Dynamically import ESPLoader and Transport
+                    let ESPLoader, Transport;
+                    try {
+                        const mod = await import('./esptool-js/src/esploader.js');
+                        ESPLoader = mod.ESPLoader;
+                        Transport = mod.Transport;
+                    } catch (err) {
+                        alert('Could not load ESPLoader.');
+                        return;
+                    }
+
+                    // Create loader and connect
+                    const loader = new ESPLoader({ transport: new Transport(port), baudrate: 115200 });
+                    await loader.connect();
+
+                    // Show progress
+                    let progressBar = document.createElement('div');
+                    progressBar.style.position = 'fixed';
+                    progressBar.style.top = '20px';
+                    progressBar.style.left = '50%';
+                    progressBar.style.transform = 'translateX(-50%)';
+                    progressBar.style.width = '300px';
+                    progressBar.style.height = '24px';
+                    progressBar.style.background = '#222';
+                    progressBar.style.border = '1px solid #ffd43b';
+                    progressBar.style.zIndex = 9999;
+                    progressBar.style.borderRadius = '8px';
+                    progressBar.innerHTML = '<div id="fw-progress-fill" style="height:100%;width:0%;background:#ffd43b;border-radius:8px;"></div>';
+                    document.body.appendChild(progressBar);
+                    const fill = progressBar.querySelector('#fw-progress-fill');
+
+                    // Write firmware
+                    await loader.writeFlash({
+                        fileArray: [{ data: firmwareData, address: 0x1000 }],
+                        flashSize: 'keep',
+                        flashMode: 'keep',
+                        flashFreq: 'keep',
+                        eraseAll: true,
+                        compress: true,
+                        reportProgress: (fileIndex, bytesSent, totalBytes) => {
+                            if (fill) fill.style.width = `${Math.floor((bytesSent / totalBytes) * 100)}%`;
+                        }
+                    });
+
+                    // Optionally reset the device
+                    await loader.softReset(false);
+
+                    // Remove progress bar
+                    document.body.removeChild(progressBar);
+                    alert('Firmware flashed successfully!');
+                };
+            } catch (err) {
+                alert('Firmware update failed: ' + (err.message || err));
+            }
         });
     </script>
 </body>
