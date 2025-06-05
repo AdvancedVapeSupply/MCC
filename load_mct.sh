@@ -116,7 +116,16 @@ echo_status "$BLUE" "Using REPL port: $REPL_PORT"
 # Ensure the device is in bootloader mode
 if [ -z "$BOOTLOADER_PORT" ]; then
     echo_status "$YELLOW" "Device not in bootloader mode, attempting to enter bootloader..."
-    mpremote connect "$REPL_PORT" bootloader
+    
+    # First try mpremote bootloader command
+    echo_status "$BLUE" "Using mpremote to enter bootloader..."
+    mpremote bootloader
+    sleep 2
+    
+    # Then try esptool
+    echo_status "$BLUE" "Using esptool to verify bootloader mode..."
+    esptool.py --chip esp32s3 --port "$REPL_PORT" --before no_reset --after no_reset chip_id
+    
     sleep 2
     DEVICE_INFO=$(mpremote devs)
     echo_status "$BLUE" "mpremote devs output after attempting bootloader entry:"

@@ -1358,6 +1358,20 @@
             color: var(--neon-blue);
             text-shadow: var(--neon-blue-glow);
         }
+
+        .action-button.connect-btn.active {
+            background: rgba(0,255,0,0.15);
+            color: var(--neon-green);
+            box-shadow: 0 0 8px 2px var(--neon-green);
+        }
+        .action-button.connect-btn.active i {
+            transform: rotate(90deg);
+            text-shadow: 0 0 8px var(--neon-green);
+            transition: transform 0.2s;
+        }
+        .action-button.connect-btn i {
+            transition: transform 0.2s;
+        }
     </style>
 </head>
 <body>
@@ -1422,6 +1436,28 @@
                         </div>
                     </div>
                     <div class="tile-content">
+                        <div class="small-tile-carousel">
+                            <div class="small-tile">
+                                <div class="tile-icon"><i class="fas fa-bolt"></i></div>
+                                <div class="tile-title" style="font-size:13px;text-align:center;margin-top:8px;">Power</div>
+                            </div>
+                            <div class="small-tile">
+                                <div class="tile-icon"><i class="fas fa-thermometer-half"></i></div>
+                                <div class="tile-title" style="font-size:13px;text-align:center;margin-top:8px;">Temp</div>
+                            </div>
+                            <div class="small-tile">
+                                <div class="tile-icon"><i class="fas fa-fan"></i></div>
+                                <div class="tile-title" style="font-size:13px;text-align:center;margin-top:8px;">Fan</div>
+                            </div>
+                            <div class="small-tile">
+                                <div class="tile-icon"><i class="fas fa-lightbulb"></i></div>
+                                <div class="tile-title" style="font-size:13px;text-align:center;margin-top:8px;">Light</div>
+                            </div>
+                            <div class="small-tile">
+                                <div class="tile-icon"><i class="fas fa-cog"></i></div>
+                                <div class="tile-title" style="font-size:13px;text-align:center;margin-top:8px;">Settings</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1526,6 +1562,12 @@
                             </div>
                         </div>
                         <div class="tile-header-right">
+                            <button class="action-button connect-btn" id="wifi-connect-btn" title="Connect/Disconnect WiFi">
+                                <i class="fas fa-plug"></i>
+                            </button>
+                            <button class="action-button" id="wifi-test-btn" title="Test WiFi Bandwidth">
+                                <i class="fas fa-wifi"></i>
+                            </button>
                             <button class="settings-button">
                                 <i class="fas fa-cog"></i>
                             </button>
@@ -1559,6 +1601,9 @@
                             </div>
                         </div>
                         <div class="tile-header-right">
+                            <button class="action-button connect-btn" id="ble-connect-btn" title="Connect/Disconnect Bluetooth">
+                                <i class="fas fa-plug"></i>
+                            </button>
                             <button class="settings-button">
                                 <i class="fas fa-cog"></i>
                             </button>
@@ -1592,6 +1637,9 @@
                             </div>
                         </div>
                         <div class="tile-header-right">
+                            <button class="action-button connect-btn" id="serial-connect-btn" title="Connect/Disconnect USB">
+                                <i class="fas fa-plug"></i>
+                            </button>
                             <button class="settings-button">
                                 <i class="fas fa-cog"></i>
                             </button>
@@ -1663,12 +1711,21 @@
             const esp32Icon = document.getElementById('esp32-icon');
             const pythonTile = document.getElementById('python-tile');
             const pythonIcon = document.getElementById('python-icon');
-            
+            const wifiIcon = document.getElementById('wifi-icon');
+            const bleIcon = document.getElementById('ble-icon');
+
             if (esp32Tile) esp32Tile.style.opacity = '0.5';
             if (esp32Icon) esp32Icon.style.opacity = '0.3';
             if (pythonTile) pythonTile.style.opacity = '0.5';
             if (pythonIcon) pythonIcon.style.opacity = '0.3';
-            
+            if (wifiIcon) {
+                wifiIcon.classList.remove('connected');
+                wifiIcon.style.opacity = '0.3';
+            }
+            if (bleIcon) {
+                bleIcon.classList.remove('connected');
+                bleIcon.style.opacity = '0.3';
+            }
             // Set up status bar icon click handlers
             setupStatusIconClickHandlers();
             
@@ -1726,7 +1783,7 @@
                 '.status-icon.usb-icon': '#usb-tile',
                 '.status-icon.esp32-icon': '#esp32-tile',
                 '.status-icon.python-icon': '#python-tile',
-                '.status-icon.avs-icon': '#avs-mcc-tile',
+                '.status-icon.avs-icon': '#avs-tile',
                 '.status-icon.battery-icon': '#battery-tile' // If you have a battery tile
             };
 
@@ -1823,6 +1880,15 @@
                                 usbIcon.style.color = 'var(--neon-green)';
                                 usbIcon.style.textShadow = 'var(--neon-green-intense)';
                             }
+                            
+                            // Before ESP32 detection (after port open):
+                            updateConnectionStatus(true, 'usb');
+                            // ... ESP32 detection logic ...
+                            // Before Python detection (if separate):
+                            updateConnectionStatus(true, 'usb');
+                            // ... Python detection logic ...
+                            // After disconnect/cleanup/close:
+                            updateConnectionStatus(false, 'usb');
                             
                             // After successfully connecting, also check for AVS MCT
                             if (USBManager.currentPort) {
@@ -1973,7 +2039,7 @@
         });
 
         // Initialize serial manager - do this only once
-        USBManager.autoConnectToStoredPorts().then(connected => {
+        USBManager.autoConnectToStoredPorts().then(async (connected) => {
             if (connected) {
                 // Make sure USB icon is properly lit
                 const usbIcon = document.getElementById('usb-icon');
@@ -1991,6 +2057,28 @@
                 }
                 
                 logToTerminal('Successfully connected to stored port', false, 'serial');
+                // After ESP32 detection, disconnect the port
+                if (USBManager.currentPort) {
+                    try {
+                        await USBManager.cleanupPort(USBManager.currentPort);
+                        await USBManager.currentPort.close();
+                        logToTerminal('Port disconnected after ESP32 detection', false, 'serial');
+                        updateConnectionStatus(false, 'serial');
+                    } catch (e) {
+                        logToTerminal('Error disconnecting port after ESP32 detection: ' + (e.message || e), true, 'serial');
+                    }
+                }
+                // After ESP32 and Python detection, disconnect the port
+                if (USBManager.currentPort) {
+                    try {
+                        await USBManager.cleanupPort(USBManager.currentPort);
+                        await USBManager.currentPort.close();
+                        logToTerminal('Port disconnected after Python check', false, 'serial');
+                        updateConnectionStatus(false, 'serial');
+                    } catch (e) {
+                        logToTerminal('Error disconnecting port after Python check: ' + (e.message || e), true, 'serial');
+                    }
+                }
             } else {
                 // Show connect modal if no ports found
                 const modal = document.getElementById('connect-modal');
@@ -2015,86 +2103,197 @@
             alert('Download Python Files: This feature is not yet implemented.');
         });
         document.getElementById('firmware-update-btn').addEventListener('click', async () => {
-            try {
-                // Prompt user for firmware file
-                const fileInput = document.createElement('input');
-                fileInput.type = 'file';
-                fileInput.accept = '.bin';
-                fileInput.style.display = 'none';
-                document.body.appendChild(fileInput);
-                fileInput.click();
-                fileInput.onchange = async (e) => {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    const arrayBuffer = await file.arrayBuffer();
-                    const firmwareData = new Uint8Array(arrayBuffer);
-
-                    // Get the current port
-                    const port = window.USBManager?.currentPort;
-                    if (!port) {
-                        alert('No device connected!');
-                        return;
-                    }
-
-                    // Reset ESP32 into bootloader mode
-                    if (window.USBManager?.resetESP32ToBootloader) {
-                        await window.USBManager.resetESP32ToBootloader(port);
-                    }
-
-                    // Dynamically import ESPLoader and Transport
-                    let ESPLoader, Transport;
-                    try {
-                        const mod = await import('./esptool-js/src/esploader.js');
-                        ESPLoader = mod.ESPLoader;
-                        Transport = mod.Transport;
-                    } catch (err) {
-                        alert('Could not load ESPLoader.');
-                        return;
-                    }
-
-                    // Create loader and connect
-                    const loader = new ESPLoader({ transport: new Transport(port), baudrate: 115200 });
-                    await loader.connect();
-
-                    // Show progress
-                    let progressBar = document.createElement('div');
-                    progressBar.style.position = 'fixed';
-                    progressBar.style.top = '20px';
-                    progressBar.style.left = '50%';
-                    progressBar.style.transform = 'translateX(-50%)';
-                    progressBar.style.width = '300px';
-                    progressBar.style.height = '24px';
-                    progressBar.style.background = '#222';
-                    progressBar.style.border = '1px solid #ffd43b';
-                    progressBar.style.zIndex = 9999;
-                    progressBar.style.borderRadius = '8px';
-                    progressBar.innerHTML = '<div id="fw-progress-fill" style="height:100%;width:0%;background:#ffd43b;border-radius:8px;"></div>';
-                    document.body.appendChild(progressBar);
-                    const fill = progressBar.querySelector('#fw-progress-fill');
-
-                    // Write firmware
-                    await loader.writeFlash({
-                        fileArray: [{ data: firmwareData, address: 0x1000 }],
-                        flashSize: 'keep',
-                        flashMode: 'keep',
-                        flashFreq: 'keep',
-                        eraseAll: true,
-                        compress: true,
-                        reportProgress: (fileIndex, bytesSent, totalBytes) => {
-                            if (fill) fill.style.width = `${Math.floor((bytesSent / totalBytes) * 100)}%`;
-                        }
-                    });
-
-                    // Optionally reset the device
-                    await loader.softReset(false);
-
-                    // Remove progress bar
-                    document.body.removeChild(progressBar);
-                    alert('Firmware flashed successfully!');
-                };
-            } catch (err) {
-                alert('Firmware update failed: ' + (err.message || err));
+            let port = window.USBManager?.currentPort;
+            if (port) {
+                try { await window.USBManager.cleanupPort(port); } catch (e) {}
+                try { await port.close(); } catch (e) {}
+                window.USBManager.currentPort = null;
+                if (window.activePort) window.activePort = null;
             }
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const openPorts = await navigator.serial.getPorts();
+            if (openPorts.length > 0) {
+                alert('A serial port is still open. Please close all serial connections or reload the page before flashing.');
+                return;
+            }
+            window.open('esptool.html', '_blank');
+        });
+
+        // --- Modal Color Picker for MCT ---
+        // Add modal HTML to the body if not present
+        if (!document.getElementById('mod-color-modal')) {
+            const modal = document.createElement('div');
+            modal.id = 'mod-color-modal';
+            modal.style.display = 'none';
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100vw';
+            modal.style.height = '100vh';
+            modal.style.background = 'rgba(0,0,0,0.7)';
+            modal.style.zIndex = '10001';
+            modal.style.justifyContent = 'center';
+            modal.style.alignItems = 'center';
+            modal.innerHTML = `
+              <div id="mod-color-modal-content" style="background:#222;padding:32px 24px;border-radius:16px;box-shadow:0 0 32px var(--mod-color,#0f0);display:flex;flex-direction:column;align-items:center;">
+                <label style="color:var(--mod-color,#0f0);font-size:18px;margin-bottom:12px;">Pick Mod Color</label>
+                <input type="color" id="mod-color-picker" style="width:80px;height:80px;border:none;box-shadow:0 0 16px var(--mod-color,#0f0);margin-bottom:16px;">
+                <button id="mod-color-close" style="padding:8px 24px;border-radius:8px;background:var(--mod-color,#0f0);color:#111;font-weight:bold;border:none;cursor:pointer;">Close</button>
+              </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        const modColorModal = document.getElementById('mod-color-modal');
+        const modColorPicker = document.getElementById('mod-color-picker');
+        const modColorClose = document.getElementById('mod-color-close');
+        // Set initial value
+        modColorPicker.value = localStorage.getItem('modColor') || '#00ff00';
+        // Show modal on settings click
+        const avsSettingsBtn = document.querySelector('#avs-tile .settings-button');
+        if (avsSettingsBtn) {
+            avsSettingsBtn.addEventListener('click', () => {
+                modColorModal.style.display = 'flex';
+                modColorPicker.focus();
+            });
+        }
+        // Hide modal on close or backdrop click
+        modColorClose.addEventListener('click', () => { modColorModal.style.display = 'none'; });
+        modColorModal.addEventListener('click', (e) => {
+            if (e.target === modColorModal) modColorModal.style.display = 'none';
+        });
+        // Update color on input
+        modColorPicker.addEventListener('input', (e) => {
+            const color = e.target.value;
+            document.documentElement.style.setProperty('--mod-color', color);
+            localStorage.setItem('modColor', color);
+            const avsTile = document.getElementById('avs-tile');
+            if (avsTile) {
+                avsTile.style.boxShadow = `0 0 16px 4px ${color}, 0 0 32px 8px ${color}55`;
+                avsTile.style.borderColor = color;
+            }
+            // Send color to 3D portal iframe (mct.html) if ready
+            const portalIframe = document.querySelector('#canvas-container iframe');
+            if (mctReady && portalIframe && portalIframe.contentWindow) {
+                console.log('[MCC] Sending color to mct:', color);
+                portalIframe.contentWindow.postMessage({ type: 'set-mct-color', color }, '*');
+            } else {
+                console.log('[MCC] mct.html not ready, not sending color');
+            }
+        });
+        // On page load, apply the saved mod color
+        const savedModColor = localStorage.getItem('modColor');
+        if (savedModColor) {
+            document.documentElement.style.setProperty('--mod-color', savedModColor);
+            const avsTile = document.getElementById('avs-tile');
+            if (avsTile) {
+                avsTile.style.boxShadow = `0 0 16px 4px ${savedModColor}, 0 0 32px 8px ${savedModColor}55`;
+                avsTile.style.borderColor = savedModColor;
+            }
+        }
+        // --- Improved WiFi Test Button Logic ---
+        document.getElementById('wifi-test-btn').addEventListener('click', async () => {
+            // Only allow if Python tile is active
+            const pythonTile = document.getElementById('python-tile');
+            if (!pythonTile || !pythonTile.classList.contains('detected')) {
+                alert('Please connect to MicroPython (Python tile must be active) before running the WiFi test.');
+                return;
+            }
+            // Use the same port as Python tile
+            const port = window.USBManager?.currentPort;
+            if (!port) {
+                alert('No device connected! Please reconnect using the Python tile.');
+                return;
+            }
+            // Prompt for WiFi credentials
+            const ssid = prompt('Enter WiFi SSID:');
+            if (!ssid) return;
+            const password = prompt('Enter WiFi Password:');
+            if (password === null) return;
+            // Generate the script with improved error handling and timeout
+            const script = `\nimport network\nimport socket\nimport time\n\nssid = "${ssid}"\npassword = "${password}"\n\nwlan = network.WLAN(network.STA_IF)\nwlan.active(True)\nwlan.connect(ssid, password)\n\nprint('Connecting to WiFi...')\nstart = time.time()\nwhile not wlan.isconnected():\n    if time.time() - start > 20:\n        print('Failed to connect to WiFi after 20 seconds.')\n        raise RuntimeError('WiFi connection timeout')\n    time.sleep(1)\nif wlan.isconnected():\n    print('Connected:', wlan.ifconfig())\n    # Bandwidth test: download a chunk from a server\n    try:\n        import urequests\n    except ImportError:\n        import upip\n        upip.install('micropython-urequests')\n        import urequests\n    url = 'http://speedtest.ftp.otenet.gr/files/test10Mb.db'  # Example test file\n    start = time.ticks_ms()\n    try:\n        r = urequests.get(url)\n        data = r.content\n        r.close()\n        end = time.ticks_ms()\n        print('Downloaded', len(data), 'bytes in', (end-start)/1000, 'seconds')\n        print('Bandwidth:', len(data)/((end-start)/1000)/1024, 'KB/s')\n    except Exception as e:\n        print('Bandwidth test failed:', e)\nelse:\n    print('WiFi not connected.')\n`;
+            // Send the script to the device via MicroPython REPL
+            try {
+                const writer = port.writable.getWriter();
+                await writer.write(new TextEncoder().encode("\x03\r\n"));
+                await new Promise(r => setTimeout(r, 100));
+                await writer.write(new TextEncoder().encode(script + "\r\n"));
+                writer.releaseLock();
+                alert('WiFi test script sent and running! Check the terminal for output.');
+            } catch (err) {
+                alert('Failed to send script: ' + (err.message || err));
+            }
+        });
+
+        // Add a modal for reconnecting after firmware update (place this outside any event handler)
+        if (!document.getElementById('fw-reconnect-modal')) {
+            const modal = document.createElement('div');
+            modal.id = 'fw-reconnect-modal';
+            modal.style.display = 'none';
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100vw';
+            modal.style.height = '100vh';
+            modal.style.background = 'rgba(0,0,0,0.7)';
+            modal.style.zIndex = '10002';
+            modal.style.justifyContent = 'center';
+            modal.style.alignItems = 'center';
+            modal.innerHTML = `
+              <div style="background:#222;padding:32px 24px;border-radius:16px;box-shadow:0 0 32px var(--mod-color,#0f0);display:flex;flex-direction:column;align-items:center;">
+                <div style="color:var(--mod-color,#0f0);font-size:18px;margin-bottom:16px;">Device disconnected after firmware update.<br>Please reconnect using the button below.</div>
+                <button id="fw-reconnect-btn" style="padding:12px 32px;border-radius:8px;background:var(--mod-color,#0f0);color:#111;font-weight:bold;border:none;cursor:pointer;font-size:16px;">Reconnect</button>
+              </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        const fwReconnectModal = document.getElementById('fw-reconnect-modal');
+        const fwReconnectBtn = document.getElementById('fw-reconnect-btn');
+        if (fwReconnectBtn) {
+            fwReconnectBtn.onclick = async () => {
+                fwReconnectModal.style.display = 'none';
+                if (window.USBManager?.manualConnect) {
+                    try {
+                        await window.USBManager.manualConnect();
+                    } catch (e) {
+                        alert('Reconnect failed: ' + (e.message || e));
+                    }
+                }
+            };
+        }
+
+        let mctReady = false;
+        window.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'mct-ready') {
+                mctReady = true;
+                console.log('[MCC] mct.html iframe is ready');
+                // Send the current color immediately
+                const color = localStorage.getItem('modColor') || '#00ff00';
+                const portalIframe = document.querySelector('#canvas-container iframe');
+                if (portalIframe && portalIframe.contentWindow) {
+                    console.log('[MCC] Sending initial color to mct:', color);
+                    portalIframe.contentWindow.postMessage({ type: 'set-mct-color', color }, '*');
+                }
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // ... existing code ...
+            // Toggle logic for connect buttons
+            const connectButtons = [
+                { btn: document.getElementById('serial-connect-btn'), type: 'serial' },
+                { btn: document.getElementById('wifi-connect-btn'), type: 'wifi' },
+                { btn: document.getElementById('ble-connect-btn'), type: 'ble' }
+            ];
+            connectButtons.forEach(({btn, type}) => {
+                if (btn) {
+                    btn.addEventListener('click', () => {
+                        btn.classList.toggle('active');
+                        // Optionally, call your connect/disconnect logic here
+                        // For example: toggleConnection(type);
+                    });
+                }
+            });
+            // ... existing code ...
         });
     </script>
 </body>

@@ -1,0 +1,118 @@
+# AVS M22 MCC Interface Rules
+
+## Core Functionality
+
+### USB Connection
+- Auto-connect to previously connected ports on startup
+- Toggle button to manually connect/disconnect
+- Display USB VID/PID and port info in USB tile
+- USB icon in status bar illuminates when connected
+- Proper cleanup of port resources on disconnect
+- Handle locked streams gracefully
+
+### ESP32 Detection
+- Detect ESP32 presence after USB connection
+- Show ESP32 tile and icon when detected
+- Display chip info (type, flash size, PSRAM, MAC)
+- Support both DTR/RTS and watchdog reset methods
+- Sync with ROM bootloader for chip identification
+- Handle ESP32-S3 chips without UART DTR/RTS
+
+### MicroPython Support
+- Detect MicroPython runtime after ESP32 connection
+- Show Python tile and icon when detected
+- Display MicroPython version info
+- Support file operations and REPL
+
+### UI/UX Requirements
+- All icons should be visible and properly styled
+- Status icons should be clickable and scroll to tiles
+- Tiles should maintain proper vertical alignment
+- Terminal should display all connection events
+- Copy button should copy terminal contents
+- Support keyboard shortcuts (u,d,f,k)
+
+### Error Handling
+- Graceful handling of connection failures
+- Clear error messages in terminal
+- Proper cleanup of resources on errors
+- Retry logic for failed connections
+- Handle stream locking issues
+
+## Layout Rules
+
+### Status Bar
+- Time display (left)
+- Connection icons (right):
+  - WiFi
+  - Bluetooth
+  - USB
+  - ESP32 (conditional)
+  - Python (conditional)
+  - AVS
+  - Battery
+
+### Main Display
+- Tile carousel at top
+- 3D portal in middle
+- Terminal panel at bottom
+
+### Tile Order
+1. AVS MCT (400px wide)
+2. USB Connection
+3. ESP32 (when detected)
+4. MicroPython (when detected)
+5. Bluetooth LE
+6. WiFi
+
+## Style Guidelines
+
+### Colors
+- Use neon color scheme with glows
+- Green: Primary/USB
+- Blue: Bluetooth
+- Cyan: WiFi
+- Red: ESP32
+- Yellow: Python
+- Green: AVS/MCT
+
+### Animations
+- Smooth transitions for connections
+- Glow effects on active states
+- Progress indicators for operations
+
+## Development Rules
+
+### Code Organization
+- Maintain clean separation of concerns
+- Use consistent naming conventions
+- Document complex functionality
+- Handle all async operations properly
+
+### Serial Manager Implementation
+- All USB/serial port related functions must be in serial-manager.js
+- ESP32 detection functions should be methods of USBManager object
+- MicroPython detection should be a method of USBManager object
+- Avoid global standalone functions that reference USBManager
+- Use "this" inside USBManager methods, not direct USBManager references
+- Ensure proper initialization order to avoid undefined references
+- Handle DOM element access safely with null checks
+- Use opacity and grayscale for inactive tiles, not display:none
+
+### Testing
+- Test all connection scenarios
+- Verify proper resource cleanup
+- Check error handling paths
+- Validate UI state management
+
+### Performance
+- Optimize animations for smooth rendering
+- Minimize DOM updates
+- Handle memory cleanup
+- Efficient event handling 
+
+
+### On Detect
+- when we detect potential USB device, alight the usb icon in the status bar white
+- next, we need to get the ESP32 info, and alight the ESP32 icon in the status bar red
+- then, we need to see if micropython is installed, and get it's version, and add the python icon to the status bar yellow

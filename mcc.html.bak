@@ -1,0 +1,2664 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AVS M22 MCC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="shortcut icon" type="image/x-icon" href="https://www.advancedvapesupply.com/cdn/shop/files/AVS_Molecule_5_180x180.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/brands.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap">
+    <script type="importmap">
+    {
+        "imports": {
+            "esptool-js": "https://cdn.jsdelivr.net/npm/esptool-js@0.3.0/bundle.js",
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+            "three/examples/jsm/controls/OrbitControls": "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js",
+            "three/examples/jsm/renderers/CSS3DRenderer": "https://unpkg.com/three@0.160.0/examples/jsm/renderers/CSS3DRenderer.js",
+            "esp-web-tools": "https://unpkg.com/esp-web-tools@9.4.3/dist/web/install-button.js?module"
+        }
+    }
+    </script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <!-- Include the serial manager JavaScript -->
+    <script src="js/serial-manager.js" defer></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --neon-green: #00ff00;
+            --neon-green-glow: 0 0 10px rgba(0, 255, 0, 0.5);
+            --neon-green-intense: 0 0 20px rgba(0, 255, 0, 0.8), 0 0 30px rgba(0, 255, 0, 0.6);
+            --neon-blue: #0088ff;
+            --neon-blue-glow: 0 0 10px rgba(0, 136, 255, 0.5);
+            --neon-blue-intense: 0 0 20px rgba(0, 136, 255, 0.8), 0 0 30px rgba(0, 136, 255, 0.6);
+            --neon-cyan: #00ffff;
+            --neon-cyan-glow: 0 0 10px rgba(0, 255, 255, 0.5);
+            --neon-cyan-intense: 0 0 20px rgba(0, 255, 255, 0.8), 0 0 30px rgba(0, 255, 255, 0.6);
+            --neon-red: #e31837;
+            --neon-red-glow: 0 0 10px rgba(227, 24, 55, 0.5);
+            --neon-red-intense: 0 0 20px rgba(227, 24, 55, 0.8), 0 0 30px rgba(227, 24, 55, 0.6);
+            --neon-yellow: #ffd43b;
+            --neon-yellow-glow: 0 0 10px rgba(255, 212, 59, 0.5);
+            --neon-yellow-intense: 0 0 20px rgba(255, 212, 59, 0.8), 0 0 30px rgba(255, 212, 59, 0.6);
+            --tile-background: #1a1a1a;
+            --border-color: rgba(0, 255, 0, 0.3);
+        }
+
+        body { 
+            margin: 0; 
+            overflow: hidden;
+            background: #000000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--neon-green);
+        }
+
+        /* iPhone Status Bar */
+        #iphone-status-bar {
+            width: 100%;
+            height: 44px;
+            background: rgba(0, 20, 0, 0.8);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            color: var(--neon-green);
+            font-weight: 600;
+            text-shadow: var(--neon-green-glow);
+            border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+        }
+
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .status-right {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .battery-icon {
+            width: 25px;
+            height: 12px;
+            border: 2px solid rgba(0, 255, 0, 0.3);
+            border-radius: 3px;
+            position: relative;
+            margin-left: 5px;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.1);
+            opacity: 0.3;
+            transition: all 0.3s ease;
+        }
+
+        .battery-icon::after {
+            content: '';
+            position: absolute;
+            right: -4px;
+            top: 3px;
+            width: 2px;
+            height: 4px;
+            background: rgba(0, 255, 0, 0.3);
+            border-radius: 0 1px 1px 0;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.1);
+        }
+
+        .battery-icon.active {
+            border-color: var(--neon-green);
+            box-shadow: var(--neon-green-glow);
+            opacity: 1;
+        }
+
+        .battery-icon.active::after {
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-glow);
+        }
+
+        .battery-level {
+            position: absolute;
+            left: 1px;
+            top: 1px;
+            bottom: 1px;
+            width: 0%;
+            background: rgba(0, 255, 0, 0.3);
+            border-radius: 1px;
+            transition: all 0.3s ease;
+        }
+
+        .battery-icon.active .battery-level {
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-intense);
+        }
+
+        /* App Container */
+        #app-container {
+            width: 100%;
+            max-width: 430px;
+            height: 100vh;
+            background: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Control Panel */
+        #control-panel {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(145deg, rgba(0, 40, 0, 0.9) 0%, rgba(0, 20, 0, 0.9) 100%);
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+            box-shadow: 0 2px 10px rgba(0, 255, 0, 0.1);
+        }
+
+        .switch-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .switch-container span {
+            font-size: 12px;
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+        }
+
+        .toggle-switch {
+            width: 36px;
+            height: 18px;
+            background: rgba(0, 40, 0, 0.6);
+            border-radius: 9px;
+            position: relative;
+            cursor: pointer;
+            box-shadow: inset 0 1px 3px rgba(0, 255, 0, 0.2);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: #1a1a1a;
+            border-radius: 50%;
+            top: 0px;
+            left: 0px;
+            transition: all 0.3s;
+            box-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+        }
+
+        .toggle-switch.active {
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: inset 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+
+        .toggle-switch.active::after {
+            transform: translateX(18px);
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-intense);
+        }
+
+        .indicator-light {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #300;
+            box-shadow: inset 0 0 2px rgba(255, 0, 0, 0.5);
+        }
+
+        .indicator-light.active {
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-intense);
+        }
+
+        /* Main Display */
+        #main-display {
+            flex: 1;
+            padding: 10px 15px 15px 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            height: calc(100vh - 44px);
+            overflow: hidden;
+            justify-content: space-between;
+        }
+
+        #porthole-container {
+            flex: 1;
+            width: 100%;
+            position: relative;
+            background: transparent;
+            min-height: 0;
+            margin-top: 20px;
+        }
+
+        #porthole-inner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: transparent;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+        }
+
+        /* Terminal Panel Container */
+        .terminal-container {
+            position: relative;
+            margin-top: auto;
+            width: 100%;
+            height: 150px;
+            min-height: 150px;
+            max-height: 150px;
+            background: rgba(0, 10, 0, 0.95);
+            border-radius: 8px;
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
+            overflow: hidden;
+        }
+
+        /* Terminal Panel */
+        #terminal-panel {
+            height: 100%;
+            min-height: 100%;
+            max-height: 100%;
+            width: 100%;
+            padding: 10px;
+            margin: 0;
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            overflow-y: auto;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+        }
+
+        .terminal-line {
+            color: var(--neon-green);
+            margin: 0;
+            padding: 2px 0;
+            text-shadow: var(--neon-green-glow);
+            white-space: pre-wrap;
+            word-break: break-word;
+            opacity: 1;
+        }
+
+        .terminal-line.progress-line {
+            position: relative;
+            padding-right: 20px;
+        }
+
+        .terminal-line.progress-line::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--neon-green);
+            border-radius: 50%;
+            border-right-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: translateY(-50%) rotate(0deg); }
+            100% { transform: translateY(-50%) rotate(360deg); }
+        }
+
+        .terminal-line.error {
+            color: #ff4444;
+            text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+        }
+
+        .terminal-copy-btn {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: rgba(0, 40, 0, 0.9);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            border-radius: 4px;
+            color: var(--neon-green);
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .terminal-copy-btn:hover {
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: var(--neon-green-glow);
+        }
+
+        .terminal-copy-btn.copied {
+            color: #44ff44;
+            border-color: #44ff44;
+        }
+
+        #cursor {
+            display: inline-block;
+            width: 6px;
+            height: 12px;
+            background: var(--neon-green);
+            animation: blink 1s infinite;
+            vertical-align: middle;
+            margin-left: 4px;
+            box-shadow: var(--neon-green-glow);
+        }
+
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+
+        /* Safari Bottom Bar */
+        #safari-bar {
+            width: 100%;
+            height: 45px;
+            background: rgba(0, 20, 0, 0.95);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 10px;
+            border-top: 1px solid rgba(0, 255, 0, 0.2);
+        }
+
+        .url-bar {
+            flex: 1;
+            height: 32px;
+            margin: 0 10px;
+            background: rgba(0, 40, 0, 0.6);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            font-size: 14px;
+            color: var(--neon-green);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            text-shadow: var(--neon-green-glow);
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 20px;
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+            font-size: 20px;
+        }
+
+        .usb-icon {
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+        }
+
+        .usb-icon.connected {
+            opacity: 1;
+            text-shadow: var(--neon-green-intense);
+        }
+
+        .tile-status-container {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .tile-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #333;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .tile-status:hover::after {
+            content: attr(title);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 4px 8px;
+            background: rgba(0, 20, 0, 0.9);
+            color: var(--neon-green);
+            font-size: 12px;
+            border-radius: 4px;
+            white-space: nowrap;
+            pointer-events: none;
+            margin-bottom: 4px;
+        }
+
+        .tile-status.connected {
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-glow);
+        }
+
+        .tile-status.micropython {
+            background: #00ff00;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+
+        /* Main Carousel */
+        .tile-carousel {
+            display: flex;
+            gap: 5px;
+            padding: 2px 10px;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+            margin: 0;
+            scroll-padding: 10px;
+            flex-wrap: nowrap;
+            height: 170px;
+            min-height: 170px;
+            max-height: 170px;
+            align-items: flex-start;
+            width: 100%;
+            scrollbar-width: none;  /* Firefox */
+            -ms-overflow-style: none;  /* IE and Edge */
+        }
+
+        .tile-carousel::-webkit-scrollbar {
+            display: none;  /* Chrome, Safari, Opera */
+        }
+
+        /* Main Tiles */
+        .tile {
+            width: 100%;
+            min-width: 100%;
+            max-width: 100%;
+            height: 160px;
+            min-height: 160px;
+            max-height: 160px;
+            background-color: var(--tile-background);
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            border: 1px solid var(--border-color);
+            flex: 0 0 100%;
+        }
+
+        #avs-tile, #serial-tile, #ble-tile, #wifi-tile, #esp32-tile, #python-tile {
+            width: 100%;
+            min-width: 100%;
+            max-width: 100%;
+            flex: 0 0 100%;
+        }
+
+        #avs-tile .tile-content {
+            width: 100%;
+        }
+
+        /* Tile Header Styles */
+        .tile-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .tile-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tile-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            background: rgba(0, 40, 0, 0.6);
+            transition: all 0.3s ease;
+        }
+
+        .tile-icon.disconnected {
+            opacity: 0.3;
+            border-color: rgba(0, 255, 0, 0.1);
+        }
+
+        .tile-title-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .tile-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+            text-shadow: var(--neon-green-glow);
+        }
+
+        .tile-subtitle {
+            font-size: 12px;
+            opacity: 0.7;
+            margin: 0;
+        }
+
+        .tile-header-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .settings-button {
+            background: none;
+            border: none;
+            color: var(--neon-green);
+            font-size: 16px;
+            cursor: pointer;
+            padding: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .settings-button:hover {
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+        }
+
+        /* Tile Color Variants */
+        #wifi-tile .tile-icon,
+        #wifi-tile .tile-title,
+        #wifi-tile .settings-button {
+            color: var(--neon-cyan);
+            border-color: rgba(0, 255, 255, 0.3);
+            text-shadow: var(--neon-cyan-glow);
+        }
+
+        #wifi-tile .tile-icon.disconnected {
+            border-color: rgba(0, 255, 255, 0.1);
+        }
+
+        #ble-tile .tile-icon,
+        #ble-tile .tile-title,
+        #ble-tile .settings-button {
+            color: var(--neon-blue);
+            border-color: rgba(0, 136, 255, 0.3);
+            text-shadow: var(--neon-blue-glow);
+        }
+
+        #ble-tile .tile-icon.disconnected {
+            border-color: rgba(0, 136, 255, 0.1);
+        }
+
+        #esp32-tile .tile-icon,
+        #esp32-tile .tile-title,
+        #esp32-tile .settings-button {
+            color: var(--neon-red);
+            border-color: rgba(227, 24, 55, 0.3);
+            text-shadow: var(--neon-red-glow);
+        }
+
+        #esp32-tile .tile-icon.disconnected {
+            border-color: rgba(227, 24, 55, 0.1);
+        }
+
+        #python-tile .tile-icon,
+        #python-tile .tile-title,
+        #python-tile .settings-button {
+            color: var(--neon-yellow);
+            border-color: rgba(255, 212, 59, 0.3);
+            text-shadow: var(--neon-yellow-glow);
+        }
+
+        #python-tile .tile-icon.disconnected {
+            border-color: rgba(255, 212, 59, 0.1);
+        }
+
+        #avs-tile .tile-icon,
+        #avs-tile .tile-title,
+        #avs-tile .settings-button {
+            color: var(--neon-green);
+            border-color: rgba(0, 255, 0, 0.3);
+            text-shadow: var(--neon-green-glow);
+        }
+
+        #avs-tile .tile-icon.disconnected {
+            border-color: rgba(0, 255, 0, 0.1);
+        }
+
+        /* Terminal Message Colors */
+        .terminal-line.wifi {
+            color: var(--neon-cyan);
+            text-shadow: var(--neon-cyan-glow);
+        }
+
+        .terminal-line.ble {
+            color: var(--neon-blue);
+            text-shadow: var(--neon-blue-glow);
+        }
+
+        .terminal-line.esp32 {
+            color: var(--neon-red);
+            text-shadow: var(--neon-red-glow);
+        }
+
+        .terminal-line.python {
+            color: var(--neon-yellow);
+            text-shadow: var(--neon-yellow-glow);
+        }
+
+        .terminal-line.avs {
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+        }
+
+        /* Small Tiles Carousel inside MCT */
+        #avs-tile .small-tile-carousel {
+            position: absolute;
+            top: calc(100% + 10px);
+            left: 0;
+            width: 100%;
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+            padding: 10px;
+            background: rgba(0, 20, 0, 0.8);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            border-radius: 6px;
+            margin-top: 0;
+            margin-bottom: 0;
+        }
+
+        #avs-tile .small-tile {
+            width: 80px;
+            height: 160px;
+            flex: 0 0 auto;
+            scroll-snap-align: start;
+            scroll-snap-stop: always;
+            margin-bottom: 0;
+        }
+
+        /* Connection Tiles */
+        #serial-tile,
+        #ble-tile,
+        #wifi-tile,
+        #esp32-tile,
+        #python-tile {
+            min-width: 300px;
+            max-width: 300px;
+        }
+
+        .action-button {
+            background: rgba(0, 40, 0, 0.6);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            border-radius: 4px;
+            color: var(--neon-green);
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            margin-top: 2px;
+        }
+
+        .action-button:hover {
+            background: rgba(0, 136, 255, 0.2);
+            box-shadow: var(--neon-blue-glow);
+        }
+
+        .action-button i {
+            font-size: 14px;
+        }
+
+        .action-button.loading {
+            opacity: 0.5;
+            cursor: wait;
+        }
+
+        .action-button .progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 2px;
+            background: var(--neon-blue);
+            box-shadow: var(--neon-blue-glow);
+            transition: width 0.3s ease;
+            width: 0;
+        }
+
+        .action-button.loading .progress {
+            animation: progress-pulse 1s infinite;
+        }
+
+        @keyframes progress-pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        /* ESP32 Tile Specific Styles */
+        #esp32-tile {
+            border-color: rgba(227, 24, 55, 0.3);
+            box-shadow: 0 2px 10px rgba(227, 24, 55, 0.1);
+        }
+
+        #esp32-tile .tile-icon {
+            border-color: rgba(227, 24, 55, 0.3);
+            background: rgba(80, 10, 20, 0.6);
+            color: var(--neon-red);
+        }
+
+        #esp32-tile .tile-title {
+            color: var(--neon-red);
+            text-shadow: var(--neon-red-glow);
+        }
+
+        .status-icon[data-tile="esp32-tile"] {
+            color: var(--neon-red);
+            text-shadow: var(--neon-red-glow);
+        }
+
+        .status-icon[data-tile="esp32-tile"].connected {
+            opacity: 1;
+            text-shadow: var(--neon-red-intense);
+        }
+
+        /* MicroPython Tile Specific Styles */
+        #python-tile {
+            border-color: rgba(255, 212, 59, 0.3);
+            box-shadow: 0 2px 10px rgba(255, 212, 59, 0.1);
+        }
+
+        #python-tile .tile-icon {
+            border-color: rgba(255, 212, 59, 0.3);
+            background: rgba(80, 70, 0, 0.6);
+            color: var(--neon-yellow);
+        }
+
+        #python-tile .tile-title {
+            color: var(--neon-yellow);
+            text-shadow: var(--neon-yellow-glow);
+        }
+
+        .status-icon[data-tile="python-tile"] {
+            color: var(--neon-yellow);
+            text-shadow: var(--neon-yellow-glow);
+        }
+
+        .status-icon[data-tile="python-tile"].connected {
+            opacity: 1;
+            text-shadow: var(--neon-yellow-intense);
+        }
+
+        /* AVS Tile Specific Styles */
+        #avs-tile {
+            border-color: rgba(0, 255, 0, 0.3);
+            box-shadow: 0 2px 10px rgba(0, 255, 0, 0.1);
+        }
+
+        #avs-tile .tile-icon {
+            border-color: rgba(0, 255, 0, 0.3);
+            background: rgba(0, 40, 0, 0.6);
+            color: var(--neon-green);
+        }
+
+        #avs-tile .tile-title {
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+        }
+
+        .status-icon[data-tile="avs-tile"] {
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+        }
+
+        .status-icon[data-tile="avs-tile"].connected {
+            opacity: 1;
+            text-shadow: var(--neon-green-intense);
+        }
+
+        /* 80x160 Tile Carousel Styles */
+        .small-tile-carousel {
+            display: flex;
+            overflow-x: auto;
+            gap: 8px;
+            padding: 8px 15px;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+            margin: 8px -15px;
+            scroll-padding: 15px;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            flex-wrap: nowrap;
+        }
+
+        .small-tile-carousel::-webkit-scrollbar {
+            display: none;
+        }
+
+        .small-tile {
+            background: #000000;
+            border-radius: 6px;
+            padding: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 2px solid rgba(0, 255, 0, 0.3);
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.15),
+                       inset 0 0 8px rgba(0, 255, 0, 0.1);
+            position: relative;
+            width: 80px;
+            height: 160px;
+            flex: 0 0 auto;
+            scroll-snap-align: start;
+            scroll-snap-stop: always;
+            transition: all 0.3s ease;
+            overflow: hidden;
+        }
+
+        .small-tile::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 255, 0, 0.03) 0px,
+                rgba(0, 255, 0, 0.03) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .small-tile::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+                90deg,
+                rgba(0, 255, 0, 0.1) 0%,
+                transparent 50%,
+                rgba(0, 255, 0, 0.1) 100%
+            );
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .small-tile:hover {
+            transform: translateY(-2px);
+            border-color: rgba(0, 255, 0, 0.5);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.25),
+                       inset 0 0 12px rgba(0, 255, 0, 0.2);
+        }
+
+        .small-tile-icon {
+            font-size: 20px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 40, 0, 0.4);
+            border-radius: 4px;
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            margin-bottom: 6px;
+            color: var(--neon-green);
+            position: relative;
+            z-index: 3;
+        }
+
+        .small-tile-content {
+            text-align: center;
+            width: 100%;
+            position: relative;
+            z-index: 3;
+            background: rgba(0, 20, 0, 0.4);
+            border-radius: 4px;
+            padding: 4px;
+            margin-top: auto;
+        }
+
+        .small-tile-title {
+            font-family: 'Fira Code', monospace;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+            margin: 0 0 4px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .small-tile-value {
+            font-family: 'Fira Code', monospace;
+            font-size: 22px;
+            font-weight: 500;
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+            margin: 4px 0;
+            line-height: 1;
+        }
+
+        .small-tile-subtitle {
+            font-family: 'Fira Code', monospace;
+            font-size: 9px;
+            color: rgba(0, 255, 0, 0.7);
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .small-tile-chart {
+            width: 100%;
+            height: 40px;
+            margin-top: 8px;
+            position: relative;
+            background: rgba(0, 20, 0, 0.4);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .small-tile-chart canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            z-index: 3;
+        }
+
+        @keyframes scanline {
+            0% {
+                transform: translateY(-100%);
+            }
+            100% {
+                transform: translateY(100%);
+            }
+        }
+
+        .small-tile-chart::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(
+                to bottom,
+                transparent,
+                rgba(0, 255, 0, 0.1),
+                transparent
+            );
+            animation: scanline 2s linear infinite;
+            z-index: 4;
+        }
+
+        /* Add new styles for the metrics */
+        .small-tile-metrics {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 8px;
+            margin-top: 4px;
+            background: rgba(0, 20, 0, 0.4);
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 10px;
+        }
+
+        .small-tile-metrics .metric {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--neon-green);
+        }
+
+        .small-tile-metrics .metric i {
+            font-size: 8px;
+            opacity: 0.7;
+        }
+
+        .small-tile-metrics span {
+            text-shadow: var(--neon-green-glow);
+        }
+
+        /* Status Icons */
+        .status-icon {
+            opacity: 0.3;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .status-icon[data-tile="wifi-tile"] {
+            color: var(--neon-cyan);
+            text-shadow: none;
+        }
+
+        .status-icon[data-tile="wifi-tile"].connected {
+            opacity: 1;
+            text-shadow: var(--neon-cyan-intense);
+        }
+
+        .status-icon[data-tile="ble-tile"] {
+            color: var(--neon-blue);
+            text-shadow: none;
+        }
+
+        .status-icon[data-tile="ble-tile"].connected {
+            opacity: 1;
+            text-shadow: var(--neon-blue-intense);
+        }
+
+        .status-icon[data-tile="serial-tile"] {
+            color: var(--neon-green);
+            text-shadow: none;
+        }
+
+        .status-icon[data-tile="serial-tile"].connected {
+            opacity: 1;
+            text-shadow: var(--neon-green-intense);
+        }
+
+        /* Endpoint Info Styles */
+        .endpoint-info {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(0, 20, 0, 0.4);
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 11px;
+        }
+
+        .endpoint-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .endpoint-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .endpoint-label {
+            color: rgba(0, 255, 0, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .endpoint-value {
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+            font-weight: 500;
+        }
+
+        .tile-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .action-button {
+            background: rgba(0, 40, 0, 0.6);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            border-radius: 4px;
+            color: var(--neon-green);
+            width: 28px;
+            height: 28px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .action-button:hover {
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: var(--neon-green-glow);
+        }
+
+        .action-button.loading {
+            opacity: 0.5;
+            cursor: wait;
+        }
+
+        .action-button .progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 2px;
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-glow);
+            transition: width 0.3s ease;
+            width: 0;
+        }
+
+        .action-button.loading .progress {
+            animation: progress-pulse 1s infinite;
+        }
+
+        @keyframes progress-pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .connection-toggle {
+            width: 40px;
+            height: 20px;
+            background: var(--background-dark);
+            border-radius: 10px;
+            position: relative;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+        }
+
+        .connection-toggle::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--text-color);
+            top: 1px;
+            left: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .connection-toggle.active {
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-glow);
+        }
+
+        .connection-toggle.active::after {
+            left: 22px;
+            background: white;
+        }
+
+        #ble-toggle.active {
+            background: var(--neon-blue);
+            box-shadow: var(--neon-blue-glow);
+        }
+
+        #wifi-toggle.active {
+            background: var(--neon-cyan);
+            box-shadow: var(--neon-cyan-glow);
+        }
+
+        #esp32-toggle.active {
+            background: var(--neon-red);
+            box-shadow: var(--neon-red-glow);
+        }
+
+        #python-toggle.active {
+            background: var(--neon-yellow);
+            box-shadow: var(--neon-yellow-glow);
+        }
+
+        /* Add these CSS rules in the style section */
+        .progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(0, 40, 0, 0.4);
+            display: none;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0%;
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-glow);
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            position: absolute;
+            top: -18px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 10px;
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+        }
+
+        .action-button {
+            position: relative;
+            overflow: visible;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <!-- iPhone Status Bar -->
+        <div id="iphone-status-bar">
+            <div class="status-left">9:08</div>
+            <div class="status-right">
+                <span id="avs-icon" class="status-icon" data-tile="avs-tile"><i class="fas fa-atom"></i></span>
+                <span id="python-icon" class="status-icon" data-tile="python-tile"><i class="fa-brands fa-python"></i></span>
+                <span id="esp32-icon" class="status-icon" data-tile="esp32-tile"><i class="fas fa-microchip"></i></span>
+                <span class="status-icon" data-tile="wifi-tile"><i class="fas fa-wifi"></i></span>
+                <span class="status-icon" data-tile="ble-tile"><i class="fa-brands fa-bluetooth-b"></i></span>
+                <span id="usb-icon" class="status-icon" data-tile="serial-tile"><i class="fa-brands fa-usb"></i></span>
+                <div class="battery-icon" data-tile="power-tile">
+                    <div class="battery-level"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Display -->
+        <div id="main-display">
+            <!-- Tiles Section -->
+            <div class="tile-carousel">
+                <!-- AVS Tile -->
+                <div class="tile" id="avs-tile">
+                    <div class="tile-header">
+                        <div class="tile-header-left">
+                            <div class="tile-icon">
+                                <i class="fas fa-atom"></i>
+                            </div>
+                            <div class="tile-title-container">
+                                <h3 class="tile-title">MCT</h3>
+                                <p class="tile-subtitle">Molecule Control Tower</p>
+                            </div>
+                        </div>
+                        <div class="tile-header-right">
+                            <div class="header-actions">
+                                <button class="action-button" id="download-files-btn" title="Download Python Files">
+                                    <i class="fas fa-download"></i>
+                                    <div class="progress"></div>
+                                </button>
+                                <button class="action-button" id="firmware-update-btn" title="Update MCT Firmware">
+                                    <i class="fas fa-microchip"></i>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill"></div>
+                                        <div class="progress-text">0%</div>
+                                    </div>
+                                </button>
+                                <button class="settings-button">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                            </div>
+                            <div class="connection-toggle" id="avs-toggle"></div>
+                        </div>
+                    </div>
+                    <div class="tile-content">
+                    </div>
+                </div>
+
+                <!-- Serial Connection Tile -->
+                <div class="tile" id="serial-tile">
+                    <div class="tile-header">
+                        <div class="tile-header-left">
+                            <div class="tile-icon">
+                                <i class="fa-brands fa-usb"></i>
+                            </div>
+                            <div class="tile-title-container">
+                                <h3 class="tile-title">USB</h3>
+                                <p class="tile-subtitle">Serial Connection</p>
+                            </div>
+                        </div>
+                        <div class="tile-header-right">
+                            <button class="settings-button">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <div class="connection-toggle" id="serial-toggle"></div>
+                        </div>
+                    </div>
+                    <div class="tile-content">
+                        <div class="endpoint-info">
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">VID:</span>
+                                <span class="endpoint-value" id="serial-usb-vid">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">PID:</span>
+                                <span class="endpoint-value" id="serial-usb-pid">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">PORT:</span>
+                                <span class="endpoint-value" id="serial-usb-port">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ESP32 Tile -->
+                <div class="tile" id="esp32-tile">
+                    <div class="tile-header">
+                        <div class="tile-header-left">
+                            <div class="tile-icon">
+                                <i class="fas fa-microchip"></i>
+                            </div>
+                            <div class="tile-title-container">
+                                <h3 class="tile-title">ESP32</h3>
+                                <p class="tile-subtitle">Chip Information</p>
+                            </div>
+                        </div>
+                        <div class="tile-header-right">
+                            <button class="settings-button">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <div class="connection-toggle" id="esp32-toggle"></div>
+                        </div>
+                    </div>
+                    <div class="tile-content">
+                        <div class="endpoint-info">
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">CHIP:</span>
+                                <span class="endpoint-value" id="esp32-chip-type">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">FLASH:</span>
+                                <span class="endpoint-value" id="esp32-flash">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">PSRAM:</span>
+                                <span class="endpoint-value" id="esp32-psram">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">MAC:</span>
+                                <span class="endpoint-value" id="esp32-mac">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Python Tile -->
+                <div class="tile" id="python-tile">
+                    <div class="tile-header">
+                        <div class="tile-header-left">
+                            <div class="tile-icon">
+                                <i class="fa-brands fa-python"></i>
+                            </div>
+                            <div class="tile-title-container">
+                                <h3 class="tile-title">Python</h3>
+                                <p class="tile-subtitle">MicroPython Runtime</p>
+                            </div>
+                        </div>
+                        <div class="tile-header-right">
+                            <button class="settings-button">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <div class="connection-toggle" id="python-toggle"></div>
+                        </div>
+                    </div>
+                    <div class="tile-content">
+                        <div class="endpoint-info">
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">VERSION:</span>
+                                <span class="endpoint-value" id="python-version">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">RUNTIME:</span>
+                                <span class="endpoint-value" id="python-runtime">MicroPython</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">MEMORY:</span>
+                                <span class="endpoint-value" id="python-memory">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WiFi Tile -->
+                <div class="tile" id="wifi-tile">
+                    <div class="tile-header">
+                        <div class="tile-header-left">
+                            <div class="tile-icon">
+                                <i class="fas fa-wifi"></i>
+                            </div>
+                            <div class="tile-title-container">
+                                <h3 class="tile-title">WiFi</h3>
+                                <p class="tile-subtitle">Wireless Connection</p>
+                            </div>
+                        </div>
+                        <div class="tile-header-right">
+                            <button class="settings-button">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <div class="connection-toggle" id="wifi-toggle"></div>
+                        </div>
+                    </div>
+                    <div class="tile-content">
+                        <div class="endpoint-info">
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">HOST:</span>
+                                <span class="endpoint-value" id="wifi-host">mct.local</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">PORT:</span>
+                                <span class="endpoint-value" id="wifi-port">5500</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BLE Tile -->
+                <div class="tile" id="ble-tile">
+                    <div class="tile-header">
+                        <div class="tile-header-left">
+                            <div class="tile-icon">
+                                <i class="fa-brands fa-bluetooth-b"></i>
+                            </div>
+                            <div class="tile-title-container">
+                                <h3 class="tile-title">Bluetooth</h3>
+                                <p class="tile-subtitle">BLE Connection</p>
+                            </div>
+                        </div>
+                        <div class="tile-header-right">
+                            <button class="settings-button">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <div class="connection-toggle" id="ble-toggle"></div>
+                        </div>
+                    </div>
+                    <div class="tile-content">
+                        <div class="endpoint-info">
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">SERVICE:</span>
+                                <span class="endpoint-value" id="ble-service">-</span>
+                            </div>
+                            <div class="endpoint-row">
+                                <span class="endpoint-label">CHARACTERISTIC:</span>
+                                <span class="endpoint-value" id="ble-characteristic">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="porthole-container">
+                <div id="porthole-inner">
+                    <div id="canvas-container"></div>
+                </div>
+            </div>
+
+            <!-- Terminal Panel -->
+            <div class="terminal-container">
+                <div id="terminal-panel"></div>
+                <button class="terminal-copy-btn" title="Copy terminal output">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+        import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer';
+        import { ESPLoader, Transport } from 'esptool-js';
+        
+        // Feature detection
+        const hasWebSerial = 'serial' in navigator;
+        const hasWebBluetooth = 'bluetooth' in navigator;
+        const hasBLEScan = hasWebBluetooth && 'requestLEScan' in navigator.bluetooth;
+        
+        // Connection state management
+        const connectionState = {
+            serial: false,
+            esp32: false,
+            python: false,
+            ble: false,
+            wifi: false
+        };
+
+        // USB port management
+        let activePort = null;
+        let portReader = null;
+        let portWriter = null;
+
+        // Initialize WebSerial
+        async function initializeWebSerial() {
+            try {
+                if (!hasWebSerial) {
+                    logToTerminal('WebSerial API not supported in this browser', true);
+                    return false;
+                }
+
+                // Request port access
+                const port = await navigator.serial.requestPort({
+                    filters: [
+                        { usbVendorId: 0x303a }, // ESP32-S3
+                        { usbVendorId: 0x10c4 }  // CP210x
+                    ]
+                });
+
+                // Open port
+                await port.open({ baudRate: 115200 });
+                activePort = port;
+
+                // Set up reader
+                portReader = port.readable.getReader();
+                portWriter = port.writable.getWriter();
+
+                // Update USB info
+                await updateUSBInfo(port);
+
+                // Update connection state
+                updateConnectionStatus(true, 'serial');
+                updateUSBConnectionState(true);
+
+                // Start reading
+                readSerialData();
+
+                return true;
+            } catch (error) {
+                logToTerminal(`Failed to initialize WebSerial: ${error.message}`, true);
+                return false;
+            }
+        }
+
+        // Read serial data
+        async function readSerialData() {
+            try {
+                while (true) {
+                    const { value, done } = await portReader.read();
+                    if (done) {
+                        logToTerminal('Serial port closed', true);
+                        break;
+                    }
+
+                    // Convert to text
+                    const text = new TextDecoder().decode(value);
+                    
+                    // Check for ESP32 detection
+                    if (text.includes('ESP32-S3')) {
+                        updateConnectionStatus(true, 'esp32');
+                        logToTerminal('ESP32-S3 detected', false, 'esp32');
+                    }
+                    
+                    // Check for MicroPython detection
+                    if (text.includes('MicroPython')) {
+                        updateConnectionStatus(true, 'python');
+                        logToTerminal('MicroPython detected', false, 'python');
+                    }
+
+                    // Log to terminal
+                    logToTerminal(text);
+                }
+            } catch (error) {
+                logToTerminal(`Error reading serial data: ${error.message}`, true);
+            } finally {
+                portReader.releaseLock();
+            }
+        }
+
+        // Update USB connection state
+        function updateUSBConnectionState(connected) {
+            const toggle = document.getElementById('serial-toggle');
+            const usbIcon = document.getElementById('usb-icon');
+            
+            if (toggle) {
+                toggle.classList.toggle('active', connected);
+            }
+            
+            if (usbIcon) {
+                usbIcon.classList.toggle('active', connected);
+            }
+        }
+
+        // Update connection status
+        function updateConnectionStatus(connected, type) {
+            // Update internal state
+            connectionState[type] = connected;
+            
+            // Update UI elements
+            const icon = document.querySelector(`.status-icon[data-tile="${type}-tile"]`);
+            const tileIcon = document.querySelector(`#${type}-tile .tile-icon`);
+            const toggle = document.getElementById(`${type}-toggle`);
+            
+            if (icon) {
+                icon.classList.toggle('connected', connected);
+                icon.style.opacity = connected ? '1' : '0.3';
+            }
+            
+            if (tileIcon) {
+                tileIcon.classList.toggle('disconnected', !connected);
+            }
+            
+            if (toggle) {
+                toggle.classList.toggle('active', connected);
+            }
+
+            // Update specific elements based on type
+            switch(type) {
+                case 'serial':
+                    if (activePort) {
+                        USBManager.updateUSBInfo(activePort);
+                    } else {
+                        // Clear USB info if disconnected
+                        document.getElementById('serial-usb-vid').textContent = '-';
+                        document.getElementById('serial-usb-pid').textContent = '-';
+                        document.getElementById('serial-usb-port').textContent = '-';
+                    }
+                    break;
+                case 'esp32':
+                    const esp32Icon = document.getElementById('esp32-icon');
+                    const esp32Tile = document.getElementById('esp32-tile');
+                    if (connected) {
+                        if (esp32Icon) esp32Icon.style.display = 'inline';
+                        if (esp32Tile) esp32Tile.style.display = 'flex';
+                    } else {
+                        if (esp32Icon) esp32Icon.style.display = 'none';
+                        if (esp32Tile) esp32Tile.style.display = 'none';
+                    }
+                    break;
+                case 'python':
+                    const pythonIcon = document.getElementById('python-icon');
+                    const pythonTile = document.getElementById('python-tile');
+                    if (connected) {
+                        if (pythonIcon) pythonIcon.style.display = 'inline';
+                        if (pythonTile) pythonTile.style.display = 'flex';
+                    } else {
+                        if (pythonIcon) pythonIcon.style.display = 'none';
+                        if (pythonTile) pythonTile.style.display = 'none';
+                    }
+                    break;
+            }
+            
+            // Log status with appropriate color
+            logToTerminal(
+                `${type.toUpperCase()} ${connected ? 'connected' : 'disconnected'}`,
+                false,
+                type
+            );
+        }
+
+        // Toggle serial connection
+        async function toggleSerialConnection() {
+            const toggle = document.getElementById('serial-toggle');
+            if (!toggle) return;
+
+            try {
+                if (toggle.classList.contains('active')) {
+                    // Disconnect
+                    try {
+                        const ports = await navigator.serial.getPorts();
+                        if (ports.length > 0) {
+                            await USBManager.cleanupPort(ports[0]);
+                            toggle.classList.remove('active');
+                            updateConnectionStatus(false, 'serial');
+                            updateConnectionStatus(false, 'esp32');
+                            updateConnectionStatus(false, 'python');
+                            logToTerminal('USB disconnected', false, 'serial');
+                        }
+                    } catch (error) {
+                        logToTerminal(`USB disconnect failed: ${error.message}`, true, 'serial');
+                    }
+                } else {
+                    // Connect
+                    try {
+                        logToTerminal('Connecting to USB device...', false, 'serial');
+                        const port = await navigator.serial.requestPort({
+                            filters: [
+                                // Current device
+                                { usbVendorId: 0x303a, usbProductId: 0x0420 },
+                                // Additional supported device
+                                { usbVendorId: 0x3031, usbProductId: 0x0420 }
+                            ]
+                        });
+                        await USBManager.connectToPort(port);
+                        toggle.classList.add('active');
+                        updateConnectionStatus(true, 'serial');
+                        logToTerminal('USB connected successfully', false, 'serial');
+                    } catch (error) {
+                        toggle.classList.remove('active');
+                        logToTerminal(`USB connect failed: ${error.message}`, true, 'serial');
+                    }
+                }
+            } catch (error) {
+                logToTerminal(`USB operation failed: ${error.message}`, true);
+                // Ensure clean state on error
+                updateConnectionStatus(false, 'serial');
+                updateConnectionStatus(false, 'esp32');
+                updateConnectionStatus(false, 'python');
+            }
+        }
+
+        // Terminal logging helper
+        function logToTerminal(message, isError = false, type = 'default', overwrite = false) {
+            const terminal = document.getElementById('terminal-panel');
+            if (!terminal) return;
+
+            // If overwrite is true and there's a previous line, update it instead of creating a new one
+            if (overwrite && terminal.lastElementChild) {
+                const lastLine = terminal.lastElementChild;
+                lastLine.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                if (type !== 'default') {
+                    lastLine.classList.add(type);
+                }
+                if (isError) {
+                    lastLine.classList.add('error');
+                }
+                return;
+            }
+
+            const line = document.createElement('p');
+            line.className = 'terminal-line';
+            
+            // Add color class based on type
+            if (type !== 'default') {
+                line.classList.add(type);
+            }
+            
+            // Add error class if needed
+            if (isError) {
+                line.classList.add('error');
+            }
+            
+            // Handle ANSI escape codes
+            let processedMessage = message;
+            if (message.includes('\x1b[')) {
+                // Replace ANSI color codes with CSS classes
+                processedMessage = message
+                    .replace(/\x1b\[0m/g, '') // Reset
+                    .replace(/\x1b\[32m/g, '') // Green
+                    .replace(/\x1b\[31m/g, '') // Red
+                    .replace(/\x1b\[33m/g, '') // Yellow
+                    .replace(/\x1b\[36m/g, '') // Cyan
+                    .replace(/\x1b\[34m/g, '') // Blue
+                    .replace(/\x1b\[35m/g, '') // Magenta
+                    .replace(/\x1b\[37m/g, '') // White
+                    .replace(/\x1b\[1m/g, '') // Bold
+                    .replace(/\x1b\[4m/g, '') // Underline
+                    .replace(/\x1b\[5m/g, '') // Blink
+                    .replace(/\x1b\[7m/g, '') // Inverse
+                    .replace(/\x1b\[8m/g, '') // Hidden
+                    .replace(/\x1b\[K/g, '') // Clear line
+                    .replace(/\x1b\[2K/g, '') // Clear entire line
+                    .replace(/\x1b\[1K/g, '') // Clear from cursor to beginning
+                    .replace(/\x1b\[0K/g, '') // Clear from cursor to end
+                    .replace(/\x1b\[?25l/g, '') // Hide cursor
+                    .replace(/\x1b\[?25h/g, '') // Show cursor
+                    .replace(/\x1b\[\d+;\d+H/g, '') // Move cursor
+                    .replace(/\x1b\[\d+[ABCD]/g, '') // Move cursor up/down/left/right
+                    .replace(/\x1b\[\d+[JK]/g, '') // Clear screen
+                    .replace(/\x1b\[\d+[G]/g, '') // Move cursor to column
+                    .replace(/\x1b\[\d+;\d+f/g, '') // Move cursor to position
+                    .replace(/\x1b\[\d+[ST]/g, '') // Scroll up/down
+                    .replace(/\x1b\[\d+[XY]/g, '') // Move cursor to position
+                    .replace(/\x1b\[\d+[Z]/g, '') // Move cursor back
+                    .replace(/\x1b\[\d+[a]/g, '') // Move cursor right
+                    .replace(/\x1b\[\d+[b]/g, '') // Move cursor down
+                    .replace(/\x1b\[\d+[c]/g, '') // Move cursor left
+                    .replace(/\x1b\[\d+[d]/g, '') // Move cursor up
+                    .replace(/\x1b\[\d+[e]/g, '') // Move cursor down
+                    .replace(/\x1b\[\d+[f]/g, '') // Move cursor to position
+                    .replace(/\x1b\[\d+[g]/g, '') // Clear tab stop
+                    .replace(/\x1b\[\d+[h]/g, '') // Set mode
+                    .replace(/\x1b\[\d+[l]/g, '') // Reset mode
+                    .replace(/\x1b\[\d+[m]/g, '') // Set attributes
+                    .replace(/\x1b\[\d+[n]/g, '') // Device status report
+                    .replace(/\x1b\[\d+[p]/g, '') // Set character set
+                    .replace(/\x1b\[\d+[q]/g, '') // Set cursor style
+                    .replace(/\x1b\[\d+[r]/g, '') // Set scroll region
+                    .replace(/\x1b\[\d+[s]/g, '') // Save cursor position
+                    .replace(/\x1b\[\d+[u]/g, '') // Restore cursor position
+                    .replace(/\x1b\[\d+[v]/g, '') // Set scrolling region
+                    .replace(/\x1b\[\d+[w]/g, '') // Set window title
+                    .replace(/\x1b\[\d+[x]/g, '') // Request terminal parameters
+                    .replace(/\x1b\[\d+[y]/g, '') // Set terminal parameters
+                    .replace(/\x1b\[\d+[z]/g, '') // Set terminal parameters
+                    .replace(/\x1b\[\d+[{|}]/g, '') // Set character set
+                    .replace(/\x1b\[\d+[~]/g, '') // Set character set
+                    .replace(/\x1b\[\d+[^_`]/g, '') // Set character set
+                    .replace(/\x1b\[\d+[a-z]/g, '') // Set character set
+                    .replace(/\x1b\[\d+[A-Z]/g, ''); // Set character set
+            }
+            
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${processedMessage}`;
+            terminal.appendChild(line);
+            
+            // Ensure scroll to bottom
+            terminal.scrollTop = terminal.scrollHeight;
+            
+            // Keep only last 100 lines to prevent memory issues
+            while (terminal.children.length > 100) {
+                terminal.removeChild(terminal.firstChild);
+            }
+        }
+
+        // ESP32 detection and tile management
+        async function detectESP32(port) {
+            try {
+                logToTerminal('Detecting ESP32...');
+                
+                // Release existing readers/writers
+                if (portReader) {
+                    await portReader.cancel();
+                    portReader.releaseLock();
+                    portReader = null;
+                }
+                if (portWriter) {
+                    await portWriter.close();
+                    portWriter.releaseLock();
+                    portWriter = null;
+                }
+
+                // Close the port temporarily
+                await port.close();
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                // Reopen port for ESP32 detection
+                await port.open({ 
+                    baudRate: 115200,
+                    dataBits: 8,
+                    stopBits: 1,
+                    parity: "none",
+                    flowControl: "none"
+                });
+                
+                // Create ESPLoader instance
+                const loader = new ESPLoader({
+                    transport: new Transport(port),
+                    baudrate: 115200,
+                    debug: true
+                });
+
+                // Try to connect and get chip info
+                await loader.connect();
+                const chipType = await loader.detectChip();
+                const features = await loader.getChipFeatures();
+                const mac = await loader.readMac();
+                
+                // Show ESP32 tile and icon
+                const esp32Tile = document.getElementById('esp32-tile');
+                const esp32Icon = document.getElementById('esp32-icon');
+                if (esp32Tile) {
+                    esp32Tile.style.display = 'flex';
+                    // Update chip info
+                    document.getElementById('esp32-chip-type').textContent = chipType.name;
+                    document.getElementById('esp32-flash').textContent = features.find(f => f.includes('Flash'))?.split(' ')[2] || 'N/A';
+                    document.getElementById('esp32-psram').textContent = features.find(f => f.includes('PSRAM')) ? 'Yes' : 'No';
+                    document.getElementById('esp32-mac').textContent = mac.map(b => b.toString(16).padStart(2, '0')).join(':');
+                }
+                if (esp32Icon) {
+                    esp32Icon.style.display = 'inline';
+                    esp32Icon.classList.add('connected');
+                    esp32Icon.style.color = 'var(--neon-red)';
+                    esp32Icon.style.textShadow = 'var(--neon-red-intense)';
+                }
+                
+                // Update connection state
+                connectionState.esp32 = true;
+                updateConnectionStatus(true, 'esp32');
+                
+                logToTerminal(`ESP32 detected: ${chipType.name}`, false, 'esp32');
+                
+                // Close and reopen port for normal operation
+                await port.close();
+                await new Promise(resolve => setTimeout(resolve, 100));
+                await port.open({ 
+                    baudRate: 115200,
+                    dataBits: 8,
+                    stopBits: 1,
+                    parity: "none",
+                    flowControl: "none"
+                });
+                
+                // Recreate reader and writer
+                portReader = port.readable.getReader();
+                portWriter = port.writable.getWriter();
+                
+                // Try to detect MicroPython
+                await detectMicroPython(port);
+                
+            } catch (error) {
+                logToTerminal(`ESP32 detection failed: ${error.message}`, true);
+                // Hide ESP32 tile and icon on error
+                const esp32Tile = document.getElementById('esp32-tile');
+                const esp32Icon = document.getElementById('esp32-icon');
+                if (esp32Tile) esp32Tile.style.display = 'none';
+                if (esp32Icon) {
+                    esp32Icon.style.display = 'none';
+                    esp32Icon.classList.remove('connected');
+                }
+                connectionState.esp32 = false;
+                updateConnectionStatus(false, 'esp32');
+                
+                // Make sure port is open and readers/writers are recreated
+                try {
+                    if (!port.readable || !port.writable) {
+                        await port.open({ 
+                            baudRate: 115200,
+                            dataBits: 8,
+                            stopBits: 1,
+                            parity: "none",
+                            flowControl: "none"
+                        });
+                    }
+
+                    // Set as active port and create readers/writers if needed
+                    activePort = port;
+                    if (!portReader || portReader.closed) {
+                        portReader = port.readable.getReader();
+                    }
+                    if (!portWriter || portWriter.closed) {
+                        portWriter = port.writable.getWriter();
+                    }
+
+                    // Update USB icon and connection status
+                    updateConnectionStatus(true, 'serial');
+                    connectionState.serial = true;
+                    this.updateToggleState(true);
+                    
+                    // Get port info safely
+                    try {
+                        const info = await port.getInfo();
+                        if (info && info.usbVendorId && info.usbProductId) {
+                            logToTerminal(`Connected to USB device (VID: ${info.usbVendorId}, PID: ${info.usbProductId})`);
+                        } else {
+                            logToTerminal('Connected to port (detailed info not available)');
+                        }
+                    } catch (infoError) {
+                        logToTerminal('Connected to port (could not get device info)');
+                        console.warn('Could not get port info:', infoError);
+                    }
+                    
+                    // Update USB info
+                    await this.updateUSBInfo(port);
+
+                    // Try to detect ESP32
+                    try {
+                        await detectESP32(port);
+                    } catch (error) {
+                        logToTerminal(`ESP32 detection failed: ${error.message}`, true);
+                    }
+                
+                    return true;
+                } catch (error) {
+                    logToTerminal(`Failed to open port: ${error.message}`, true);
+                    this.updateToggleState(false);
+                    
+                    // Clean up if port was opened
+                    try {
+                        if (port.readable || port.writable) {
+                            await this.cleanupPort(port);
+                        }
+                    } catch (closeError) {
+                        console.warn('Error while cleaning up port:', closeError);
+                    }
+                    
+                    throw error;
+                }
+            }
+        }
+
+        async cleanupPort(port) {
+            if (!port) return;
+                
+            try {
+                // Cancel any ongoing reads
+                const reader = port.readable?.getReader();
+                if (reader) {
+                    await reader.cancel();
+                    reader.releaseLock();
+                }
+                
+                // Close any writers
+                const writer = port.writable?.getWriter();
+                if (writer) {
+                    await writer.close();
+                    writer.releaseLock();
+                }
+                
+                // Close the port
+                if (port.readable || port.writable) {
+                    await port.close();
+                    logToTerminal('Port closed successfully');
+                }
+
+                // Clear port variables
+                if (port === activePort) {
+                    activePort = null;
+                    portReader = null;
+                    portWriter = null;
+                }
+            } catch (error) {
+                console.warn('Error during port cleanup:', error);
+                logToTerminal(`Failed to enter bootloader mode: ${error.message}`, true);
+                throw error;
+            }
+        }
+
+        async detectMicroPython(port) {
+            try {
+                logToTerminal('Checking for MicroPython...');
+                
+                // Create a writer
+                const writer = port.writable.getWriter();
+                const reader = port.readable.getReader();
+                
+                try {
+                    // Send Ctrl+C to interrupt any running program
+                    await writer.write(new Uint8Array([0x03]));
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Send Enter and wait for prompt
+                    await writer.write(new Uint8Array([0x0D]));
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Send version check command
+                    const cmd = new TextEncoder().encode('import sys\r\nprint(sys.implementation.name, sys.implementation.version)\r\n');
+                    await writer.write(cmd);
+                    
+                    // Read response with timeout
+                    let response = '';
+                    const startTime = Date.now();
+                    const timeout = 2000; // 2 second timeout
+                    
+                    while (Date.now() - startTime < timeout) {
+                        const {value, done} = await reader.read();
+                        if (done) break;
+                        
+                        response += new TextDecoder().decode(value);
+                        if (response.includes('micropython')) {
+                            // Show Python tile and icon
+                            const pythonTile = document.getElementById('python-tile');
+                            const pythonIcon = document.getElementById('python-icon');
+                            if (pythonTile) pythonTile.style.display = 'flex';
+                            if (pythonIcon) pythonIcon.style.display = 'inline';
+                            
+                            // Update connection state
+                            connectionState.python = true;
+                            updateConnectionStatus(true, 'python');
+                            
+                            // Extract version and update UI
+                            const versionMatch = response.match(/micropython\s+([\d.]+)/i);
+                            const version = versionMatch ? versionMatch[1] : 'Unknown';
+                            document.getElementById('python-version').textContent = version;
+                            
+                            // Get memory info
+                            const memoryCmd = new TextEncoder().encode('import gc\r\nprint(f"Free: {gc.mem_free()}, Allocated: {gc.mem_alloc()}")\r\n');
+                            await writer.write(memoryCmd);
+                            
+                            // Read memory info with timeout
+                            let memoryResponse = '';
+                            const memoryStartTime = Date.now();
+                            const memoryTimeout = 1000;
+                            
+                            while (Date.now() - memoryStartTime < memoryTimeout) {
+                                const {value, done} = await reader.read();
+                                if (done) break;
+                                
+                                memoryResponse += new TextDecoder().decode(value);
+                                if (memoryResponse.includes('Free:')) {
+                                    const memoryMatch = memoryResponse.match(/Free: (\d+), Allocated: (\d+)/);
+                                    if (memoryMatch) {
+                                        const freeMem = parseInt(memoryMatch[1]);
+                                        const allocMem = parseInt(memoryMatch[2]);
+                                        const totalMem = freeMem + allocMem;
+                                        const freePercent = Math.round((freeMem / totalMem) * 100);
+                                        document.getElementById('python-memory').textContent = `${freePercent}% Free`;
+                                    }
+                                    break;
+                                }
+                            }
+                            
+                            logToTerminal(`MicroPython detected: ${version}`);
+                            break;
+                        }
+                    }
+                } finally {
+                    writer.releaseLock();
+                    reader.releaseLock();
+                }
+            } catch (error) {
+                logToTerminal(`MicroPython detection failed: ${error.message}`, true);
+                // Hide Python tile and icon on error
+                const pythonTile = document.getElementById('python-tile');
+                const pythonIcon = document.getElementById('python-icon');
+                if (pythonTile) pythonTile.style.display = 'none';
+                if (pythonIcon) pythonIcon.style.display = 'none';
+                connectionState.python = false;
+                updateConnectionStatus(false, 'python');
+            }
+        }
+
+        async updateUSBInfo(port) {
+            try {
+                const info = await port.getInfo();
+                if (info) {
+                    const vidStr = info.usbVendorId ? `0x${info.usbVendorId.toString(16).padStart(4, '0')}` : '-';
+                    const pidStr = info.usbProductId ? `0x${info.usbProductId.toString(16).padStart(4, '0')}` : '-';
+                    
+                    // Get port path based on device type and platform
+                    let portStr = '-';
+                    if (info.usbVendorId === 0x303a && info.usbProductId === 0x0420) {
+                        // MCT device
+                        if (navigator.platform.includes('Mac')) {
+                            portStr = '/dev/cu.usbmodem2101';
+                        } else if (navigator.platform.includes('Win')) {
+                            portStr = 'COM3';
+                        } else {
+                            portStr = '/dev/ttyACM0';
+                        }
+                    } else {
+                        // Other USB devices
+                        if (navigator.platform.includes('Mac')) {
+                            portStr = `/dev/cu.usbserial-${info.serialNumber || '0000'}`;
+                        } else if (navigator.platform.includes('Win')) {
+                            portStr = `COM${info.serialNumber || '1'}`;
+                        } else {
+                            portStr = `/dev/ttyUSB${info.serialNumber || '0'}`;
+                        }
+                    }
+
+                    // Update Serial tile USB info only
+                    document.getElementById('serial-usb-vid').textContent = vidStr;
+                    document.getElementById('serial-usb-pid').textContent = pidStr;
+                    document.getElementById('serial-usb-port').textContent = portStr;
+
+                    // Log the connection details
+                    logToTerminal(`USB device connected - VID: ${vidStr}, PID: ${pidStr}, Port: ${portStr}`);
+                }
+            } catch (error) {
+                console.warn('Could not get USB info:', error);
+                logToTerminal('Failed to update USB info: ' + error.message, true);
+            }
+        }
+
+        updateToggleState(connected) {
+            const toggle = document.getElementById('serial-toggle');
+            if (toggle) {
+                toggle.classList.toggle('active', connected);
+            }
+        }
+
+        async autoConnectToStoredPorts() {
+            logToTerminal('Checking for stored ports...');
+            try {
+                const ports = await navigator.serial.getPorts();
+                
+                if (ports.length > 0) {
+                    logToTerminal(`Found ${ports.length} stored port(s)`);
+                    
+                    // Clean up any existing connections first
+                    for (const port of ports) {
+                        await this.cleanupPort(port);
+                    }
+                    
+                    // Small delay before reconnecting
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Try to connect to the first available port
+                    try {
+                        await this.connectToPort(ports[0]);
+                        logToTerminal('Successfully connected to stored port');
+                        this.updateToggleState(true);
+                        return true;
+                    } catch (error) {
+                        logToTerminal(`Failed to connect to stored port: ${error.message}`, true);
+                        this.updateToggleState(false);
+                        throw error;
+                    }
+                } else {
+                    logToTerminal('No stored ports found');
+                    this.updateToggleState(false);
+                    return false;
+                }
+            } catch (error) {
+                logToTerminal(`Error checking stored ports: ${error.message}`, true);
+                this.updateToggleState(false);
+                throw error;
+            }
+        }
+
+        async resetESP32ToBootloader(port) {
+            try {
+                logToTerminal('Entering bootloader mode...');
+                
+                // Create a writer
+                const writer = port.writable.getWriter();
+                
+                try {
+                    // Send DTR/RTS sequence
+                    await port.setSignals({ dataTerminalReady: false, requestToSend: true });
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await port.setSignals({ dataTerminalReady: true, requestToSend: false });
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    await port.setSignals({ dataTerminalReady: false });
+                } finally {
+                    writer.releaseLock();
+                }
+                
+                // Wait for bootloader
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                logToTerminal('Entered bootloader mode');
+            } catch (error) {
+                logToTerminal(`Failed to enter bootloader mode: ${error.message}`, true);
+                throw error;
+            }
+        }
+    };
+
+    // Initialize serial manager
+    const serialManager = {
+        connectToPort: async function(port) {
+            try {
+                // Open the port
+                await port.open({ baudRate: 115200 });
+                
+                // Store the active port
+                activePort = port;
+                
+                // Update USB icon and connection status
+                updateConnectionStatus(true, 'serial');
+                connectionState.serial = true;
+                this.updateToggleState(true);
+                
+                // Get port info safely
+                try {
+                    const info = await port.getInfo();
+                    if (info && info.usbVendorId && info.usbProductId) {
+                        logToTerminal(`Connected to USB device (VID: ${info.usbVendorId}, PID: ${info.usbProductId})`);
+                    } else {
+                        logToTerminal('Connected to port (detailed info not available)');
+                    }
+                } catch (infoError) {
+                    logToTerminal('Connected to port (could not get device info)');
+                    console.warn('Could not get port info:', infoError);
+                }
+                
+                // Update USB info
+                await this.updateUSBInfo(port);
+
+                // Try to detect ESP32
+                try {
+                    await detectESP32(port);
+                } catch (error) {
+                    logToTerminal(`ESP32 detection failed: ${error.message}`, true);
+                }
+            
+                return true;
+            } catch (error) {
+                logToTerminal(`Failed to open port: ${error.message}`, true);
+                this.updateToggleState(false);
+                
+                // Clean up if port was opened
+                try {
+                    if (port.readable || port.writable) {
+                        await this.cleanupPort(port);
+                    }
+                } catch (closeError) {
+                    console.warn('Error while cleaning up port:', closeError);
+                }
+                
+                throw error;
+            }
+        },
+
+        cleanupPort: async function(port) {
+            if (!port) return;
+            
+            try {
+                // Cancel any ongoing reads
+                const reader = port.readable?.getReader();
+                if (reader) {
+                    await reader.cancel();
+                    reader.releaseLock();
+                }
+                
+                // Close any writers
+                const writer = port.writable?.getWriter();
+                if (writer) {
+                    await writer.close();
+                    writer.releaseLock();
+                }
+                
+                // Close the port
+                if (port.readable || port.writable) {
+                    await port.close();
+                    logToTerminal('Port closed successfully');
+                }
+
+                // Clear port variables
+                if (port === activePort) {
+                    activePort = null;
+                    portReader = null;
+                    portWriter = null;
+                }
+            } catch (error) {
+                console.warn('Error during port cleanup:', error);
+                logToTerminal(`Failed to clean up port: ${error.message}`, true);
+                throw error;
+            }
+        },
+
+        detectMicroPython: async function(port) {
+            try {
+                logToTerminal('Checking for MicroPython...');
+                
+                // Create a writer
+                const writer = port.writable.getWriter();
+                const reader = port.readable.getReader();
+                
+                try {
+                    // Send Ctrl+C to interrupt any running program
+                    await writer.write(new Uint8Array([0x03]));
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Send Enter and wait for prompt
+                    await writer.write(new Uint8Array([0x0D]));
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Send version check command
+                    const cmd = new TextEncoder().encode('import sys\r\nprint(sys.implementation.name, sys.implementation.version)\r\n');
+                    await writer.write(cmd);
+                    
+                    // Read response with timeout
+                    let response = '';
+                    const startTime = Date.now();
+                    const timeout = 2000; // 2 second timeout
+                    
+                    while (Date.now() - startTime < timeout) {
+                        const {value, done} = await reader.read();
+                        if (done) break;
+                        
+                        response += new TextDecoder().decode(value);
+                        if (response.includes('micropython')) {
+                            // Show Python tile and icon
+                            const pythonTile = document.getElementById('python-tile');
+                            const pythonIcon = document.getElementById('python-icon');
+                            if (pythonTile) pythonTile.style.display = 'flex';
+                            if (pythonIcon) pythonIcon.style.display = 'inline';
+                            
+                            // Update connection state
+                            connectionState.python = true;
+                            updateConnectionStatus(true, 'python');
+                            
+                            // Extract version and update UI
+                            const versionMatch = response.match(/micropython\s+([\d.]+)/i);
+                            const version = versionMatch ? versionMatch[1] : 'Unknown';
+                            document.getElementById('python-version').textContent = version;
+                            
+                            // Get memory info
+                            const memoryCmd = new TextEncoder().encode('import gc\r\nprint(f"Free: {gc.mem_free()}, Allocated: {gc.mem_alloc()}")\r\n');
+                            await writer.write(memoryCmd);
+                            
+                            // Read memory info with timeout
+                            let memoryResponse = '';
+                            const memoryStartTime = Date.now();
+                            const memoryTimeout = 1000;
+                            
+                            while (Date.now() - memoryStartTime < memoryTimeout) {
+                                const {value, done} = await reader.read();
+                                if (done) break;
+                                
+                                memoryResponse += new TextDecoder().decode(value);
+                                if (memoryResponse.includes('Free:')) {
+                                    const memoryMatch = memoryResponse.match(/Free: (\d+), Allocated: (\d+)/);
+                                    if (memoryMatch) {
+                                        const freeMem = parseInt(memoryMatch[1]);
+                                        const allocMem = parseInt(memoryMatch[2]);
+                                        const totalMem = freeMem + allocMem;
+                                        const freePercent = Math.round((freeMem / totalMem) * 100);
+                                        document.getElementById('python-memory').textContent = `${freePercent}% Free`;
+                                    }
+                                    break;
+                                }
+                            }
+                            
+                            logToTerminal(`MicroPython detected: ${version}`);
+                            break;
+                        }
+                    }
+                } finally {
+                    writer.releaseLock();
+                    reader.releaseLock();
+                }
+            } catch (error) {
+                logToTerminal(`MicroPython detection failed: ${error.message}`, true);
+                // Hide Python tile and icon on error
+                const pythonTile = document.getElementById('python-tile');
+                const pythonIcon = document.getElementById('python-icon');
+                if (pythonTile) pythonTile.style.display = 'none';
+                if (pythonIcon) pythonIcon.style.display = 'none';
+                connectionState.python = false;
+                updateConnectionStatus(false, 'python');
+            }
+        },
+
+        updateUSBInfo: async function(port) {
+            try {
+                const info = await port.getInfo();
+                if (info) {
+                    const vidStr = info.usbVendorId ? `0x${info.usbVendorId.toString(16).padStart(4, '0')}` : '-';
+                    const pidStr = info.usbProductId ? `0x${info.usbProductId.toString(16).padStart(4, '0')}` : '-';
+                    
+                    // Get port path based on device type and platform
+                    let portStr = '-';
+                    if (info.usbVendorId === 0x303a && info.usbProductId === 0x0420) {
+                        // MCT device
+                        if (navigator.platform.includes('Mac')) {
+                            portStr = '/dev/cu.usbmodem2101';
+                        } else if (navigator.platform.includes('Win')) {
+                            portStr = 'COM3';
+                        } else {
+                            portStr = '/dev/ttyACM0';
+                        }
+                    } else {
+                        // Other USB devices
+                        if (navigator.platform.includes('Mac')) {
+                            portStr = `/dev/cu.usbserial-${info.serialNumber || '0000'}`;
+                        } else if (navigator.platform.includes('Win')) {
+                            portStr = `COM${info.serialNumber || '1'}`;
+                        } else {
+                            portStr = `/dev/ttyUSB${info.serialNumber || '0'}`;
+                        }
+                    }
+                    
+                    // Update the USB info in the tile
+                    document.getElementById('usb-vid').textContent = vidStr;
+                    document.getElementById('usb-pid').textContent = pidStr;
+                    document.getElementById('usb-port').textContent = portStr;
+                }
+            } catch (error) {
+                logToTerminal('Failed to update USB info: ' + error.message, true);
+            }
+        },
+
+        updateToggleState: function(connected) {
+            const toggle = document.getElementById('serial-toggle');
+            if (toggle) {
+                toggle.classList.toggle('active', connected);
+            }
+        },
+
+        autoConnectToStoredPorts: async function() {
+            logToTerminal('Checking for stored ports...');
+            try {
+                const ports = await navigator.serial.getPorts();
+                
+                if (ports.length > 0) {
+                    logToTerminal(`Found ${ports.length} stored port(s)`);
+                    
+                    // Clean up any existing connections first
+                    for (const port of ports) {
+                        await this.cleanupPort(port);
+                    }
+                    
+                    // Small delay before reconnecting
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Try to connect to the first available port
+                    try {
+                        await this.connectToPort(ports[0]);
+                        logToTerminal('Successfully connected to stored port');
+                        this.updateToggleState(true);
+                        return true;
+                    } catch (error) {
+                        logToTerminal(`Failed to connect to stored port: ${error.message}`, true);
+                        this.updateToggleState(false);
+                        throw error;
+                    }
+                } else {
+                    logToTerminal('No stored ports found');
+                    this.updateToggleState(false);
+                    return false;
+                }
+            } catch (error) {
+                logToTerminal(`Error checking stored ports: ${error.message}`, true);
+                this.updateToggleState(false);
+                throw error;
+            }
+        },
+
+        resetESP32ToBootloader: async function(port) {
+            try {
+                logToTerminal('Entering bootloader mode...');
+                
+                // Create a writer
+                const writer = port.writable.getWriter();
+                
+                try {
+                    // Send DTR/RTS sequence
+                    await port.setSignals({ dataTerminalReady: false, requestToSend: true });
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await port.setSignals({ dataTerminalReady: true, requestToSend: false });
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                    await port.setSignals({ dataTerminalReady: false });
+                } finally {
+                    writer.releaseLock();
+                }
+                
+                // Wait for bootloader
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                logToTerminal('Entered bootloader mode');
+            } catch (error) {
+                logToTerminal(`Failed to enter bootloader mode: ${error.message}`, true);
+                throw error;
+            }
+        }
+    };
+
+    // Initialize serial manager
+    serialManager.autoConnectToStoredPorts();
+
+    // Initialize the application when the DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Setup event listeners for serial connection
+        document.getElementById('serial-toggle').addEventListener('click', async function() {
+            if (activePort) {
+                // Disconnect if already connected
+                try {
+                    if (portReader) {
+                        await portReader.cancel();
+                        portReader.releaseLock();
+                        portReader = null;
+                    }
+                    if (portWriter) {
+                        await portWriter.close();
+                        portWriter.releaseLock();
+                        portWriter = null;
+                    }
+                    await activePort.close();
+                    activePort = null;
+                    
+                    // Update connection state
+                    connectionState.serial = false;
+                    connectionState.esp32 = false;
+                    connectionState.python = false;
+                    updateConnectionStatus(false, 'serial');
+                    updateConnectionStatus(false, 'esp32');
+                    updateConnectionStatus(false, 'python');
+                    
+                    // Update UI
+                    document.getElementById('serial-toggle').classList.remove('active');
+                    document.getElementById('esp32-tile').style.display = 'none';
+                    document.getElementById('python-tile').style.display = 'none';
+                    document.getElementById('esp32-icon').style.display = 'none';
+                    document.getElementById('python-icon').style.display = 'none';
+                    
+                    logToTerminal('Disconnected from port');
+                } catch (error) {
+                    logToTerminal(`Error disconnecting: ${error.message}`, true);
+                }
+            } else {
+                // Connect to a new port
+                try {
+                    const port = await navigator.serial.requestPort();
+                    await serialManager.connectToPort(port);
+                } catch (error) {
+                    if (error.name === 'NotFoundError') {
+                        logToTerminal('No ports selected.', true);
+                    } else {
+                        logToTerminal(`Error connecting: ${error.message}`, true);
+                    }
+                }
+            }
+        });
+
+        // Initialize serial manager
+        serialManager.autoConnectToStoredPorts();
+    });
+    </script>
+</body>
+</html>
+
+

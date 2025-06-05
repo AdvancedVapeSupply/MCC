@@ -811,6 +811,9 @@
 
             // Update all materials and meshes
             updateGroupMeshes();
+            if (lastRequestedColor) {
+                applyMCTColor(lastRequestedColor);
+            }
         });
 
         // Orbit controls setup
@@ -848,6 +851,34 @@
 
         // Initialize
         animate();
+
+        // Debug: Notify parent when ready
+        window.parent.postMessage({ type: 'mct-ready' }, '*');
+        // Debug: Log all received messages
+        window.addEventListener('message', (event) => {
+            console.log('[MCT] Received message:', event.data);
+            if (event.data && event.data.type === 'set-mct-color' && typeof event.data.color === 'string') {
+                lastRequestedColor = event.data.color;
+                applyMCTColor(lastRequestedColor);
+            }
+        });
+
+        function applyMCTColor(colorStr) {
+            if (!colorStr) return;
+            try {
+                const color = new THREE.Color(colorStr);
+                ['f', 'u', 'k', 'd', 't'].forEach(group => {
+                    if (materials[group]) {
+                        materials[group].color.set(color);
+                        if (materials[group].emissive) materials[group].emissive.set(color);
+                    }
+                });
+                updateGroupMeshes();
+                console.log('[MCT] Color applied:', colorStr);
+            } catch (e) {
+                console.warn('[MCT] Failed to apply color:', colorStr, e);
+            }
+        }
     </script>
 </body>
 </html> 

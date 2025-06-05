@@ -1,4 +1,4 @@
 {
-    "idf.pythonInstallPath": "/usr/local/bin/python3",
+    "idf.pythonInstallPath": "/opt/homebrew/opt/python/libexec/bin/python",
     "cmake.sourceDirectory": "/Users/danielmcshan/GitHub/MCC/fatfs"
 }

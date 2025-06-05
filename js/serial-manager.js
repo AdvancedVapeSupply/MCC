@@ -52,13 +52,20 @@ function logToTerminal(message, isError = false, category = '') {
 }
 
 function updateConnectionStatus(isConnected, type) {
-    const icon = document.getElementById(`${type}-icon`);
+    let icon = null;
+    if (type === 'serial' || type === 'usb') {
+        icon = document.getElementById('usb-icon');
+    } else {
+        icon = document.getElementById(`${type}-icon`);
+    }
     if (icon) {
-        icon.style.display = isConnected ? 'inline' : 'none';
+        icon.style.display = 'inline'; // Always visible
         if (isConnected) {
-            icon.classList.add('active');
+            icon.classList.add('connected');
+            icon.style.opacity = '1';
         } else {
-            icon.classList.remove('active');
+            icon.classList.remove('connected');
+            icon.style.opacity = '0.3';
         }
     }
 }
@@ -448,11 +455,10 @@ const USBManager = {
 
     cleanupPort: async function(port) {
         if (!port) return;
-            
         try {
             logToTerminal('Performing thorough port cleanup...');
-            
-            // First handle global readers and writers
+
+            // Release global reader
             if (portReader) {
                 try {
                     await portReader.cancel().catch(e => console.warn('Reader cancel error:', e));
@@ -463,10 +469,10 @@ const USBManager = {
                     console.warn('Error releasing global reader:', readerError);
                 }
             }
-            
+
+            // Release global writer
             if (portWriter) {
                 try {
-                    await portWriter.close().catch(e => console.warn('Writer close error:', e));
                     portWriter.releaseLock();
                     portWriter = null;
                     logToTerminal('Released global writer lock');
@@ -474,44 +480,39 @@ const USBManager = {
                     console.warn('Error releasing global writer:', writerError);
                 }
             }
-            
-            // Now try to release any other potential locks on the port
+
+            // Release any other locks on the port
             try {
-                // Create and immediately release a reader to clear any lingering locks
-            const reader = port.readable?.getReader();
-            if (reader) {
+                // Only get a reader if not already locked
+                if (port.readable && !port.readable.locked) {
+                    const reader = port.readable.getReader();
                     try {
                         await reader.cancel().catch(e => console.warn('Reader cancel error:', e));
                     } finally {
-                reader.releaseLock();
+                        reader.releaseLock();
                     }
-            }
-            
-                // Create and immediately release a writer to clear any lingering locks
-            const writer = port.writable?.getWriter();
-            if (writer) {
-                    try {
-                        await writer.close().catch(e => console.warn('Writer close error:', e));
-                    } finally {
-                writer.releaseLock();
-                    }
+                }
+                // Only get a writer if not already locked
+                if (port.writable && !port.writable.locked) {
+                    const writer = port.writable.getWriter();
+                    writer.releaseLock();
                 }
             } catch (streamError) {
                 console.warn('Error handling port streams:', streamError);
             }
-            
+
             // Allow a small delay for locks to clear
             await new Promise(resolve => setTimeout(resolve, 100));
-            
+
             // Try to close the port with multiple attempts if needed
             let closed = false;
             for (let attempt = 1; attempt <= 3; attempt++) {
                 try {
-            if (port.readable || port.writable) {
+                    if (port.readable || port.writable) {
                         logToTerminal(`Closing port attempt ${attempt}/3...`);
-                await port.close();
+                        await port.close();
                         closed = true;
-                logToTerminal('Port closed successfully');
+                        logToTerminal('Port closed successfully');
                         break;
                     } else {
                         logToTerminal('Port already closed');
@@ -520,16 +521,13 @@ const USBManager = {
                     }
                 } catch (closeError) {
                     logToTerminal(`Port close attempt ${attempt} failed: ${closeError.message}`, true);
-                    
                     if (attempt < 3) {
-                        // Wait longer between attempts
                         await new Promise(resolve => setTimeout(resolve, 500 * attempt));
                     }
                 }
             }
-            
+
             if (!closed) {
-                // If we couldn't close properly, at least indicate the issue
                 logToTerminal('Warning: Could not fully close the port', true);
             }
 
@@ -538,20 +536,16 @@ const USBManager = {
                 activePort = null;
                 connectionState.serial = false;
                 updateConnectionStatus(false, 'serial');
-                
-                // Also clear ESP32/Python states
                 connectionState.esp32 = false;
                 connectionState.python = false;
                 updateConnectionStatus(false, 'esp32');
                 updateConnectionStatus(false, 'python');
             }
-            
+
             return closed;
         } catch (error) {
             console.warn('Error during port cleanup:', error);
             logToTerminal(`Failed to clean up port: ${error.message}`, true);
-            
-            // Still reset the state variables even if cleanup failed
             if (port === activePort) {
                 activePort = null;
                 connectionState.serial = false;
@@ -561,7 +555,6 @@ const USBManager = {
                 updateConnectionStatus(false, 'esp32');
                 updateConnectionStatus(false, 'python');
             }
-            
             throw error;
         }
     },
@@ -646,8 +639,32 @@ const USBManager = {
                     // If prompt was detected, we know it's MicroPython
                     updateMicroPythonUI('MicroPython detected via REPL prompt');
                     
-                    // Try to get more info about MCT specifically - first try version.__version__
-                    await port.write(Buffer.from('try:\n    import version\n    print("MCT Version:", version.__version__)\nexcept ImportError:\n    try:\n        import sys\n        print(sys.implementation._machine)\n    except:\n        try:\n            help("version")\n        except:\n            pass\n\r'));
+                    // Instead of sending a custom script, do a soft reboot and parse the banner
+                    logToTerminal('Sending CTRL-C to interrupt any running program...', false, 'python');
+                    await writer.write(new Uint8Array([0x03])); // CTRL-C
+                    await new Promise(r => setTimeout(r, 100));
+
+                    logToTerminal('Sending CTRL-D for soft reboot...', false, 'python');
+                    await writer.write(new Uint8Array([0x04])); // CTRL-D
+                    await new Promise(r => setTimeout(r, 100));
+
+                    // Read the banner output
+                    let banner = '';
+                    const startTime = Date.now();
+                    const timeout = 3000;
+                    logToTerminal('Reading MicroPython banner after soft reboot...', false, 'python');
+                    while (Date.now() - startTime < timeout) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        const decoded = new TextDecoder().decode(value);
+                        banner += decoded;
+                        logToTerminal('Banner chunk: ' + decoded, false, 'python');
+                        if (banner.includes('>>>')) break;
+                    }
+                    logToTerminal('Full MicroPython banner received:\n' + banner, false, 'python');
+
+                    // Pass the banner to the UI update function for parsing
+                    updateMicroPythonUI(banner);
                     
                     return true;
                 }
@@ -718,12 +735,74 @@ const USBManager = {
                         return false;
                     }
                     
-                    // Send Ctrl+C to interrupt any running program
-                    await writer.write(new Uint8Array([0x03]));
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    // Send Enter and wait for prompt
-                    await writer.write(new Uint8Array([0x0D]));
+                // After creating writer and reader, flush any pending REPL output before sending commands
+                console.log('Flushing REPL output before sending any commands...');
+                let flushData = '';
+                const flushStart = Date.now();
+                while (Date.now() - flushStart < 1500) { // 1.5 seconds flush
+                  const { value, done } = await reader.read();
+                  if (value) {
+                    console.log(hexDump(value, 'RECV FLUSH '));
+                    flushData += new TextDecoder().decode(value);
+                    if (flushData.includes('>>>') || flushData.toLowerCase().includes('micropython')) {
+                      replDetected = true;
+                    }
+                  }
+                  if (done) break;
+                }
+                console.log('REPL flush complete. Data:', flushData);
+
+                if (replDetected) {
+                  console.log('PHASE: REPL detected, skipping ESP32 chip_info/bootloader detection. Proceeding to MicroPython detection.');
+                  logToTerminal('MicroPython REPL detected! Skipping ESP32 chip_info/bootloader detection.', false, 'python');
+                  // Proceed to MicroPython detection logic (call updateMicroPythonUI or similar)
+                  updateMicroPythonUI(flushData);
+                  return true;
+                } else {
+                  console.log('PHASE: No REPL detected, running ESP32 chip_info/bootloader detection...');
+                  logToTerminal('No MicroPython REPL detected. Running ESP32 chip_info/bootloader detection...', false, 'esp32');
+                  // Proceed to ESP32 chip_info/bootloader detection logic as before
+                  // ... existing ESP32 detection code ...
+                }
+
+                // Now send only CTRL-C, wait, and read
+                console.log('SENDING TO REPL: CTRL-C (0x03)');
+                console.log(hexDump(new Uint8Array([0x03]), 'SEND '));
+                await writer.write(new Uint8Array([0x03]));
+                await new Promise(resolve => setTimeout(resolve, 100));
+
+                // Read after CTRL-C
+                let ctrlCData = '';
+                const ctrlCStart = Date.now();
+                while (Date.now() - ctrlCStart < 1000) { // 1 second read
+                  const { value, done } = await reader.read();
+                  if (value) {
+                    console.log(hexDump(value, 'RECV CTRL-C '));
+                    ctrlCData += new TextDecoder().decode(value);
+                  }
+                  if (done) break;
+                }
+                console.log('REPL after CTRL-C. Data:', ctrlCData);
+
+                // Only send ENTER if prompt not seen
+                if (!ctrlCData.includes('>>>')) {
+                  console.log('SENDING TO REPL: ENTER (0x0D)');
+                  console.log(hexDump(new Uint8Array([0x0D]), 'SEND '));
+                  await writer.write(new Uint8Array([0x0D]));
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  // Read after ENTER
+                  let enterData = '';
+                  const enterStart = Date.now();
+                  while (Date.now() - enterStart < 1000) {
+                    const { value, done } = await reader.read();
+                    if (value) {
+                      console.log(hexDump(value, 'RECV ENTER '));
+                      enterData += new TextDecoder().decode(value);
+                    }
+                    if (done) break;
+                  }
+                  console.log('REPL after ENTER. Data:', enterData);
+                }
                     
                     // First, check for the >>> prompt
                     let promptResponse = '';
@@ -746,6 +825,8 @@ const USBManager = {
                             
                             // Try to get more info about MCT specifically
                             const mctCmd = new TextEncoder().encode('try:\n    import version\n    print("MCT Version:", version.__version__)\nexcept ImportError:\n    try:\n        import sys\n        print(sys.implementation._machine)\n    except:\n        try:\n            help("version")\n        except:\n            pass\n\r');
+                            console.log('SENDING TO REPL: mctCmd', mctCmd);
+                            console.log(hexDump(mctCmd, 'SEND '));
                             await writer.write(mctCmd);
                             
                             return true;
@@ -753,19 +834,21 @@ const USBManager = {
                     }
                     
                     // Send version check command if prompt not detected
-                    const cmd = new TextEncoder().encode('import sys\r\nprint(sys.implementation.name, sys.implementation.version)\r\n');
-                    await writer.write(cmd);
+                const cmd = new TextEncoder().encode('import sys\r\nprint(sys.implementation.name, sys.implementation.version)\r\n');
+                console.log('SENDING TO REPL: version check', cmd);
+                console.log(hexDump(cmd, 'SEND '));
+                await writer.write(cmd);
+                
+                // Read response with timeout
+                let response = '';
+                const startTime = Date.now();
+                const timeout = 2000; // 2 second timeout
+                
+                while (Date.now() - startTime < timeout) {
+                    const {value, done} = await reader.read();
+                    if (done) break;
                     
-                    // Read response with timeout
-                    let response = '';
-                    const startTime = Date.now();
-                    const timeout = 2000; // 2 second timeout
-                    
-                    while (Date.now() - startTime < timeout) {
-                        const {value, done} = await reader.read();
-                        if (done) break;
-                        
-                        response += new TextDecoder().decode(value);
+                    response += new TextDecoder().decode(value);
                         if (response.toLowerCase().includes('micropython')) {
                             updateMicroPythonUI(response);
                             return true;
@@ -825,121 +908,148 @@ const USBManager = {
                 pythonTile.style.filter = 'none';
                 pythonTile.classList.remove('detecting');
                 pythonTile.classList.add('detected');
-                
+
                 // Add yellow text styling to all info values
                 const infoValues = pythonTile.querySelectorAll('.endpoint-value');
                 infoValues.forEach(el => {
                     el.style.color = 'var(--neon-yellow)';
                     el.style.textShadow = 'var(--neon-yellow-glow)';
                 });
-                
+
                 // Add yellow text styling to labels
                 const infoLabels = pythonTile.querySelectorAll('.endpoint-label');
                 infoLabels.forEach(el => {
                     el.style.color = 'var(--neon-yellow)';
                 });
-                
+
                 // Scroll to Python tile with a smooth animation
                 pythonTile.scrollIntoView({ behavior: 'smooth' });
-                
+
                 // Add highlight animation
                 pythonTile.classList.add('highlight-tile');
                 setTimeout(() => {
                     pythonTile.classList.remove('highlight-tile');
                 }, 800);
             }
-            
+
             if (pythonIcon) {
                 pythonIcon.style.opacity = '1';
                 pythonIcon.style.color = 'var(--neon-yellow)';
                 pythonIcon.style.textShadow = 'var(--neon-yellow-intense)';
             }
-            
+
             // Update connection state
             connectionState.python = true;
             updateConnectionStatus(true, 'python');
-            
+
             // Extract version and update UI
-            let version = 'Unknown';
+            let version = '?';
             let mctVersion = null;
+            let lvglVersion = null;
             let isMCT = false;
-            
+
             // Log the full response for debugging
             console.log("MicroPython detection response:", response);
-            
-            // Check for the MCT version.__version__ pattern
-            const mctVersionMatch = response.match(/MCT Version:\s+([0-9._]+)/i);
-            if (mctVersionMatch) {
-                mctVersion = mctVersionMatch[1];
-                version = `MCT ${mctVersion}`;
+
+            // Parse AVS MCT version message
+            // Example: AVS MCT (0.9.20250404_1805) LVGL (9.2.2) MicroPython (1.24.1) ...
+            const avsMctMatch = response.match(/AVS\s+MCT\s*\(([^)]+)\)\s*LVGL\s*\(([^)]+)\)\s*MicroPython\s*\(([^)]+)\)/i);
+            if (avsMctMatch) {
+                mctVersion = avsMctMatch[1] || '?';
+                lvglVersion = avsMctMatch[2] || '?';
+                version = avsMctMatch[3] || '?';
                 isMCT = true;
-                logToTerminal(`Detected MCT version: ${mctVersion}`, false, 'python');
-            } 
-            // Check for AVS MCT () LVGL (9.2.2) MicroPython (1.24.1) pattern
-            else if (response.includes('AVS MCT') && response.includes('LVGL') && response.includes('MicroPython')) {
-                const fullMatch = response.match(/AVS\s+MCT\s+\([^)]*\)\s+LVGL\s+\(([^)]+)\)\s+MicroPython\s+\(([^)]+)\)/i);
-                if (fullMatch) {
-                    const lvglVersion = fullMatch[1];
-                    const micropythonVersion = fullMatch[2];
-                    version = `AVS MCT (LVGL ${lvglVersion}, MP ${micropythonVersion})`;
-                    isMCT = true;
-                    logToTerminal(`Detected AVS MCT with LVGL ${lvglVersion} and MicroPython ${micropythonVersion}`, false, 'python');
-                }
-            }
-            // If still not found, check for the standard MicroPython pattern
-            else if (response.includes('REPL prompt')) {
-                version = 'v1.24.1'; // Default version when detected via REPL prompt
-                logToTerminal(`Using default MicroPython version: ${version}`, false, 'python');
+                logToTerminal(`Detected AVS MCT version: ${mctVersion}, LVGL: ${lvglVersion}, MicroPython: ${version}`, false, 'python');
             } else {
-                // Try to extract from response
-                const versionMatch = response.match(/micropython\s+([\d.]+)/i);
-                if (versionMatch) {
-                    version = versionMatch[1];
-                    logToTerminal(`Extracted MicroPython version: ${version}`, false, 'python');
+                // Fallback to previous logic
+                const mctVersionMatch = response.match(/MCT Version:\s+([0-9._]+)/i);
+                if (mctVersionMatch) {
+                    mctVersion = mctVersionMatch[1];
+                    version = mctVersion ? `MCT ${mctVersion}` : '?';
+                    isMCT = true;
+                    logToTerminal(`Detected MCT version: ${mctVersion || '?'}`, false, 'python');
+                }
+                // Try to extract LVGL version if present
+                const lvglMatch = response.match(/LVGL\s*\(([^)]+)\)/i);
+                if (lvglMatch) {
+                    lvglVersion = lvglMatch[1] || '?';
                 }
             }
-            
+
+            // Update Python tile version
             const versionEl = document.getElementById('python-version');
-            if (versionEl) versionEl.textContent = version;
-            
-            // Always set a default memory value
+            if (versionEl) versionEl.textContent = version || '?';
+
+            // Update Python tile LVGL version (add a new field if not present)
+            let lvglEl = document.getElementById('python-lvgl-version');
+            if (!lvglEl) {
+                // Add LVGL version row to Python tile if it doesn't exist
+                const endpointInfo = pythonTile && pythonTile.querySelector('.endpoint-info');
+                if (endpointInfo) {
+                    const lvglRow = document.createElement('div');
+                    lvglRow.className = 'endpoint-row';
+                    const label = document.createElement('span');
+                    label.className = 'endpoint-label';
+                    label.textContent = 'LVGL:';
+                    const value = document.createElement('span');
+                    value.className = 'endpoint-value';
+                    value.id = 'python-lvgl-version';
+                    value.textContent = lvglVersion || '?';
+                    lvglRow.appendChild(label);
+                    lvglRow.appendChild(value);
+                    endpointInfo.insertBefore(lvglRow, endpointInfo.firstChild.nextSibling); // After VERSION
+                    lvglEl = value;
+                }
+            } else {
+                lvglEl.textContent = lvglVersion || '?';
+            }
+
+            // Set memory value to '?' (no default)
             const memoryEl = document.getElementById('python-memory');
-            if (memoryEl) memoryEl.textContent = 'ESP32-S3 8MB';
-            
-            logToTerminal(`MicroPython detected: ${version}`, false, 'python');
-            
+            if (memoryEl) memoryEl.textContent = '?';
+
+            logToTerminal(`MicroPython detected: ${version || '?'}`, false, 'python');
+
+            // Update MCT tile with MCT version if detected
+            if (isMCT && mctVersion) {
+                const avsTile = document.getElementById('avs-tile');
+                if (avsTile) {
+                    // Find or create a version row in the tile-content
+                    let versionRow = avsTile.querySelector('.avs-version-row');
+                    if (!versionRow) {
+                        versionRow = document.createElement('div');
+                        versionRow.className = 'avs-version-row';
+                        versionRow.style.fontSize = '13px';
+                        versionRow.style.color = 'var(--neon-green)';
+                        versionRow.style.marginTop = '4px';
+                        avsTile.querySelector('.tile-content').prepend(versionRow);
+                    }
+                    versionRow.textContent = `MCT Version: ${mctVersion}`;
+                }
+            }
+
             // Check if we detected AVS MCT and activate MCT tile if found
             if (isMCT || response.toLowerCase().includes('avs mct')) {
                 logToTerminal('AVS MCT detected! Activating MCT tile...', false, 'avs');
-                
-                // Activate AVS MCT icon and tile
                 const avsTile = document.getElementById('avs-tile');
                 const avsIcon = document.getElementById('avs-icon');
-                
                 if (avsTile) {
                     avsTile.style.opacity = '1';
                     avsTile.style.filter = 'none';
                     avsTile.classList.add('detected');
-                    
-                    // Scroll to AVS MCT tile
                     setTimeout(() => {
                         avsTile.scrollIntoView({ behavior: 'smooth' });
-                        
-                        // Add highlight animation
                         avsTile.classList.add('highlight-tile');
                         setTimeout(() => {
                             avsTile.classList.remove('highlight-tile');
                         }, 800);
-                    }, 1000); // Delay to allow Python tile animation to finish first
+                    }, 1000);
                 }
-                
                 if (avsIcon) {
                     avsIcon.style.opacity = '1';
                     avsIcon.style.color = 'var(--neon-green)';
                     avsIcon.style.textShadow = 'var(--neon-green-intense)';
                 }
-                
-                // Update connection state
                 connectionState.avs = true;
                 updateConnectionStatus(true, 'avs');
             }
@@ -1057,6 +1167,10 @@ const USBManager = {
     },
 
     autoConnectToStoredPorts: async function() {
+        if (window.isFlashing) {
+            logToTerminal('Auto-connect skipped: firmware update in progress', false, 'serial');
+            return false;
+        }
         logToTerminal('Checking for stored ports...');
         try {
             const ports = await navigator.serial.getPorts();
@@ -1094,7 +1208,10 @@ const USBManager = {
                     const connected = await this.connectToPort(port);
                     
                     if (connected) {
-                        logToTerminal('Successfully connected to stored port');
+                        activePort = port;
+                        window.USBManager = window.USBManager || {};
+                        window.USBManager.currentPort = activePort;
+                        logToTerminal('Successfully connected to stored port', false, 'serial');
                         this.updateToggleState(true);
                         return true;
                     } else {
@@ -1386,7 +1503,7 @@ const USBManager = {
                             await writer.close();
                         }
                         // Then release the lock
-                        writer.releaseLock();
+                            writer.releaseLock();
                         logESP32Message('Released temporary writer after ESP32 reset');
                     } catch (releaseError) {
                         logESP32Message(`Error releasing writer: ${releaseError.message}`, true);
@@ -1994,46 +2111,34 @@ const USBManager = {
                 
                 try {
                     chipInfo = await getChipInfo(port);
-                    
-                    // If chip type is still unknown, try a direct ESP32-S3 detection approach
-                    if (chipInfo.type === "Unknown" || !chipInfo.type) {
-                        logESP32Message('Chip type unknown, trying ESP32-S3 specific detection...');
-                        
-                        // Force default ESP32-S3 values if we couldn't detect properly
-                        chipInfo = {
-                            type: "ESP32-S3",
-                            revision: "v1.0",
-                            features: ["WiFi", "BLE 5", "USB"],
-                            mac: chipInfo.mac || "Unknown",
-                            crystal: "40MHz",
-                            flashSize: "16MB",
-                            flashMode: "QIO",
-                            hasPSRAM: true,
-                            psramSize: "8MB",
-                            id: chipInfo.id || "Unknown"
-                        };
-                        
-                        logESP32Message('Using ESP32-S3 default values');
-                    }
+                    // If any value is missing or unknown, set it to '?'
+                    chipInfo = {
+                        type: chipInfo.type && chipInfo.type !== 'Unknown' ? chipInfo.type : '?',
+                        revision: chipInfo.revision && chipInfo.revision !== 'Unknown' ? chipInfo.revision : '?',
+                        features: Array.isArray(chipInfo.features) && chipInfo.features.length > 0 && chipInfo.features[0] !== 'Unknown' ? chipInfo.features : ['?'],
+                        mac: chipInfo.mac && chipInfo.mac !== 'Unknown' ? chipInfo.mac : '?',
+                        crystal: chipInfo.crystal && chipInfo.crystal !== 'Unknown' ? chipInfo.crystal : '?',
+                        flashSize: chipInfo.flashSize && chipInfo.flashSize !== 'Unknown' ? chipInfo.flashSize : '?',
+                        flashMode: chipInfo.flashMode && chipInfo.flashMode !== 'Unknown' ? chipInfo.flashMode : '?',
+                        hasPSRAM: chipInfo.hasPSRAM === true || chipInfo.hasPSRAM === false ? chipInfo.hasPSRAM : false,
+                        psramSize: chipInfo.psramSize && chipInfo.psramSize !== 'Unknown' ? chipInfo.psramSize : '?',
+                        id: chipInfo.id && chipInfo.id !== 'Unknown' ? chipInfo.id : '?'
+                    };
                 } catch (chipError) {
                     logESP32Message(`Error getting chip info: ${chipError.message}`, true);
-                    
-                    // If chip detection completely fails, assume ESP32-S3 with default values
-                    // This is based on the fact that we're seeing ESP32-S3 in the device
+                    // If chip detection completely fails, set all fields to '?'
                     chipInfo = {
-                        type: "ESP32-S3",
-                        revision: "v1.0",
-                        features: ["WiFi", "BLE 5", "USB"],
-                        mac: "Unknown",
-                        crystal: "40MHz",
-                        flashSize: "16MB",
-                        flashMode: "QIO",
-                        hasPSRAM: true,
-                        psramSize: "8MB",
-                        id: "Unknown"
+                        type: '?',
+                        revision: '?',
+                        features: ['?'],
+                        mac: '?',
+                        crystal: '?',
+                        flashSize: '?',
+                        flashMode: '?',
+                        hasPSRAM: false,
+                        psramSize: '?',
+                        id: '?'
                     };
-                    
-                    logESP32Message('Using ESP32-S3 fallback values due to detection failure');
                 } finally {
                     // Clean up event listeners
                     if (typeof cleanupListeners === 'function') {
@@ -2380,6 +2485,22 @@ const USBManager = {
         } catch (error) {
             logToTerminal(`Error forgetting device: ${error.message}`, true);
             return false;
+        }
+    },
+
+    manualConnect: async function() {
+        try {
+            // Prompt the user to select a port
+            const port = await navigator.serial.requestPort();
+            // Open the port (adjust baudRate if needed)
+            await port.open({ baudRate: 115200 });
+            // Use your existing connection logic
+            await this.connectToPort(port);
+            logToTerminal('Manual connection successful!');
+            return true;
+        } catch (error) {
+            logToTerminal(`Manual connection failed: ${error.message}`, true);
+            throw error;
         }
     }
 };
