@@ -1,0 +1,3 @@
+[submodule "esp-web-tools"]
+	path = esp-web-tools
+	url = https://github.com/esphome/esp-web-tools.git
