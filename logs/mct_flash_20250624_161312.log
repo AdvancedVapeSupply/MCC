@@ -1,0 +1,65 @@
+Running load_mct.py
+Installing required packages...
+=== Install esptool ===
+Command: pip install --upgrade esptool
+Output:
+Requirement already satisfied: esptool in /opt/homebrew/lib/python3.11/site-packages (4.9.0)
+Requirement already satisfied: bitstring!=4.2.0,>=3.1.6 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (4.3.1)
+Requirement already satisfied: cryptography>=2.1.4 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (45.0.4)
+Requirement already satisfied: ecdsa>=0.16.0 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (0.19.1)
+Requirement already satisfied: pyserial>=3.3 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (3.5)
+Requirement already satisfied: reedsolo<1.8,>=1.5.3 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (1.7.0)
+Requirement already satisfied: PyYAML>=5.1 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (6.0.2)
+Requirement already satisfied: intelhex in /opt/homebrew/lib/python3.11/site-packages (from esptool) (2.3.0)
+Requirement already satisfied: argcomplete>=3 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (3.6.2)
+Requirement already satisfied: bitarray<4.0,>=3.0.0 in /opt/homebrew/lib/python3.11/site-packages (from bitstring!=4.2.0,>=3.1.6->esptool) (3.4.2)
+Requirement already satisfied: cffi>=1.14 in /opt/homebrew/lib/python3.11/site-packages (from cryptography>=2.1.4->esptool) (1.17.1)
+Requirement already satisfied: six>=1.9.0 in /opt/homebrew/lib/python3.11/site-packages (from ecdsa>=0.16.0->esptool) (1.17.0)
+Requirement already satisfied: pycparser in /opt/homebrew/lib/python3.11/site-packages (from cffi>=1.14->cryptography>=2.1.4->esptool) (2.22)
+
+[notice] A new release of pip is available: 25.0.1 -> 25.1.1
+[notice] To update, run: python3.11 -m pip install --upgrade pip
+
+===================
+=== Install mpremote ===
+Command: pip install mpremote
+Output:
+Requirement already satisfied: mpremote in /opt/homebrew/lib/python3.11/site-packages (1.25.0)
+Requirement already satisfied: pyserial>=3.3 in /opt/homebrew/lib/python3.11/site-packages (from mpremote) (3.5)
+
+[notice] A new release of pip is available: 25.0.1 -> 25.1.1
+[notice] To update, run: python3.11 -m pip install --upgrade pip
+
+===================
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 d83bda4d29500000 303a:4001 Espressif Systems Espressif Device
+
+===================
+mpremote devs output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 d83bda4d29500000 303a:4001 Espressif Systems Espressif Device
+
+Device not detected in bootloader mode (303a:1001).
+Found device in different mode: 303a:4001 on port /dev/cu.usbmodem1101
+============================================================
+DEVICE MUST BE IN BOOTLOADER MODE!
+============================================================
+This script requires the device to be in bootloader mode.
+We need to see: 303a:1001 Espressif USB JTAG/serial debug unit
+
+To put the device in bootloader mode:
+1. Locate the BOOT and EN (or RST) buttons on your MCT device
+2. Hold down the BOOT button and keep it pressed
+3. While holding BOOT, press and release the EN (or RST) button
+4. Release the BOOT button
+5. The device should now show as 303a:1001 in bootloader mode
+
+After putting the device in bootloader mode, run this script again.
+You can verify bootloader mode with: mpremote devs
+============================================================
+Could not find bootloader port. Exiting.

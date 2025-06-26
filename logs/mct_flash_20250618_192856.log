@@ -1,0 +1,371 @@
+Running load_mct.py
+Installing required packages...
+=== Install esptool ===
+Command: pip install "git+https://github.com/espressif/esptool.git@a32988e2d5f02845ce16e22022f5b64368f12572#egg=esptool"
+Output:
+Collecting esptool
+  Using cached esptool-4.8.1-py3-none-any.whl
+Requirement already satisfied: bitstring!=4.2.0,>=3.1.6 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (4.3.1)
+Requirement already satisfied: cryptography>=2.1.4 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (45.0.4)
+Requirement already satisfied: ecdsa>=0.16.0 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (0.19.1)
+Requirement already satisfied: pyserial>=3.3 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (3.5)
+Requirement already satisfied: reedsolo<1.8,>=1.5.3 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (1.7.0)
+Requirement already satisfied: PyYAML>=5.1 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (6.0.2)
+Requirement already satisfied: intelhex in /opt/homebrew/lib/python3.11/site-packages (from esptool) (2.3.0)
+Requirement already satisfied: argcomplete>=3 in /opt/homebrew/lib/python3.11/site-packages (from esptool) (3.6.2)
+Requirement already satisfied: bitarray<4.0,>=3.0.0 in /opt/homebrew/lib/python3.11/site-packages (from bitstring!=4.2.0,>=3.1.6->esptool) (3.4.2)
+Requirement already satisfied: cffi>=1.14 in /opt/homebrew/lib/python3.11/site-packages (from cryptography>=2.1.4->esptool) (1.17.1)
+Requirement already satisfied: six>=1.9.0 in /opt/homebrew/lib/python3.11/site-packages (from ecdsa>=0.16.0->esptool) (1.17.0)
+Requirement already satisfied: pycparser in /opt/homebrew/lib/python3.11/site-packages (from cffi>=1.14->cryptography>=2.1.4->esptool) (2.22)
+
+[notice] A new release of pip is available: 25.0.1 -> 25.1.1
+[notice] To update, run: python3.11 -m pip install --upgrade pip
+
+===================
+=== Install mpremote ===
+Command: pip install mpremote
+Output:
+Requirement already satisfied: mpremote in /opt/homebrew/lib/python3.11/site-packages (1.25.0)
+Requirement already satisfied: pyserial>=3.3 in /opt/homebrew/lib/python3.11/site-packages (from mpremote) (3.5)
+
+[notice] A new release of pip is available: 25.0.1 -> 25.1.1
+[notice] To update, run: python3.11 -m pip install --upgrade pip
+
+===================
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+===================
+mpremote devs output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+Found Espressif device on port: /dev/cu.usbmodem1101
+=== Get MAC Address ===
+Command: esptool.py --port "/dev/cu.usbmodem1101" chip_id
+Output:
+esptool.py v4.8.1
+Serial port /dev/cu.usbmodem1101
+Connecting...
+Detecting chip type... ESP32-S3
+Chip is ESP32-S3 (QFN56) (revision v0.2)
+Features: WiFi, BLE, Embedded PSRAM 8MB (AP_3v3)
+Crystal is 40MHz
+USB mode: USB-Serial/JTAG
+MAC: d8:3b:da:4d:29:50
+Uploading stub...
+Running stub...
+Stub running...
+Warning: ESP32-S3 has no Chip ID. Reading MAC instead.
+MAC: d8:3b:da:4d:29:50
+Hard resetting via RTS pin...
+
+===================
+Device MAC address: d8:3b:da:4d:29:50
+Flashing firmware...
+=== Erase Flash ===
+Command: esptool.py --chip esp32s3 --port "/dev/cu.usbmodem1101" --baud 921600 --before default_reset --after hard_reset erase_flash
+Output:
+esptool.py v4.8.1
+Serial port /dev/cu.usbmodem1101
+Connecting...
+Chip is ESP32-S3 (QFN56) (revision v0.2)
+Features: WiFi, BLE, Embedded PSRAM 8MB (AP_3v3)
+Crystal is 40MHz
+USB mode: USB-Serial/JTAG
+MAC: d8:3b:da:4d:29:50
+Uploading stub...
+Running stub...
+Stub running...
+Changing baud rate to 921600
+Changed.
+Erasing flash (this may take a while)...
+Chip erase completed successfully in 15.0 seconds.
+Hard resetting via RTS pin...
+
+===================
+=== Write Flash ===
+Command: esptool.py --chip esp32s3 --port "/dev/cu.usbmodem1101" --baud 921600 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_freq 80m 0x0 "/Users/danielmcshan/GitHub/MCT/mod/MCC/firmware/bootloader.bin" 0x8000 "/Users/danielmcshan/GitHub/MCT/mod/MCC/firmware/partition-table.bin" 0x20000 "/Users/danielmcshan/GitHub/MCT/mod/MCC/firmware/micropython.bin"
+Output:
+esptool.py v4.8.1
+Serial port /dev/cu.usbmodem1101
+Connecting...
+Chip is ESP32-S3 (QFN56) (revision v0.2)
+Features: WiFi, BLE, Embedded PSRAM 8MB (AP_3v3)
+Crystal is 40MHz
+USB mode: USB-Serial/JTAG
+MAC: d8:3b:da:4d:29:50
+Uploading stub...
+Running stub...
+Stub running...
+Changing baud rate to 921600
+Changed.
+Configuring flash size...
+Flash will be erased from 0x00000000 to 0x00004fff...
+Flash will be erased from 0x00008000 to 0x00008fff...
+Flash will be erased from 0x00020000 to 0x00301fff...
+SHA digest in image updated
+Compressed 19152 bytes to 12454...
+Writing at 0x00000000... (100 %)
+Wrote 19152 bytes (12454 compressed) at 0x00000000 in 0.2 seconds (effective 712.6 kbit/s)...
+Hash of data verified.
+Compressed 3072 bytes to 139...
+Writing at 0x00008000... (100 %)
+Wrote 3072 bytes (139 compressed) at 0x00008000 in 0.0 seconds (effective 599.7 kbit/s)...
+Hash of data verified.
+Compressed 3019776 bytes to 1788597...
+Writing at 0x00020000... (0 %)
+Writing at 0x0002a844... (1 %)
+Writing at 0x000332e9... (2 %)
+Writing at 0x0003affd... (3 %)
+Writing at 0x000407d5... (4 %)
+Writing at 0x00049680... (5 %)
+Writing at 0x00055e58... (6 %)
+Writing at 0x00062b1b... (7 %)
+Writing at 0x0006e1c7... (8 %)
+Writing at 0x00079657... (9 %)
+Writing at 0x000859ac... (10 %)
+Writing at 0x0008bf3d... (10 %)
+Writing at 0x00092fe6... (11 %)
+Writing at 0x00099221... (12 %)
+Writing at 0x0009f76b... (13 %)
+Writing at 0x000a4f66... (14 %)
+Writing at 0x000aa7b2... (15 %)
+Writing at 0x000b0c2e... (16 %)
+Writing at 0x000b7963... (17 %)
+Writing at 0x000be1a8... (18 %)
+Writing at 0x000c5cc9... (19 %)
+Writing at 0x000cce80... (20 %)
+Writing at 0x000d395f... (20 %)
+Writing at 0x000da29c... (21 %)
+Writing at 0x000e08b3... (22 %)
+Writing at 0x000e7000... (23 %)
+Writing at 0x000edb32... (24 %)
+Writing at 0x000f3a90... (25 %)
+Writing at 0x000fb674... (26 %)
+Writing at 0x0010022d... (27 %)
+Writing at 0x0010866f... (28 %)
+Writing at 0x001118f2... (29 %)
+Writing at 0x0011ab79... (30 %)
+Writing at 0x001273d4... (30 %)
+Writing at 0x001341c0... (31 %)
+Writing at 0x0013ca5c... (32 %)
+Writing at 0x0014540f... (33 %)
+Writing at 0x0014ef94... (34 %)
+Writing at 0x0015a39b... (35 %)
+Writing at 0x00162b17... (36 %)
+Writing at 0x0016aa55... (37 %)
+Writing at 0x001731fc... (38 %)
+Writing at 0x0017b6c0... (39 %)
+Writing at 0x0018391c... (40 %)
+Writing at 0x0018c2a2... (40 %)
+Writing at 0x0019519a... (41 %)
+Writing at 0x0019d259... (42 %)
+Writing at 0x001a54ec... (43 %)
+Writing at 0x001ad468... (44 %)
+Writing at 0x001b518f... (45 %)
+Writing at 0x001bad79... (46 %)
+Writing at 0x001c079a... (47 %)
+Writing at 0x001c5ad4... (48 %)
+Writing at 0x001cae0b... (49 %)
+Writing at 0x001d01d0... (50 %)
+Writing at 0x001d55e7... (50 %)
+Writing at 0x001dae16... (51 %)
+Writing at 0x001e0389... (52 %)
+Writing at 0x001e5716... (53 %)
+Writing at 0x001ea95c... (54 %)
+Writing at 0x001efd5f... (55 %)
+Writing at 0x001f5190... (56 %)
+Writing at 0x001f9fcb... (57 %)
+Writing at 0x001fefa9... (58 %)
+Writing at 0x00204396... (59 %)
+Writing at 0x0020ae1d... (60 %)
+Writing at 0x00210b9f... (60 %)
+Writing at 0x0021697c... (61 %)
+Writing at 0x0021bd2b... (62 %)
+Writing at 0x00220dca... (63 %)
+Writing at 0x00226c9f... (64 %)
+Writing at 0x0022cc9a... (65 %)
+Writing at 0x002323d8... (66 %)
+Writing at 0x00237d4e... (67 %)
+Writing at 0x0023d5aa... (68 %)
+Writing at 0x0024306e... (69 %)
+Writing at 0x00248d6a... (70 %)
+Writing at 0x0024de56... (70 %)
+Writing at 0x0025472e... (71 %)
+Writing at 0x0025a22b... (72 %)
+Writing at 0x0025f983... (73 %)
+Writing at 0x002654b7... (74 %)
+Writing at 0x0026b328... (75 %)
+Writing at 0x0027074c... (76 %)
+Writing at 0x0027576a... (77 %)
+Writing at 0x0027ac22... (78 %)
+Writing at 0x0028040e... (79 %)
+Writing at 0x002857a6... (80 %)
+Writing at 0x0028b153... (80 %)
+Writing at 0x0028ff14... (81 %)
+Writing at 0x00294ed1... (82 %)
+Writing at 0x0029a279... (83 %)
+Writing at 0x0029f780... (84 %)
+Writing at 0x002a47ec... (85 %)
+Writing at 0x002a9ab1... (86 %)
+Writing at 0x002af879... (87 %)
+Writing at 0x002b4e27... (88 %)
+Writing at 0x002b9f8f... (89 %)
+Writing at 0x002beff9... (90 %)
+Writing at 0x002c4659... (90 %)
+Writing at 0x002ca7d3... (91 %)
+Writing at 0x002cfcb3... (92 %)
+Writing at 0x002d60fb... (93 %)
+Writing at 0x002db209... (94 %)
+Writing at 0x002e0986... (95 %)
+Writing at 0x002e8e20... (96 %)
+Writing at 0x002ee5f6... (97 %)
+Writing at 0x002f3b2e... (98 %)
+Writing at 0x002f9aed... (99 %)
+Writing at 0x002ffe69... (100 %)
+Wrote 3019776 bytes (1788597 compressed) at 0x00020000 in 18.5 seconds (effective 1309.1 kbit/s)...
+Hash of data verified.
+
+Leaving...
+Hard resetting via RTS pin...
+
+===================
+Waiting for device to boot into MicroPython...
+=== Run flashed firmware ===
+Command: esptool.py --chip esp32s3 --port "/dev/cu.usbmodem1101" run
+Output:
+esptool.py v4.8.1
+Serial port /dev/cu.usbmodem1101
+Connecting...
+Chip is ESP32-S3 (QFN56) (revision v0.2)
+Features: WiFi, BLE, Embedded PSRAM 8MB (AP_3v3)
+Crystal is 40MHz
+USB mode: USB-Serial/JTAG
+MAC: d8:3b:da:4d:29:50
+Uploading stub...
+Running stub...
+Stub running...
+Hard resetting via RTS pin...
+
+===================
+Waiting for REPL port (attempt 1/10)…
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+===================
+Waiting for REPL port (attempt 2/10)…
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+===================
+Waiting for REPL port (attempt 3/10)…
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+===================
+Waiting for REPL port (attempt 4/10)…
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+===================
+Waiting for REPL port (attempt 5/10)…
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+===================
+Waiting for REPL port (attempt 6/10)…
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+===================
+Waiting for REPL port (attempt 7/10)…
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+===================
+Waiting for REPL port (attempt 8/10)…
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+===================
+Waiting for REPL port (attempt 9/10)…
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+===================
+Waiting for REPL port (attempt 10/10)…
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+===================
+REPL port not detected automatically; script will still attempt mpremote without explicit port.
+Firmware flashed successfully.
+Checking MicroPython REPL access…
+=== Check REPL ===
+Command: mpremote exec "print('OK')"
+Output:
+b''
+Traceback (most recent call last):
+  File "/opt/homebrew/bin/mpremote", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/opt/homebrew/lib/python3.11/site-packages/mpremote/main.py", line 569, in main
+    handler_func(state, args)
+  File "/opt/homebrew/lib/python3.11/site-packages/mpremote/commands.py", line 448, in do_exec
+    _do_execbuffer(state, args.expr[0], args.follow)
+  File "/opt/homebrew/lib/python3.11/site-packages/mpremote/commands.py", line 431, in _do_execbuffer
+    state.ensure_raw_repl()
+  File "/opt/homebrew/lib/python3.11/site-packages/mpremote/main.py", line 511, in ensure_raw_repl
+    self.transport.enter_raw_repl(soft_reset=soft_reset)
+  File "/opt/homebrew/lib/python3.11/site-packages/mpremote/transport_serial.py", line 159, in enter_raw_repl
+    raise TransportError("could not enter raw repl")
+mpremote.transport.TransportError: could not enter raw repl
+
+===================
+Failed to access MicroPython REPL.

@@ -100,98 +100,55 @@ def setup_virtual_environment(logger: logging.Logger) -> None:
     
     # Install required packages
     echo_status(logger, Colors.BLUE, "Installing required packages...")
-    run_cmd('pip install "git+https://github.com/espressif/esptool.git@a32988e2d5f02845ce16e22022f5b64368f12572#egg=esptool"', "Install esptool", logger)
+    run_cmd('pip install --upgrade esptool', "Install esptool", logger)
     run_cmd("pip install mpremote", "Install mpremote", logger)
 
 def find_bootloader_port(logger: logging.Logger) -> Optional[str]:
     """Find the bootloader port for the ESP32 device."""
-    known_pids = "1001|2008|0002|0001"
     
     # Get device info
     _, device_info = run_cmd("mpremote devs", "Check Device Info", logger)
     echo_status(logger, Colors.BLUE, "mpremote devs output:")
     echo_status(logger, Colors.NC, device_info)
     
-    # Try to find a port with VID 303a and a known PID, excluding debug console
+    # Look specifically for 303a:1001 (bootloader mode)
     bootloader_port = None
     for line in device_info.splitlines():
-        port = line.split()[0]
-        if "debug-console" in port:
+        if "debug-console" in line:
             continue
-        if "usbmodem" in port:
-            bootloader_port = port
+        if "303a:1001" in line and "Espressif USB JTAG/serial debug unit" in line:
+            bootloader_port = line.split()[0]
+            echo_status(logger, Colors.GREEN, f"Found device in bootloader mode on port: {bootloader_port}")
+            return bootloader_port
+    
+    # If we don't find 303a:1001, the device is not in bootloader mode
+    echo_status(logger, Colors.YELLOW, "Device not detected in bootloader mode (303a:1001).")
+    
+    # Check if device is in MicroPython mode (303a:4001) or other modes
+    other_esp_port = None
+    for line in device_info.splitlines():
+        if "debug-console" in line:
+            continue
+        if "303a:" in line:
+            other_esp_port = line.split()[0]
+            pid = line.split()[2] if len(line.split()) > 2 else "unknown"
+            echo_status(logger, Colors.YELLOW, f"Found device in different mode: {pid} on port {other_esp_port}")
             break
-        if f"303a:({known_pids})" in line:
-            bootloader_port = port
-            break
     
-    if not bootloader_port:
-        # Fallback to any port with VID 303a, still excluding debug console
-        for line in device_info.splitlines():
-            port = line.split()[0]
-            if "debug-console" in port:
-                continue
-            if "303a:" in line:
-                bootloader_port = port
-                break
-        
-        if bootloader_port:
-            echo_status(logger, Colors.BLUE, "Attempting to reset device into bootloader mode...")
-            
-            # First try watchdog reset to enter bootloader mode
-            run_cmd(f"esptool.py --chip esp32s3 --port \"{bootloader_port}\" --before default_reset --after watchdog_reset chip_id",
-                   "Reset Device with Watchdog", logger)
-            
-            time.sleep(2)
-            
-            # Check if device is now in bootloader mode
-            _, device_info = run_cmd("mpremote devs", "Check Device Info After Reset", logger)
-            for line in device_info.splitlines():
-                port = line.split()[0]
-                if "debug-console" in port:
-                    continue
-                if f"303a:({known_pids})" in line:
-                    bootloader_port = port
-                    break
-            
-            if not bootloader_port:
-                # Try to force download mode using watchdog reset
-                echo_status(logger, Colors.BLUE, "First reset attempt failed, trying to force download mode...")
-                run_cmd(f"esptool.py --chip esp32s3 --port \"{bootloader_port}\" --before no_reset --after watchdog_reset write_flash 0x0 /dev/zero 0x1000",
-                       "Force Download Mode", logger)
-                
-                time.sleep(2)
-                
-                # Check if device is now in bootloader mode
-                _, device_info = run_cmd("mpremote devs", "Check Device Info After Force Download", logger)
-                for line in device_info.splitlines():
-                    port = line.split()[0]
-                    if "debug-console" in port:
-                        continue
-                    if f"303a:({known_pids})" in line:
-                        bootloader_port = port
-                        break
-                
-                if not bootloader_port:
-                    echo_status(logger, Colors.RED, "Could not reset device into bootloader mode. Please try manually by:")
-                    echo_status(logger, Colors.RED, "1. Hold down the BOOT button")
-                    echo_status(logger, Colors.RED, "2. Press and release the EN button")
-                    echo_status(logger, Colors.RED, "3. Release the BOOT button")
-                    return None
-    
-    if not bootloader_port:
-        bootloader_port = "/dev/cu.usbmodem1101"
-        echo_status(logger, Colors.YELLOW, f"Defaulting serial port to {bootloader_port}")
-    else:
-        echo_status(logger, Colors.GREEN, f"Found Espressif device on port: {bootloader_port}")
-    
-    return bootloader_port
+    # Prompt user to put device in bootloader mode
+    show_bootloader_instructions(logger)
+    return None
 
 def get_mac_address(port: str, logger: logging.Logger) -> Optional[str]:
     """Get MAC address from device using esptool."""
     _, output = run_cmd(f"esptool.py --port \"{port}\" chip_id", "Get MAC Address", logger)
-    mac_addr = None
     
+    # Check for firmware corruption first
+    if detect_firmware_corruption(output):
+        show_bootloader_instructions(logger)
+        return None
+    
+    mac_addr = None
     for line in output.splitlines():
         if "MAC:" in line:
             mac_addr = line.split("MAC:")[1].strip()
@@ -211,23 +168,38 @@ def flash_firmware(port: str, logger: logging.Logger) -> bool:
     
     echo_status(logger, Colors.BLUE, "Flashing firmware...")
     
-    # Erase flash using watchdog reset
-    run_cmd(f"esptool.py --chip esp32s3 --port \"{port}\" --baud 921600 --before default_reset --after watchdog_reset erase_flash",
-            "Erase Flash", logger)
+    # Erase flash using the same parameters as the working shell script
+    ret_code_erase, erase_output = run_cmd(
+        f"esptool.py --chip esp32s3 --port \"{port}\" --baud 115200 "
+        f"--before default_reset --after watchdog_reset erase_flash",
+        "Erase Flash",
+        logger,
+    )
     
-    time.sleep(5)  # Shorter delay after erase
+    if ret_code_erase != 0:
+        echo_status(logger, Colors.RED, "Flash erase operation failed.")
+        show_bootloader_instructions(logger)
+        return False
     
-    # Write flash (let esptool detect flash size automatically) using watchdog reset
-    run_cmd(
-        f"esptool.py --chip esp32s3 --port \"{port}\" --baud 921600 "
+    # Add delay between erase and write like the shell script
+    time.sleep(2)
+    
+    # Write flash using the same parameters as the working shell script
+    ret_code, flash_output = run_cmd(
+        f"esptool.py --chip esp32s3 --port \"{port}\" --baud 115200 "
         f"--before default_reset --after watchdog_reset write_flash -z "
-        f"--flash_mode dio --flash_freq 80m "
         f"0x0 \"{firmware_dir}/bootloader.bin\" "
         f"0x8000 \"{firmware_dir}/partition-table.bin\" "
         f"0x20000 \"{firmware_dir}/micropython.bin\"",
         "Write Flash",
         logger,
     )
+    
+    # Check if flash write failed or device is now corrupted
+    if ret_code != 0 or "Could not open" in flash_output or "port is busy" in flash_output:
+        echo_status(logger, Colors.RED, "Flash write operation failed.")
+        show_bootloader_instructions(logger)
+        return False
     
     # Give the device time to boot into MicroPython
     echo_status(logger, Colors.BLUE, "Waiting for device to boot into MicroPython...")
@@ -350,6 +322,37 @@ def set_nvs_values(repl_port: Optional[str], wifi_ssid: str, wifi_pass: str, sn_
             success = False
     return success
 
+def detect_firmware_corruption(output: str) -> bool:
+    """Detect if the device is stuck in a firmware corruption boot loop."""
+    # Look for the characteristic "invalid header: 0xffffffff" pattern
+    invalid_header_count = output.count("invalid header: 0xffffffff")
+    # Also check for ESP-ROM boot messages indicating repeated resets
+    esp_rom_count = output.count("ESP-ROM:esp32s3-")
+    # Check for mpremote transport errors that indicate REPL corruption
+    transport_error = "could not enter raw repl" in output.lower()
+    
+    # If we see many invalid headers, multiple ESP-ROM boot messages, or transport errors, it's corrupted
+    return invalid_header_count > 10 or esp_rom_count > 2 or transport_error
+
+def show_bootloader_instructions(logger: logging.Logger):
+    """Show instructions for putting device in bootloader mode."""
+    echo_status(logger, Colors.RED, "=" * 60)
+    echo_status(logger, Colors.RED, "DEVICE MUST BE IN BOOTLOADER MODE!")
+    echo_status(logger, Colors.RED, "=" * 60)
+    echo_status(logger, Colors.YELLOW, "This script requires the device to be in bootloader mode.")
+    echo_status(logger, Colors.YELLOW, "We need to see: 303a:1001 Espressif USB JTAG/serial debug unit")
+    echo_status(logger, Colors.YELLOW, "")
+    echo_status(logger, Colors.YELLOW, "To put the device in bootloader mode:")
+    echo_status(logger, Colors.YELLOW, "1. Locate the BOOT and EN (or RST) buttons on your MCT device")
+    echo_status(logger, Colors.YELLOW, "2. Hold down the BOOT button and keep it pressed")
+    echo_status(logger, Colors.YELLOW, "3. While holding BOOT, press and release the EN (or RST) button")
+    echo_status(logger, Colors.YELLOW, "4. Release the BOOT button")
+    echo_status(logger, Colors.YELLOW, "5. The device should now show as 303a:1001 in bootloader mode")
+    echo_status(logger, Colors.YELLOW, "")
+    echo_status(logger, Colors.GREEN, "After putting the device in bootloader mode, run this script again.")
+    echo_status(logger, Colors.GREEN, "You can verify bootloader mode with: mpremote devs")
+    echo_status(logger, Colors.RED, "=" * 60)
+
 # ------------------------- Argument parsing impl -------------------------
 
 def parse_args():
@@ -402,6 +405,11 @@ def main():
         repl_cmd = f"mpremote connect {globals()['_mct_repl_port']} exec \"print('OK')\""
 
     _, output = run_cmd(repl_cmd, "Check REPL", logger)
+
+    # Check for firmware corruption before checking for "OK"
+    if detect_firmware_corruption(output):
+        show_bootloader_instructions(logger)
+        return False
 
     if "OK" not in output:
         echo_status(logger, Colors.RED, "Failed to access MicroPython REPL.")

@@ -1,11 +1,11 @@
 {
-    "mct_version": "0.9.20250523_1717-main@702d69c",
-    "lvgl_version": "1.24.1@2df9373",
-    "mct_commit": "702d69c",
-    "lvgl_commit": "2df9373",
-    "build_date": "2025-05-23T23:19:25Z",
-    "repo_urls": {
-        "mct": "https://github.com/AdvancedVapeSupply/MCT",
-        "lvgl": "https://github.com/lvgl-micropython/lvgl_micropython"
-    }
+  "mct_version": "0.9.20250624_1611-main@158dba4",
+  "lvgl_version": "1.24.1@d271655",
+  "mct_commit": "158dba4",
+  "lvgl_commit": "d271655",
+  "build_date": "2025-06-24T22:11:34Z",
+  "repo_urls": {
+    "mct": "https://github.com/AdvancedVapeSupply/MCT",
+    "lvgl": "https://github.com/lvgl-micropython/lvgl_micropython"
+  }
 }
