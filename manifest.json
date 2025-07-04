@@ -1,6 +1,6 @@
 {
   "name": "AVS MCT",
-  "version": "0.9.20250624_1611",
+  "version": "0.9.20250703_1441",
   "builds": [
     {
       "chipFamily": "ESP32-S3",
@@ -16,6 +16,10 @@
         {
           "path": "firmware/micropython.bin",
           "offset": 131072
+        },
+        {
+          "path": "firmware/filesystem.bin",
+          "offset": 4194304
         }
       ]
     }

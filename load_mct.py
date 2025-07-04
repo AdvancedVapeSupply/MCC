@@ -190,7 +190,8 @@ def flash_firmware(port: str, logger: logging.Logger) -> bool:
         f"--before default_reset --after watchdog_reset write_flash -z "
         f"0x0 \"{firmware_dir}/bootloader.bin\" "
         f"0x8000 \"{firmware_dir}/partition-table.bin\" "
-        f"0x20000 \"{firmware_dir}/micropython.bin\"",
+        f"0x20000 \"{firmware_dir}/micropython.bin\" "
+        f"0x820000 \"{firmware_dir}/filesystem.bin\"",
         "Write Flash",
         logger,
     )
@@ -390,14 +391,17 @@ def main():
     # Use MAC address if no serial numbers provided
     sn_mct = args.sn_mct or mac_addr.replace(":", "")
     sn_led = args.sn_led or sn_mct
-    
+
+    # Always use cleaned MAC (no colons, lowercase) for uuid
+    mac_clean = mac_addr.lower().replace(":", "") if mac_addr else "unknown"
+
     # Flash firmware
     if not flash_firmware(port, logger):
         echo_status(logger, Colors.RED, "Failed to flash firmware. Exiting.")
         return False
-    
+
     echo_status(logger, Colors.GREEN, "Firmware flashed successfully.")
-    
+
     # Check MicroPython REPL access (use detected port if we have one)
     echo_status(logger, Colors.BLUE, "Checking MicroPython REPL access…")
     repl_cmd = "mpremote exec \"print('OK')\""
@@ -443,13 +447,13 @@ def main():
         except Exception as e:
             echo_status(logger, Colors.YELLOW, f"Could not read version_info.json: {e}")
 
-    mac_clean = mac_addr.lower().replace(":", "") if mac_addr else "unknown"
-
+    # Always include both cleaned and original MAC in payload
     payload_flash = create_payload(
         mac_clean,
         "flashed",
         sn_mct=sn_mct,
         sn_led=sn_led,
+        mac_addr=mac_addr,
         **{"ota_0.upy": lvgl_version, "ota_0.mct": mct_version},
     )
     if not register_data(payload_flash, "FLASH", logger):
@@ -459,6 +463,7 @@ def main():
     payload_repl = create_payload(
         mac_clean,
         "test_repl",
+        mac_addr=mac_addr,
         **{"ota_0.upy": lvgl_version, "ota_0.mct": mct_version},
     )
     register_data(payload_repl, "REPL TEST", logger)

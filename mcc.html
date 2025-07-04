@@ -20,7 +20,9 @@
     }
     </script>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script type="module" src="js/serial-manager.js"></script>
+    <script type="module" src="js/ble-monitor.js"></script>
     <script type="module" src="chip_info.js"></script>
     <style>
         * {
@@ -1428,6 +1430,14 @@
                                         <div class="progress-text">0%</div>
                                     </div>
                                 </button>
+                                <button class="action-button" id="mct-test-btn" title="Run MCT Test Suite">
+                                    <i class="fas fa-vial"></i>
+                                    <div class="progress"></div>
+                                </button>
+                                <button class="action-button" id="ble-monitor-btn" title="BLE Monitoring">
+                                    <i class="fas fa-chart-line"></i>
+                                    <div class="progress"></div>
+                                </button>
                                 <button class="settings-button">
                                     <i class="fas fa-cog"></i>
                                 </button>
@@ -1457,6 +1467,29 @@
                                 <div class="tile-icon"><i class="fas fa-cog"></i></div>
                                 <div class="tile-title" style="font-size:13px;text-align:center;margin-top:8px;">Settings</div>
                             </div>
+                        </div>
+                        
+                        <!-- NVS Color Control Section -->
+                        <div class="nvs-color-section" style="margin-top: 20px; padding: 15px; background: rgba(0, 40, 0, 0.3); border-radius: 8px; border: 1px solid rgba(0, 255, 0, 0.2);">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                                <span style="color: var(--neon-green); font-size: 14px; font-weight: 500;">NVS Color Control</span>
+                                <div style="display: flex; gap: 8px;">
+                                    <button id="read-nvs-color-btn" class="action-button" style="padding: 6px 12px; font-size: 12px;" title="Read mod.color from NVS">
+                                        <i class="fas fa-download"></i> Read
+                                    </button>
+                                    <button id="write-nvs-color-btn" class="action-button" style="padding: 6px 12px; font-size: 12px;" title="Write mod.color to NVS">
+                                        <i class="fas fa-upload"></i> Write
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <input type="color" id="nvs-color-picker" style="width: 40px; height: 40px; border: 2px solid var(--neon-green); border-radius: 4px; background: none; cursor: pointer;">
+                                <div style="flex: 1;">
+                                    <div style="color: var(--neon-green); font-size: 12px; margin-bottom: 4px;">Current Color:</div>
+                                    <div id="nvs-color-display" style="color: var(--neon-green); font-size: 11px; font-family: monospace;">#00ff00</div>
+                                </div>
+                            </div>
+                            <div id="nvs-color-status" style="margin-top: 8px; font-size: 11px; color: var(--neon-green); opacity: 0.8;"></div>
                         </div>
                     </div>
                 </div>
@@ -2102,6 +2135,229 @@
         document.getElementById('download-files-btn').addEventListener('click', () => {
             alert('Download Python Files: This feature is not yet implemented.');
         });
+
+        // WebREPL functionality for Python REPL button
+        let replMode = false;
+        let replTerminal = null;
+        let replSocket = null;
+        
+        document.getElementById('python-repl-btn').addEventListener('click', async () => {
+            const replBtn = document.getElementById('python-repl-btn');
+            const pythonTile = document.getElementById('python-tile');
+            const terminalContainer = document.querySelector('.terminal-container');
+            const terminalPanel = document.getElementById('terminal-panel');
+            const terminalInputContainer = document.getElementById('terminal-input-container');
+            const terminalInput = document.getElementById('terminal-input');
+            
+            // Check if Python tile is active
+            if (!pythonTile || !pythonTile.classList.contains('detected')) {
+                alert('Please connect to MicroPython first');
+                return;
+            }
+            
+            // Toggle REPL mode
+            replMode = !replMode;
+            
+            if (replMode) {
+                // Get device IP from WiFi tile if available
+                const wifiSSID = document.getElementById('wifi-ssid')?.textContent;
+                const wifiIP = document.getElementById('wifi-ip')?.textContent;
+                
+                // Check if we should use WebREPL or USB Serial REPL
+                const useWebREPL = wifiIP && wifiIP !== '-' && wifiSSID && wifiSSID !== '-';
+                
+                if (!useWebREPL) {
+                    // Use USB Serial REPL fallback
+                    const port = window.USBManager?.currentPort;
+                    if (!port) {
+                        alert('No USB connection available. Please connect via USB or ensure WiFi is connected for WebREPL.');
+                        replMode = false;
+                        return;
+                    }
+                    
+                    // Activate REPL mode UI
+                    replBtn.classList.add('active');
+                    terminalContainer.classList.add('repl-mode');
+                    terminalInputContainer.classList.add('active');
+                    
+                    // Clear terminal and show connection message
+                    terminalPanel.innerHTML = '';
+                    logToTerminal('Entering USB Serial REPL mode...', false, 'python');
+                    logToTerminal('Type Python commands and press Enter. Use Ctrl-C to interrupt.', false, 'python');
+                    
+                    // Focus on input
+                    terminalInput.focus();
+                    
+                    // Mark as USB REPL mode
+                    window.usbReplMode = true;
+                    
+                    return;
+                }
+                
+                // Activate REPL mode UI
+                replBtn.classList.add('active');
+                terminalContainer.classList.add('repl-mode');
+                terminalInputContainer.classList.add('active');
+                
+                // Clear terminal and show connection message
+                terminalPanel.innerHTML = '';
+                logToTerminal(`Connecting to WebREPL at ws://${wifiIP}:420...`, false, 'python');
+                
+                try {
+                    // Create WebSocket connection to MCT WebREPL on port 420
+                    replSocket = new WebSocket(`ws://${wifiIP}:420`);
+                    replSocket.binaryType = 'arraybuffer';
+                    
+                    replSocket.onopen = () => {
+                        logToTerminal('WebREPL connected!', false, 'python');
+                        logToTerminal('Enter password to authenticate...', false, 'python');
+                        terminalInput.focus();
+                    };
+                    
+                    replSocket.onmessage = (event) => {
+                        if (event.data instanceof ArrayBuffer) {
+                            // Handle binary WebSocket frames
+                            const view = new DataView(event.data);
+                            const frameType = view.getUint8(0);
+                            const payloadLength = view.getUint8(1);
+                            
+                            if (frameType === 0x81) { // Text frame
+                                const decoder = new TextDecoder();
+                                const text = decoder.decode(new Uint8Array(event.data, 2, payloadLength));
+                                
+                                // Display in terminal with proper formatting
+                                const lines = text.split('\\n');
+                                lines.forEach(line => {
+                                    if (line.trim()) {
+                                        const lineElement = document.createElement('div');
+                                        lineElement.className = 'terminal-line python';
+                                        lineElement.textContent = line;
+                                        terminalPanel.appendChild(lineElement);
+                                    }
+                                });
+                                
+                                // Auto-scroll to bottom
+                                terminalPanel.scrollTop = terminalPanel.scrollHeight;
+                            }
+                        } else {
+                            // Handle text messages
+                            const text = event.data;
+                            logToTerminal(text, false, 'python');
+                        }
+                    };
+                    
+                    replSocket.onerror = (error) => {
+                        logToTerminal(`WebREPL error: ${error}`, true, 'python');
+                    };
+                    
+                    replSocket.onclose = () => {
+                        logToTerminal('WebREPL disconnected', false, 'python');
+                        // Clean up UI
+                        replBtn.classList.remove('active');
+                        terminalContainer.classList.remove('repl-mode');
+                        terminalInputContainer.classList.remove('active');
+                        replMode = false;
+                        replSocket = null;
+                    };
+                    
+                } catch (error) {
+                    logToTerminal(`Failed to connect to WebREPL: ${error.message}`, true, 'python');
+                    replMode = false;
+                }
+                
+            } else {
+                // Deactivate REPL mode
+                if (replSocket) {
+                    replSocket.close();
+                }
+                if (window.usbReplMode) {
+                    window.usbReplMode = false;
+                    logToTerminal('Exited USB Serial REPL mode', false, 'python');
+                } else {
+                    logToTerminal('Exited WebREPL mode', false, 'python');
+                }
+                replBtn.classList.remove('active');
+                terminalContainer.classList.remove('repl-mode');
+                terminalInputContainer.classList.remove('active');
+            }
+        });
+        
+        // Handle terminal input for REPL (both WebREPL and USB Serial)
+        document.getElementById('terminal-input').addEventListener('keypress', async (event) => {
+            if (event.key === 'Enter' && replMode) {
+                const input = event.target.value;
+                event.target.value = '';
+                
+                if (window.usbReplMode) {
+                    // USB Serial REPL mode
+                    const port = window.USBManager?.currentPort;
+                    if (port && port.writable) {
+                        try {
+                            const writer = port.writable.getWriter();
+                            const encoder = new TextEncoder();
+                            
+                            // Send the command
+                            await writer.write(encoder.encode(input + '\r\n'));
+                            writer.releaseLock();
+                            
+                            // Echo command in terminal
+                            logToTerminal(`>>> ${input}`, false, 'python');
+                            
+                            // Read response
+                            if (port.readable) {
+                                const reader = port.readable.getReader();
+                                setTimeout(async () => {
+                                    try {
+                                        const { value, done } = await reader.read();
+                                        if (!done && value) {
+                                            const response = new TextDecoder().decode(value);
+                                            logToTerminal(response, false, 'python');
+                                        }
+                                        reader.releaseLock();
+                                    } catch (e) {
+                                        console.error('Error reading REPL response:', e);
+                                    }
+                                }, 100);
+                            }
+                        } catch (error) {
+                            logToTerminal(`Error sending command: ${error.message}`, true, 'python');
+                        }
+                    }
+                } else if (replSocket && replSocket.readyState === WebSocket.OPEN) {
+                    // WebREPL mode
+                    // Send command to WebREPL (text frame format)
+                    const encoder = new TextEncoder();
+                    const data = encoder.encode(input + '\r\n');
+                    const frame = new Uint8Array(2 + data.length);
+                    frame[0] = 0x81; // Text frame
+                    frame[1] = data.length;
+                    frame.set(data, 2);
+                    
+                    replSocket.send(frame);
+                    
+                    // Echo command in terminal
+                    logToTerminal(`>>> ${input}`, false, 'python');
+                }
+            }
+        });
+        
+        // Add Ctrl-C handler for interrupting running programs
+        document.getElementById('terminal-input').addEventListener('keydown', async (event) => {
+            if (event.ctrlKey && event.key === 'c' && replMode && window.usbReplMode) {
+                event.preventDefault();
+                const port = window.USBManager?.currentPort;
+                if (port && port.writable) {
+                    try {
+                        const writer = port.writable.getWriter();
+                        await writer.write(new Uint8Array([0x03])); // Ctrl-C
+                        writer.releaseLock();
+                        logToTerminal('^C', false, 'python');
+                    } catch (error) {
+                        console.error('Error sending Ctrl-C:', error);
+                    }
+                }
+            }
+        });
         document.getElementById('firmware-update-btn').addEventListener('click', async () => {
             let port = window.USBManager?.currentPort;
             if (port) {
@@ -2117,6 +2373,306 @@
                 return;
             }
             window.open('esptool.html', '_blank');
+        });
+
+        // --- MCT Test Button Logic ---
+        document.getElementById('mct-test-btn').addEventListener('click', async () => {
+            // Only allow if Python tile is active
+            const pythonTile = document.getElementById('python-tile');
+            if (!pythonTile || !pythonTile.classList.contains('detected')) {
+                alert('Please connect to MicroPython (Python tile must be active) before running the MCT test.');
+                return;
+            }
+            
+            // Use the same port as Python tile
+            const port = window.USBManager?.currentPort;
+            if (!port) {
+                alert('No device connected! Please reconnect using the Python tile.');
+                return;
+            }
+
+            // Show test options
+            const testType = prompt('Select test type:\n1. auto (comprehensive)\n2. manual (interactive)\n3. performance (benchmark)\n\nEnter 1, 2, or 3:', '1');
+            if (!testType) return;
+            
+            let testMode = 'auto';
+            if (testType === '2') testMode = 'manual';
+            else if (testType === '3') testMode = 'performance';
+            
+            logToTerminal(`🧪 Starting MCT test suite (${testMode} mode)...`, false, 'avs');
+            
+            // Create the test script
+            const testScript = `
+import json
+import time
+from MCT import MCT
+
+print("🧪 MCT Test Suite Starting...")
+print(f"Test Mode: {testMode}")
+print("=" * 50)
+
+try:
+    # Create MCT instance
+    print("Creating MCT instance...")
+    mct = MCT()
+    print("✅ MCT instance created successfully")
+    
+    # Run the test
+    print(f"Running {testMode} test...")
+    start_time = time.ticks_ms()
+    
+    if hasattr(mct, 'test'):
+        # Use the new simplified test method
+        result = mct.test()
+        print("✅ Test completed successfully")
+        print("Test result:", result)
+    else:
+        # Fallback to comprehensive test
+        print("Using comprehensive test fallback...")
+        from MCT_TEST import MCT_TEST
+        tester = MCT_TEST(mct)
+        result = tester.comprehensive_test(testMode)
+        print("✅ Comprehensive test completed")
+    
+    end_time = time.ticks_ms()
+    duration = time.ticks_diff(end_time, start_time) / 1000
+    
+    print(f"\\nTest completed in {duration:.2f} seconds")
+    print("=" * 50)
+    print("🎉 MCT Test Suite Finished!")
+    
+except Exception as e:
+    print(f"❌ Test failed with error: {e}")
+    import sys
+    sys.print_exception(e)
+    print("=" * 50)
+    print("💥 MCT Test Suite Failed!")
+`;
+
+            // Send the test script to the device via MicroPython REPL
+            try {
+                const writer = port.writable.getWriter();
+                
+                // Send Ctrl-C to interrupt any running code
+                await writer.write(new TextEncoder().encode("\x03\r\n"));
+                await new Promise(r => setTimeout(r, 100));
+                
+                // Send the test script
+                await writer.write(new TextEncoder().encode(testScript + "\r\n"));
+                writer.releaseLock();
+                
+                logToTerminal('MCT test script sent and running! Check the terminal for results.', false, 'avs');
+                
+            } catch (err) {
+                logToTerminal(`Failed to send MCT test script: ${err.message || err}`, true, 'avs');
+                alert('Failed to send test script: ' + (err.message || err));
+            }
+        });
+
+        // --- NVS Color Control Logic ---
+        const nvsColorPicker = document.getElementById('nvs-color-picker');
+        const nvsColorDisplay = document.getElementById('nvs-color-display');
+        const nvsColorStatus = document.getElementById('nvs-color-status');
+        const readNvsColorBtn = document.getElementById('read-nvs-color-btn');
+        const writeNvsColorBtn = document.getElementById('write-nvs-color-btn');
+
+        // Initialize color picker with current mod color
+        nvsColorPicker.value = localStorage.getItem('modColor') || '#00ff00';
+        nvsColorDisplay.textContent = nvsColorPicker.value;
+
+        // Update display when color picker changes
+        nvsColorPicker.addEventListener('input', (e) => {
+            const color = e.target.value;
+            nvsColorDisplay.textContent = color;
+        });
+
+        // Read mod.color from NVS
+        readNvsColorBtn.addEventListener('click', async () => {
+            // Only allow if Python tile is active
+            const pythonTile = document.getElementById('python-tile');
+            if (!pythonTile || !pythonTile.classList.contains('detected')) {
+                alert('Please connect to MicroPython (Python tile must be active) before reading from NVS.');
+                return;
+            }
+            
+            const port = window.USBManager?.currentPort;
+            if (!port) {
+                alert('No device connected! Please reconnect using the Python tile.');
+                return;
+            }
+
+            nvsColorStatus.textContent = 'Reading from NVS...';
+            
+            try {
+                const writer = port.writable.getWriter();
+                
+                // Send Ctrl-C to interrupt any running code
+                await writer.write(new TextEncoder().encode("\x03\r\n"));
+                await new Promise(r => setTimeout(r, 100));
+                
+                // Send the read script
+                const readScript = `
+import nvs
+try:
+    color = nvs.get_nvs('mod.color')
+    if color:
+        print(f"NVS_COLOR_READ_SUCCESS:{color}")
+    else:
+        print("NVS_COLOR_READ_NONE")
+except Exception as e:
+    print(f"NVS_COLOR_READ_ERROR:{e}")
+`;
+                
+                await writer.write(new TextEncoder().encode(readScript + "\r\n"));
+                writer.releaseLock();
+                
+                // Listen for the response
+                const reader = port.readable.getReader();
+                let response = '';
+                let timeout = setTimeout(() => {
+                    reader.releaseLock();
+                    nvsColorStatus.textContent = 'Read timeout - no response from device';
+                }, 5000);
+                
+                try {
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        
+                        response += new TextDecoder().decode(value);
+                        
+                        if (response.includes('NVS_COLOR_READ_SUCCESS:')) {
+                            clearTimeout(timeout);
+                            const match = response.match(/NVS_COLOR_READ_SUCCESS:(.+)/);
+                            if (match) {
+                                const color = match[1].trim();
+                                nvsColorPicker.value = color;
+                                nvsColorDisplay.textContent = color;
+                                nvsColorStatus.textContent = `Read successfully: ${color}`;
+                                
+                                // Update the mod color in the UI
+                                document.documentElement.style.setProperty('--mod-color', color);
+                                localStorage.setItem('modColor', color);
+                                const avsTile = document.getElementById('avs-tile');
+                                if (avsTile) {
+                                    avsTile.style.boxShadow = `0 0 16px 4px ${color}, 0 0 32px 8px ${color}55`;
+                                    avsTile.style.borderColor = color;
+                                }
+                            }
+                            break;
+                        } else if (response.includes('NVS_COLOR_READ_NONE')) {
+                            clearTimeout(timeout);
+                            nvsColorStatus.textContent = 'No color found in NVS';
+                            break;
+                        } else if (response.includes('NVS_COLOR_READ_ERROR:')) {
+                            clearTimeout(timeout);
+                            const match = response.match(/NVS_COLOR_READ_ERROR:(.+)/);
+                            if (match) {
+                                nvsColorStatus.textContent = `Read error: ${match[1].trim()}`;
+                            }
+                            break;
+                        }
+                    }
+                } finally {
+                    reader.releaseLock();
+                }
+                
+            } catch (err) {
+                nvsColorStatus.textContent = `Failed to read from NVS: ${err.message || err}`;
+                console.error('NVS read error:', err);
+            }
+        });
+
+        // Write mod.color to NVS
+        writeNvsColorBtn.addEventListener('click', async () => {
+            // Only allow if Python tile is active
+            const pythonTile = document.getElementById('python-tile');
+            if (!pythonTile || !pythonTile.classList.contains('detected')) {
+                alert('Please connect to MicroPython (Python tile must be active) before writing to NVS.');
+                return;
+            }
+            
+            const port = window.USBManager?.currentPort;
+            if (!port) {
+                alert('No device connected! Please reconnect using the Python tile.');
+                return;
+            }
+
+            const color = nvsColorPicker.value;
+            nvsColorStatus.textContent = 'Writing to NVS...';
+            
+            try {
+                const writer = port.writable.getWriter();
+                
+                // Send Ctrl-C to interrupt any running code
+                await writer.write(new TextEncoder().encode("\x03\r\n"));
+                await new Promise(r => setTimeout(r, 100));
+                
+                // Send the write script
+                const writeScript = `
+import nvs
+try:
+    result = nvs.set_nvs('mod.color', '${color}')
+    if result:
+        print("NVS_COLOR_WRITE_SUCCESS")
+    else:
+        print("NVS_COLOR_WRITE_FAILED")
+except Exception as e:
+    print(f"NVS_COLOR_WRITE_ERROR:{e}")
+`;
+                
+                await writer.write(new TextEncoder().encode(writeScript + "\r\n"));
+                writer.releaseLock();
+                
+                // Listen for the response
+                const reader = port.readable.getReader();
+                let response = '';
+                let timeout = setTimeout(() => {
+                    reader.releaseLock();
+                    nvsColorStatus.textContent = 'Write timeout - no response from device';
+                }, 5000);
+                
+                try {
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        
+                        response += new TextDecoder().decode(value);
+                        
+                        if (response.includes('NVS_COLOR_WRITE_SUCCESS')) {
+                            clearTimeout(timeout);
+                            nvsColorStatus.textContent = `Written successfully: ${color}`;
+                            
+                            // Update the mod color in the UI
+                            document.documentElement.style.setProperty('--mod-color', color);
+                            localStorage.setItem('modColor', color);
+                            const avsTile = document.getElementById('avs-tile');
+                            if (avsTile) {
+                                avsTile.style.boxShadow = `0 0 16px 4px ${color}, 0 0 32px 8px ${color}55`;
+                                avsTile.style.borderColor = color;
+                            }
+                            break;
+                        } else if (response.includes('NVS_COLOR_WRITE_FAILED')) {
+                            clearTimeout(timeout);
+                            nvsColorStatus.textContent = 'Write failed';
+                            break;
+                        } else if (response.includes('NVS_COLOR_WRITE_ERROR:')) {
+                            clearTimeout(timeout);
+                            const match = response.match(/NVS_COLOR_WRITE_ERROR:(.+)/);
+                            if (match) {
+                                nvsColorStatus.textContent = `Write error: ${match[1].trim()}`;
+                            }
+                            break;
+                        }
+                    }
+                } finally {
+                    reader.releaseLock();
+                }
+                
+            } catch (err) {
+                nvsColorStatus.textContent = `Failed to write to NVS: ${err.message || err}`;
+                console.error('NVS write error:', err);
+            }
         });
 
         // --- Modal Color Picker for MCT ---
@@ -2262,6 +2818,37 @@
         }
 
         let mctReady = false;
+        let bleMonitor = null;
+        
+        // Initialize BLE Monitor
+        async function initBLEMonitor() {
+            try {
+                const { BLEMonitor } = await import('./js/ble-monitor.js');
+                bleMonitor = new BLEMonitor();
+                console.log('[MCC] BLE Monitor initialized');
+            } catch (error) {
+                console.error('[MCC] Failed to initialize BLE Monitor:', error);
+            }
+        }
+        
+        // BLE Monitor button handler
+        document.addEventListener('DOMContentLoaded', () => {
+            const bleMonitorBtn = document.getElementById('ble-monitor-btn');
+            if (bleMonitorBtn) {
+                bleMonitorBtn.addEventListener('click', () => {
+                    if (bleMonitor) {
+                        bleMonitor.show();
+                    } else {
+                        console.error('[MCC] BLE Monitor not initialized');
+                        alert('BLE Monitor not available. Please refresh the page.');
+                    }
+                });
+            }
+        });
+        
+        // Initialize BLE Monitor when page loads
+        initBLEMonitor();
+        
         window.addEventListener('message', (event) => {
             if (event.data && event.data.type === 'mct-ready') {
                 mctReady = true;
