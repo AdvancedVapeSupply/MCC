@@ -1,0 +1,139 @@
+Running load_mct.py
+Installing required packages...
+=== Install esptool ===
+Command: pip install --upgrade esptool
+Output:
+Requirement already satisfied: esptool in ./venv_ble/lib/python3.13/site-packages (5.0.0)
+Requirement already satisfied: bitstring!=4.2.0,>=3.1.6 in ./venv_ble/lib/python3.13/site-packages (from esptool) (4.3.1)
+Requirement already satisfied: cryptography>=43.0.0 in ./venv_ble/lib/python3.13/site-packages (from esptool) (45.0.4)
+Requirement already satisfied: pyserial>=3.3 in ./venv_ble/lib/python3.13/site-packages (from esptool) (3.5)
+Requirement already satisfied: reedsolo<1.8,>=1.5.3 in ./venv_ble/lib/python3.13/site-packages (from esptool) (1.7.0)
+Requirement already satisfied: PyYAML>=5.1 in ./venv_ble/lib/python3.13/site-packages (from esptool) (6.0.2)
+Requirement already satisfied: intelhex in ./venv_ble/lib/python3.13/site-packages (from esptool) (2.3.0)
+Requirement already satisfied: rich_click in ./venv_ble/lib/python3.13/site-packages (from esptool) (1.8.9)
+Requirement already satisfied: click<8.2.0 in ./venv_ble/lib/python3.13/site-packages (from esptool) (8.1.8)
+Requirement already satisfied: bitarray<4.0,>=3.0.0 in ./venv_ble/lib/python3.13/site-packages (from bitstring!=4.2.0,>=3.1.6->esptool) (3.4.3)
+Requirement already satisfied: cffi>=1.14 in ./venv_ble/lib/python3.13/site-packages (from cryptography>=43.0.0->esptool) (1.17.1)
+Requirement already satisfied: rich>=10.7 in ./venv_ble/lib/python3.13/site-packages (from rich_click->esptool) (14.0.0)
+Requirement already satisfied: typing_extensions>=4 in ./venv_ble/lib/python3.13/site-packages (from rich_click->esptool) (4.14.0)
+Requirement already satisfied: pycparser in ./venv_ble/lib/python3.13/site-packages (from cffi>=1.14->cryptography>=43.0.0->esptool) (2.22)
+Requirement already satisfied: markdown-it-py>=2.2.0 in ./venv_ble/lib/python3.13/site-packages (from rich>=10.7->rich_click->esptool) (3.0.0)
+Requirement already satisfied: pygments<3.0.0,>=2.13.0 in ./venv_ble/lib/python3.13/site-packages (from rich>=10.7->rich_click->esptool) (2.19.2)
+Requirement already satisfied: mdurl~=0.1 in ./venv_ble/lib/python3.13/site-packages (from markdown-it-py>=2.2.0->rich>=10.7->rich_click->esptool) (0.1.2)
+
+[notice] A new release of pip is available: 25.0.1 -> 25.1.1
+[notice] To update, run: pip install --upgrade pip
+
+===================
+=== Install mpremote ===
+Command: pip install mpremote
+Output:
+Requirement already satisfied: mpremote in ./venv_ble/lib/python3.13/site-packages (1.25.0)
+Requirement already satisfied: pyserial>=3.3 in ./venv_ble/lib/python3.13/site-packages (from mpremote) (3.5)
+
+[notice] A new release of pip is available: 25.0.1 -> 25.1.1
+[notice] To update, run: pip install --upgrade pip
+
+===================
+=== Check Device Info ===
+Command: mpremote devs
+Output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+===================
+mpremote devs output:
+/dev/cu.Bluetooth-Incoming-Port None 0000:0000 None None
+/dev/cu.debug-console None 0000:0000 None None
+/dev/cu.usbmodem1101 D8:3B:DA:4D:29:50 303a:1001 Espressif USB JTAG/serial debug unit
+
+Found device in bootloader mode on port: /dev/cu.usbmodem1101
+=== Get MAC Address ===
+Command: esptool --port "/dev/cu.usbmodem1101" chip-id
+Output:
+esptool v5.0.0
+Serial port /dev/cu.usbmodem1101:
+Connecting....
+Detecting chip type... ESP32-S3
+[1A[2K[1A[2K[1A[2KConnected to ESP32-S3 on /dev/cu.usbmodem1101:
+Chip type:          ESP32-S3 (QFN56) (revision v0.2)
+Features:           Wi-Fi, BT 5 (LE), Dual Core + LP Core, 240MHz, Embedded PSRAM 8MB (AP_3v3)
+Crystal frequency:  40MHz
+USB mode:           USB-Serial/JTAG
+MAC:                d8:3b:da:4d:29:50
+
+Uploading stub flasher...
+Running stub flasher...
+[1A[2K[1A[2KStub flasher running.
+
+[0;33mWarning:[0m ESP32-S3 has no chip ID. Reading MAC address instead.
+MAC:                d8:3b:da:4d:29:50
+
+Hard resetting via RTS pin...
+
+===================
+Device MAC address: d8:3b:da:4d:29:50
+Flashing firmware...
+=== Erase Flash ===
+Command: esptool --chip esp32s3 --port "/dev/cu.usbmodem1101" --baud 115200 --before default_reset --after watchdog_reset erase_flash
+Output:
+[0;33mWarning:[0m Deprecated: Choice 'default_reset' for option '--before' is deprecated. Use 'default-reset' instead.
+[0;33mWarning:[0m Deprecated: Choice 'watchdog_reset' for option '--after' is deprecated. Use 'watchdog-reset' instead.
+[0;33mWarning:[0m Deprecated: Command 'erase_flash' is deprecated. Use 'erase-flash' instead.
+esptool v5.0.0
+Serial port /dev/cu.usbmodem1101:
+Connecting....
+[1A[2K[1A[2KConnected to ESP32-S3 on /dev/cu.usbmodem1101:
+Chip type:          ESP32-S3 (QFN56) (revision v0.2)
+Features:           Wi-Fi, BT 5 (LE), Dual Core + LP Core, 240MHz, Embedded PSRAM 8MB (AP_3v3)
+Crystal frequency:  40MHz
+USB mode:           USB-Serial/JTAG
+MAC:                d8:3b:da:4d:29:50
+
+Uploading stub flasher...
+Running stub flasher...
+[1A[2K[1A[2KStub flasher running.
+
+Erasing flash memory (this may take a while)...
+[1A[2KFlash memory erased successfully in 3.3 seconds.
+
+Hard resetting with a watchdog...
+
+===================
+=== Write Flash ===
+Command: esptool --chip esp32s3 --port "/dev/cu.usbmodem1101" --baud 115200 --before default_reset --after watchdog_reset write_flash -z 0x0 "/Users/danielmcshan/GitHub/MCT/mod/MCC/firmware/bootloader.bin" 0x8000 "/Users/danielmcshan/GitHub/MCT/mod/MCC/firmware/partition-table.bin" 0x20000 "/Users/danielmcshan/GitHub/MCT/mod/MCC/firmware/micropython.bin" 0x820000 "/Users/danielmcshan/GitHub/MCT/mod/MCC/firmware/filesystem.bin"
+Output:
+[0;33mWarning:[0m Deprecated: Choice 'default_reset' for option '--before' is deprecated. Use 'default-reset' instead.
+[0;33mWarning:[0m Deprecated: Choice 'watchdog_reset' for option '--after' is deprecated. Use 'watchdog-reset' instead.
+[0;33mWarning:[0m Deprecated: Command 'write_flash' is deprecated. Use 'write-flash' instead.
+esptool v5.0.0
+                                                                                                                               
+ Usage: esptool write-flash [OPTIONS] <address> <filename>...                                                                  
+                                                                                                                               
+ Try 'esptool write-flash -h' for help                                                                                         
+╭─ Error ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Invalid value for '<address> <filename>...': [Errno 2] No such file or directory:                                           │
+│ '/Users/danielmcshan/GitHub/MCT/mod/MCC/firmware/filesystem.bin'                                                            │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+                                                                                                                               
+
+===================
+Flash write operation failed.
+============================================================
+DEVICE MUST BE IN BOOTLOADER MODE!
+============================================================
+This script requires the device to be in bootloader mode.
+We need to see: 303a:1001 Espressif USB JTAG/serial debug unit
+
+To put the device in bootloader mode:
+1. Locate the BOOT and EN (or RST) buttons on your MCT device
+2. Hold down the BOOT button and keep it pressed
+3. While holding BOOT, press and release the EN (or RST) button
+4. Release the BOOT button
+5. The device should now show as 303a:1001 in bootloader mode
+
+After putting the device in bootloader mode, run this script again.
+You can verify bootloader mode with: mpremote devs
+============================================================
+Failed to flash firmware. Exiting.
