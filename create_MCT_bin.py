@@ -95,11 +95,41 @@ def find_esp32_port():
 # Filesystem functions
 def create_littlefs_image(image_path, source_dir, partition_size):
     """Create a LittleFS image from the source directory."""
-    # Get absolute path to mklittlefs binary
-    mklittlefs_path = os.path.abspath("./mklittlefs/mklittlefs")
-    if not os.path.exists(mklittlefs_path):
-        print(f"\nError: mklittlefs binary not found at {mklittlefs_path}!")
-        print("Please ensure you've built mklittlefs in the ./mklittlefs directory")
+    # Try to find mklittlefs in ESP-IDF tools or system PATH
+    mklittlefs_path = None
+    
+    # Check ESP-IDF tools first
+    esp_idf_tools = os.environ.get('IDF_PATH')
+    if esp_idf_tools:
+        esp_mklittlefs = os.path.join(esp_idf_tools, 'components', 'spiffs', 'mklittlefs', 'mklittlefs')
+        if os.path.exists(esp_mklittlefs):
+            mklittlefs_path = esp_mklittlefs
+    
+    # Try system PATH
+    if not mklittlefs_path:
+        try:
+            result = subprocess.run(['which', 'mklittlefs'], capture_output=True, text=True)
+            if result.returncode == 0:
+                mklittlefs_path = result.stdout.strip()
+        except:
+            pass
+    
+    # Try common locations
+    if not mklittlefs_path:
+        common_paths = [
+            '/usr/local/bin/mklittlefs',
+            '/opt/homebrew/bin/mklittlefs',
+            '../mklittlefs/mklittlefs'
+        ]
+        for path in common_paths:
+            if os.path.exists(path):
+                mklittlefs_path = path
+                break
+    
+    if not mklittlefs_path:
+        print(f"\nError: mklittlefs binary not found!")
+        print("Please ensure mklittlefs is installed or available in PATH")
+        print("You can use ESP-IDF's mklittlefs or install it separately")
         return False
         
     print(f"\nCreating LittleFS image: {image_path}")
@@ -585,14 +615,14 @@ def copy_firmware():
 
 def verify_firmware():
     """Verify the firmware file exists."""
-    if not os.path.exists(firmware_path):
-        print(f"Error: Firmware not found at: {firmware_path}")
-        print(f"Please ensure firmware exists in: {os.path.dirname(firmware_path)}")
+    if not os.path.exists(firmware_dest):
+        print(f"Error: Firmware not found at: {firmware_dest}")
+        print(f"Please ensure firmware exists in: {os.path.dirname(firmware_dest)}")
         print(f"Current directory: {os.getcwd()}")
         return False
     
-    print(f"Found firmware: {firmware_path}")
-    print(f"Size: {os.path.getsize(firmware_path):,} bytes")
+    print(f"Found firmware: {firmware_dest}")
+    print(f"Size: {os.path.getsize(firmware_dest):,} bytes")
     return True
 
 # First, verify and copy the firmware
