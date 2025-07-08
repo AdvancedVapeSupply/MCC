@@ -746,8 +746,8 @@
                 <h2><i class="fas fa-flask"></i> System Testing</h2>
                 
                 <div class="step">
-                    <h3><span class="step-number">4</span>Run Tests</h3>
-                    <p>After installation, run comprehensive system tests to verify all components are working correctly.</p>
+                    <h3><span class="step-number">4</span>Test & Start MCT</h3>
+                    <p>After installation, run comprehensive system tests to verify all components are working correctly, then start the MCT application.</p>
                 </div>
 
                 <div class="test-controls">
@@ -756,6 +756,9 @@
                     </button>
                     <button class="test-button" id="run-test-btn" disabled>
                         <span id="basic-test-icon"><i class="fas fa-play"></i></span> Run MCT Test
+                    </button>
+                    <button class="test-button" id="start-mct-btn" disabled>
+                        <i class="fas fa-rocket"></i> Start MCT Application
                     </button>
                     <button class="test-button secondary" onclick="clearResults()">
                         <i class="fas fa-trash"></i> Clear Results
@@ -1273,6 +1276,7 @@ print("=== MCT Test Suite Finished ===")
         async function connectToDevice() {
             const connectBtn = document.getElementById('connect-btn');
             const runBtn = document.getElementById('run-test-btn');
+            const startBtn = document.getElementById('start-mct-btn');
             
             connectBtn.disabled = true;
             connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
@@ -1295,6 +1299,7 @@ print("=== MCT Test Suite Finished ===")
                         connectBtn.innerHTML = '<i class="fas fa-check"></i> Connected';
                         connectBtn.disabled = false;
                         runBtn.disabled = false;
+                        startBtn.disabled = false;
                         updateTestStatus('ready');
                         return true;
                     }
@@ -1307,14 +1312,121 @@ print("=== MCT Test Suite Finished ===")
                 connectBtn.innerHTML = '<i class="fas fa-usb"></i> Connect Device';
                 connectBtn.disabled = false;
                 runBtn.disabled = true;
+                startBtn.disabled = true;
                 alert('Connection failed: ' + error.message);
                 return false;
+            }
+        }
+
+        // Start MCT Application function
+        async function startMCTApplication() {
+            if (!deviceConnected) {
+                alert('Please connect to device first!');
+                return;
+            }
+
+            const startBtn = document.getElementById('start-mct-btn');
+            startBtn.disabled = true;
+            startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting MCT...';
+
+            try {
+                // Send interrupt to clear any running code
+                await usbManager.sendCommand('\x03');
+                await new Promise(resolve => setTimeout(resolve, 200));
+
+                // Script to uncomment import _main and reset
+                const startScript = `
+print("=== Starting MCT Application ===")
+print("Reading main.py...")
+
+# Read current main.py content
+try:
+    with open('main.py', 'r') as f:
+        content = f.read()
+    print("Current main.py content:")
+    print(repr(content))
+    
+    # Uncomment the import _main line
+    if '#import _main' in content:
+        new_content = content.replace('#import _main', 'import _main')
+        print("Uncommenting import _main...")
+        
+        # Write the modified content back
+        with open('main.py', 'w') as f:
+            f.write(new_content)
+        print("main.py updated successfully!")
+        
+        # Verify the change
+        with open('main.py', 'r') as f:
+            verify_content = f.read()
+        print("Updated main.py content:")
+        print(repr(verify_content))
+        
+        print("MCT application will start after reset...")
+        print("=== Resetting MCT Device ===")
+        
+        # Reset the device
+        import machine
+        machine.reset()
+        
+    else:
+        print("import _main is already uncommented or not found")
+        
+except Exception as e:
+    print("Error starting MCT application:", str(e))
+    import sys
+    sys.print_exception(e)
+`;
+
+                // Send the start script
+                await usbManager.sendCommand(startScript);
+                
+                // Read response
+                const response = await usbManager.readResponse(10000);
+                
+                if (response.includes('MCT application will start after reset')) {
+                    // Device will reset, so we need to handle disconnection
+                    startBtn.innerHTML = '<i class="fas fa-check"></i> MCT Started!';
+                    startBtn.style.background = 'var(--neon-green)';
+                    startBtn.style.color = '#000';
+                    
+                    // Update status
+                    updateDeviceState('normal');
+                    
+                    // Show success message
+                    alert('MCT application started successfully!\\n\\nThe device has been reset and should now be running the MCT application. You can disconnect the USB cable - the device will continue running on battery power.');
+                    
+                    // Disconnect after a delay since device reset
+                    setTimeout(async () => {
+                        await disconnectFromDevice();
+                    }, 2000);
+                    
+                } else if (response.includes('import _main is already uncommented')) {
+                    // Already running
+                    startBtn.innerHTML = '<i class="fas fa-info-circle"></i> Already Running';
+                    startBtn.style.background = 'var(--neon-yellow)';
+                    startBtn.style.color = '#000';
+                    
+                    alert('MCT application is already configured to run.\\n\\nThe device should start the MCT application automatically on next reset.');
+                    
+                } else {
+                    throw new Error('Unexpected response from device');
+                }
+                
+            } catch (error) {
+                console.error('Failed to start MCT application:', error);
+                startBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Start Failed';
+                startBtn.style.background = 'var(--neon-red)';
+                startBtn.style.color = '#000';
+                
+                alert('Failed to start MCT application: ' + error.message);
             }
         }
 
         // Event listeners
         document.getElementById('connect-btn').addEventListener('click', connectToDevice);
         document.getElementById('run-test-btn').addEventListener('click', runMCTTest);
+        document.getElementById('start-mct-btn').addEventListener('click', startMCTApplication);
 
         // Listen for installation events
         document.addEventListener('DOMContentLoaded', function() {
