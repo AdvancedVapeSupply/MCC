@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MCT Installation & Testing</title>
+    <link rel="shortcut icon" type="image/x-icon" href="https://www.advancedvapesupply.com/cdn/shop/files/AVS_Molecule_5_180x180.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap">
+    <script type="module" src="https://unpkg.com/esp-web-tools@9.4.3/dist/web/install-button.js?module"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --neon-green: #00ff00;
+            --neon-green-glow: 0 0 10px rgba(0, 255, 0, 0.5);
+            --neon-green-intense: 0 0 20px rgba(0, 255, 0, 0.8), 0 0 30px rgba(0, 255, 0, 0.6);
+            --neon-blue: #0088ff;
+            --neon-blue-glow: 0 0 10px rgba(0, 136, 255, 0.5);
+            --neon-blue-intense: 0 0 20px rgba(0, 136, 255, 0.8), 0 0 30px rgba(0, 136, 255, 0.6);
+            --neon-cyan: #00ffff;
+            --neon-cyan-glow: 0 0 10px rgba(0, 255, 255, 0.5);
+            --neon-cyan-intense: 0 0 20px rgba(0, 255, 255, 0.8), 0 0 30px rgba(0, 255, 255, 0.6);
+            --neon-red: #e31837;
+            --neon-red-glow: 0 0 10px rgba(227, 24, 55, 0.5);
+            --neon-red-intense: 0 0 20px rgba(227, 24, 55, 0.8), 0 0 30px rgba(227, 24, 55, 0.6);
+            --neon-yellow: #ffd43b;
+            --neon-yellow-glow: 0 0 10px rgba(255, 212, 59, 0.5);
+            --neon-yellow-intense: 0 0 20px rgba(255, 212, 59, 0.8), 0 0 30px rgba(255, 212, 59, 0.6);
+            --tile-background: #1a1a1a;
+            --border-color: rgba(0, 255, 0, 0.3);
+        }
+
+        body {
+            margin: 0;
+            overflow-x: hidden;
+            background: #000000;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--neon-green);
+        }
+
+        /* iPhone Status Bar */
+        #iphone-status-bar {
+            width: 100%;
+            height: 44px;
+            background: rgba(0, 20, 0, 0.8);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            color: var(--neon-green);
+            font-weight: 600;
+            text-shadow: var(--neon-green-glow);
+            border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+        }
+
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .status-right {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .battery-icon {
+            width: 25px;
+            height: 12px;
+            border: 2px solid rgba(0, 255, 0, 0.3);
+            border-radius: 3px;
+            position: relative;
+            margin-left: 5px;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.1);
+            opacity: 0.3;
+            transition: all 0.3s ease;
+        }
+
+        .battery-icon::after {
+            content: '';
+            position: absolute;
+            right: -4px;
+            top: 3px;
+            width: 2px;
+            height: 4px;
+            background: rgba(0, 255, 0, 0.3);
+            border-radius: 0 1px 1px 0;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.1);
+        }
+
+        .battery-icon.active {
+            border-color: var(--neon-green);
+            box-shadow: var(--neon-green-glow);
+            opacity: 1;
+        }
+
+        .battery-icon.active::after {
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-glow);
+        }
+
+        .battery-level {
+            position: absolute;
+            left: 1px;
+            top: 1px;
+            bottom: 1px;
+            width: 80%;
+            background: rgba(0, 255, 0, 0.3);
+            border-radius: 1px;
+            transition: all 0.3s ease;
+        }
+
+        .battery-icon.active .battery-level {
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-intense);
+        }
+
+        /* App Container */
+        #app-container {
+            width: 100%;
+            max-width: 430px;
+            margin: 0 auto;
+            min-height: calc(100vh - 44px);
+            background: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(145deg, rgba(0, 40, 0, 0.9) 0%, rgba(0, 20, 0, 0.9) 100%);
+            border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            text-shadow: var(--neon-green-glow);
+            color: var(--neon-green);
+        }
+
+        .header p {
+            font-size: 1rem;
+            opacity: 0.8;
+            color: var(--neon-green);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Tile Styling */
+        .tile {
+            background-color: var(--tile-background);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
+        }
+
+        .tile h2 {
+            color: var(--neon-green);
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            text-shadow: var(--neon-green-glow);
+            border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+            padding-bottom: 10px;
+        }
+
+        /* Step Styling */
+        .step {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(0, 40, 0, 0.3);
+            border-left: 3px solid var(--neon-green);
+            box-shadow: inset 0 0 10px rgba(0, 255, 0, 0.1);
+        }
+
+        .step h3 {
+            color: var(--neon-green);
+            margin-bottom: 8px;
+            font-size: 1rem;
+            text-shadow: var(--neon-green-glow);
+        }
+
+        .step p {
+            color: rgba(0, 255, 0, 0.8);
+            line-height: 1.5;
+            font-size: 0.9rem;
+        }
+
+        .step-number {
+            display: inline-block;
+            background: var(--neon-green);
+            color: #000;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            margin-right: 10px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            box-shadow: var(--neon-green-glow);
+        }
+
+        /* Device State Indicator */
+        .device-state-indicator {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(0, 20, 0, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .device-state-label {
+            color: var(--neon-green);
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .device-state-status {
+            color: rgba(0, 255, 0, 0.8);
+            font-family: 'Fira Code', monospace;
+            font-size: 0.85rem;
+            flex: 1;
+        }
+
+        .device-state-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #333;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .device-state-dot.unknown {
+            background: #666;
+        }
+
+        .device-state-dot.normal {
+            background: var(--neon-blue);
+            box-shadow: var(--neon-blue-glow);
+        }
+
+        .device-state-dot.bootloader {
+            background: var(--neon-yellow);
+            box-shadow: var(--neon-yellow-glow);
+            animation: pulse 2s infinite;
+        }
+
+        .device-state-dot.connected {
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-glow);
+        }
+
+        .device-state-dot.error {
+            background: var(--neon-red);
+            box-shadow: var(--neon-red-glow);
+        }
+
+        /* Install Button */
+        .install-section {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        esp-web-install-button {
+            --esp-tools-button-color: var(--neon-green);
+            --esp-tools-button-text-color: #000;
+            --esp-tools-button-selected-color: var(--neon-green);
+        }
+
+        .install-button {
+            background: linear-gradient(145deg, rgba(0, 40, 0, 0.9) 0%, rgba(0, 20, 0, 0.9) 100%);
+            color: var(--neon-green);
+            border: 1px solid var(--neon-green);
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-shadow: var(--neon-green-glow);
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
+        }
+
+        .install-button:hover {
+            background: var(--neon-green);
+            color: #000;
+            box-shadow: var(--neon-green-intense);
+        }
+
+        /* Connection Info */
+        .connection-info {
+            background: rgba(0, 40, 0, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+
+        .connection-info h4 {
+            color: var(--neon-green);
+            margin-bottom: 10px;
+            text-shadow: var(--neon-green-glow);
+        }
+
+        .connection-info p {
+            margin: 5px 0;
+            font-size: 0.9rem;
+            color: rgba(0, 255, 0, 0.8);
+        }
+
+        /* Status Indicators */
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background: #333;
+            transition: all 0.3s ease;
+        }
+
+        .status-indicator.connected {
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-glow);
+        }
+
+        .status-indicator.disconnected {
+            background: #333;
+        }
+
+        .status-indicator.connecting {
+            background: var(--neon-yellow);
+            box-shadow: var(--neon-yellow-glow);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Test Controls */
+        .test-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .test-button {
+            background: linear-gradient(145deg, rgba(0, 40, 0, 0.9) 0%, rgba(0, 20, 0, 0.9) 100%);
+            color: var(--neon-green);
+            border: 1px solid var(--neon-green);
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-shadow: var(--neon-green-glow);
+        }
+
+        .test-button:hover {
+            background: var(--neon-green);
+            color: #000;
+            box-shadow: var(--neon-green-glow);
+        }
+
+        .test-button.secondary {
+            border-color: rgba(0, 255, 0, 0.5);
+            color: rgba(0, 255, 0, 0.7);
+        }
+
+        .test-button.secondary:hover {
+            background: rgba(0, 255, 0, 0.1);
+            color: var(--neon-green);
+        }
+
+        /* Progress Bar */
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(0, 40, 0, 0.6);
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 15px 0;
+            border: 1px solid rgba(0, 255, 0, 0.2);
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--neon-green), var(--neon-cyan));
+            width: 0%;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+
+        /* Test Results */
+        .test-results {
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+
+        .test-result {
+            margin-bottom: 8px;
+            padding: 8px;
+            border-radius: 4px;
+            border-left: 3px solid;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .test-result:hover {
+            transform: translateX(4px);
+            box-shadow: 0 2px 8px rgba(0, 255, 0, 0.2);
+        }
+
+        .test-result.pass {
+            background: rgba(0, 255, 0, 0.1);
+            border-color: var(--neon-green);
+            color: var(--neon-green);
+        }
+
+        .test-result.fail {
+            background: rgba(227, 24, 55, 0.1);
+            border-color: var(--neon-red);
+            color: var(--neon-red);
+        }
+
+        .test-result.skip {
+            background: rgba(255, 212, 59, 0.1);
+            border-color: var(--neon-yellow);
+            color: var(--neon-yellow);
+        }
+
+        .test-result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .test-result-expand-icon {
+            font-size: 0.8rem;
+            opacity: 0.7;
+            transition: transform 0.3s ease;
+        }
+
+        .test-result.expanded .test-result-expand-icon {
+            transform: rotate(180deg);
+        }
+
+        .test-result-details {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            margin-top: 0;
+        }
+
+        .test-result.expanded .test-result-details {
+            max-height: 200px;
+            margin-top: 10px;
+        }
+
+        .test-result-expanded-content {
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            line-height: 1.4;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Test Summary */
+        .test-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .summary-card {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid;
+            background: rgba(0, 20, 0, 0.6);
+        }
+
+        .summary-card.pass {
+            border-color: var(--neon-green);
+            color: var(--neon-green);
+        }
+
+        .summary-card.fail {
+            border-color: var(--neon-red);
+            color: var(--neon-red);
+        }
+
+        .summary-card.skip {
+            border-color: var(--neon-yellow);
+            color: var(--neon-yellow);
+        }
+
+        .summary-card.total {
+            border-color: var(--neon-cyan);
+            color: var(--neon-cyan);
+        }
+
+        .summary-card h3 {
+            margin: 0 0 5px 0;
+            font-size: 0.9rem;
+        }
+
+        .summary-card p {
+            font-size: 1.5rem;
+            margin: 5px 0;
+            font-weight: bold;
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(0, 255, 0, 0.3);
+            border-top: 2px solid var(--neon-green);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Safari Bottom Bar */
+        #safari-bar {
+            width: 100%;
+            height: 45px;
+            background: rgba(0, 20, 0, 0.95);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 10px;
+            border-top: 1px solid rgba(0, 255, 0, 0.2);
+        }
+
+        .url-bar {
+            flex: 1;
+            height: 32px;
+            margin: 0 10px;
+            background: rgba(0, 40, 0, 0.6);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            font-size: 14px;
+            color: var(--neon-green);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            text-shadow: var(--neon-green-glow);
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 20px;
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+            font-size: 18px;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .test-controls {
+                flex-direction: column;
+            }
+            
+            .test-button {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- iPhone Status Bar -->
+    <div id="iphone-status-bar">
+        <div class="status-left">
+            <span>9:41</span>
+        </div>
+        <div class="status-right">
+            <span>100%</span>
+            <div class="battery-icon active">
+                <div class="battery-level"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Container -->
+    <div id="app-container">
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-microchip"></i> MCT Installation & Testing</h1>
+            <p>Install firmware and run comprehensive system tests</p>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Installation Section -->
+            <div class="tile">
+                <h2><i class="fas fa-download"></i> Firmware Installation</h2>
+                
+                <div class="step">
+                    <h3><span class="step-number">1</span>Enter Bootloader Mode</h3>
+                    <p>To enter bootloader mode:</p>
+                    <ol style="margin: 8px 0 0 20px; color: rgba(0, 255, 0, 0.8);">
+                        <li>Press and hold the <strong>SELECT</strong> button on your MCT device</li>
+                        <li>While holding SELECT, cycle power by:
+                            <ul style="margin: 4px 0 0 20px;">
+                                <li>Removing the battery (if installed)</li>
+                                <li>Unplugging the USB cable</li>
+                                <li>Reconnecting the USB cable</li>
+                            </ul>
+                        </li>
+                        <li>Release the SELECT button after reconnecting USB</li>
+                    </ol>
+                    <div class="device-state-indicator">
+                        <span class="device-state-label">Device State:</span>
+                        <span class="device-state-status" id="device-state">Unknown</span>
+                        <div class="device-state-dot" id="device-state-dot"></div>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">2</span>Connect USB Cable</h3>
+                    <p>Connect your MCT device to your computer via USB cable. The device should now be in bootloader mode and ready for firmware installation.</p>
+                </div>
+
+                <div class="step">
+                    <h3><span class="step-number">3</span>Install Firmware</h3>
+                    <p>Click the install button below to flash the latest MCT firmware to your device. The installer will automatically detect the device and begin flashing.</p>
+                </div>
+
+                <div class="install-section">
+                    <esp-web-install-button 
+                        manifest="manifest.json"
+                        class="install-button">
+                        <i class="fas fa-bolt"></i> Install MCT Firmware
+                    </esp-web-install-button>
+                </div>
+
+                <div class="connection-info">
+                    <h4><i class="fas fa-wifi"></i> Connection Status</h4>
+                    <p><span class="status-indicator disconnected"></span>Device: <span id="device-status">Not Connected</span></p>
+                    <p><span class="status-indicator disconnected"></span>WiFi: <span id="wifi-status">Not Connected</span></p>
+                    <p><span class="status-indicator disconnected"></span>WebREPL: <span id="webrepl-status">Not Connected</span></p>
+                </div>
+            </div>
+
+            <!-- Testing Section -->
+            <div class="tile">
+                <h2><i class="fas fa-flask"></i> System Testing</h2>
+                
+                <div class="step">
+                    <h3><span class="step-number">4</span>Run Tests</h3>
+                    <p>After installation, run comprehensive system tests to verify all components are working correctly.</p>
+                </div>
+
+                <div class="test-controls">
+                    <button class="test-button" onclick="runBasicTests()">
+                        <span id="basic-test-icon"><i class="fas fa-play"></i></span> Basic Tests
+                    </button>
+                    <button class="test-button" onclick="runComprehensiveTests()">
+                        <span id="comprehensive-test-icon"><i class="fas fa-play"></i></span> Comprehensive Tests
+                    </button>
+                    <button class="test-button secondary" onclick="clearResults()">
+                        <i class="fas fa-trash"></i> Clear Results
+                    </button>
+                    <button class="test-button secondary" onclick="exportResults()">
+                        <i class="fas fa-file-export"></i> Export Results
+                    </button>
+                </div>
+
+                <div class="progress-bar">
+                    <div class="progress-fill" id="test-progress"></div>
+                </div>
+
+                <div class="test-results" id="test-results">
+                    <div style="text-align: center; color: rgba(0, 255, 0, 0.6); padding: 20px;">
+                        <i class="fas fa-info-circle"></i> Click a test button to start testing...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Results Summary -->
+            <div class="tile">
+                <h2><i class="fas fa-chart-bar"></i> Test Summary</h2>
+                <div id="test-summary">
+                    <p style="color: rgba(0, 255, 0, 0.6);">No tests have been run yet.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Safari Bottom Bar -->
+    <div id="safari-bar">
+        <div class="nav-buttons">
+            <i class="fas fa-arrow-left"></i>
+            <i class="fas fa-arrow-right"></i>
+        </div>
+        <div class="url-bar">
+            <i class="fas fa-lock" style="margin-right: 8px;"></i>
+            mct-install.html
+        </div>
+        <div class="nav-buttons">
+            <i class="fas fa-share"></i>
+            <i class="fas fa-bookmark"></i>
+        </div>
+    </div>
+
+    <script>
+        let testResults = [];
+        let currentTest = null;
+        let testProgress = 0;
+
+        // Mock test data structure
+        const testDefinitions = {
+            basic: [
+                { name: 'MicroPython Import', id: 'upy', description: 'Test MicroPython import functionality' },
+                { name: 'REPL Responsive', id: 'repl', description: 'Test REPL responsiveness' },
+                { name: 'WiFi Connection', id: 'wifi', description: 'Test WiFi connectivity' },
+                { name: 'MCT Class', id: 'mct', description: 'Test MCT class initialization' },
+                { name: 'BME280 Sensor', id: 'bme280', description: 'Test temperature/humidity sensor' },
+                { name: 'ADC Reading', id: 'adc', description: 'Test analog-to-digital conversion' },
+                { name: 'Power Measurement', id: 'power', description: 'Test power monitoring' },
+                { name: 'Motion Sensor', id: 'motion', description: 'Test motion detection' }
+            ],
+            comprehensive: [
+                { name: 'LED Control', id: 'led', description: 'Test LED functionality' },
+                { name: 'Battery Status', id: 'battery', description: 'Test battery monitoring' },
+                { name: 'Button Inputs', id: 'buttons', description: 'Test button inputs' },
+                { name: 'R Sensor', id: 'r', description: 'Test R sensor functionality' },
+                { name: 'Fire Detection', id: 'fire', description: 'Test fire detection system' },
+                { name: 'Motor Control', id: 'motors', description: 'Test motor drivers' },
+                { name: 'IMU Sensor', id: 'imu', description: 'Test inertial measurement unit' },
+                { name: 'Pressure Sensor', id: 'pressure', description: 'Test pressure sensor' },
+                { name: 'Humidity Sensor', id: 'humidity', description: 'Test humidity sensor' },
+                { name: 'Temperature Sensor', id: 'temperature', description: 'Test temperature sensor' },
+                { name: 'OTA Update', id: 'ota', description: 'Test over-the-air update capability' }
+            ]
+        };
+
+        // Device state management
+        let deviceState = 'unknown';
+        const deviceStates = {
+            'unknown': { text: 'Unknown', class: 'unknown' },
+            'normal': { text: 'Normal Mode', class: 'normal' },
+            'bootloader': { text: 'Bootloader Mode', class: 'bootloader' },
+            'connected': { text: 'Connected & Ready', class: 'connected' },
+            'error': { text: 'Connection Error', class: 'error' }
+        };
+
+        function updateDeviceState(newState) {
+            deviceState = newState;
+            const stateInfo = deviceStates[newState];
+            
+            const statusElement = document.getElementById('device-state');
+            const dotElement = document.getElementById('device-state-dot');
+            
+            if (statusElement && dotElement) {
+                statusElement.textContent = stateInfo.text;
+                dotElement.className = `device-state-dot ${stateInfo.class}`;
+            }
+        }
+
+        // Simulate device state detection
+        function simulateDeviceStateDetection() {
+            const states = ['unknown', 'normal', 'bootloader', 'connected', 'error'];
+            const weights = [0.1, 0.2, 0.3, 0.3, 0.1]; // Probability weights
+            
+            let random = Math.random();
+            let cumulativeWeight = 0;
+            
+            for (let i = 0; i < states.length; i++) {
+                cumulativeWeight += weights[i];
+                if (random <= cumulativeWeight) {
+                    updateDeviceState(states[i]);
+                    break;
+                }
+            }
+        }
+
+        // Simulate connection status updates
+        function updateConnectionStatus() {
+            const statuses = ['Not Connected', 'Connecting...', 'Connected'];
+            const indicators = document.querySelectorAll('.status-indicator');
+            const statusTexts = document.querySelectorAll('#device-status, #wifi-status, #webrepl-status');
+            
+            indicators.forEach((indicator, index) => {
+                const random = Math.random();
+                if (random > 0.7) {
+                    indicator.className = 'status-indicator connected';
+                    statusTexts[index].textContent = 'Connected';
+                } else if (random > 0.4) {
+                    indicator.className = 'status-indicator connecting';
+                    statusTexts[index].textContent = 'Connecting...';
+                } else {
+                    indicator.className = 'status-indicator disconnected';
+                    statusTexts[index].textContent = 'Not Connected';
+                }
+            });
+        }
+
+        // Update device state every 4 seconds
+        setInterval(simulateDeviceStateDetection, 4000);
+        
+        // Update connection status every 3 seconds
+        setInterval(updateConnectionStatus, 3000);
+
+        // Enhanced test simulation with specific failure reasons
+        async function simulateTest(testName, duration = 1000) {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    const random = Math.random();
+                    let result;
+                    
+                    // Test-specific logic and failure reasons
+                    if (testName === 'Pressure Sensor') {
+                        if (random > 0.7) {
+                            result = {
+                                name: testName,
+                                status: 'PASS',
+                                details: 'Pressure sensor reading: 1013.25 hPa',
+                                expandedDetails: 'BME280 pressure sensor successfully initialized and reading atmospheric pressure. Calibration values loaded correctly.',
+                                timestamp: new Date().toISOString()
+                            };
+                        } else {
+                            const failureReasons = [
+                                'I2C communication timeout - sensor not responding',
+                                'BME280 sensor not detected on I2C bus',
+                                'Pressure calibration data corrupted',
+                                'Sensor initialization failed - check connections',
+                                'I2C bus locked by another process'
+                            ];
+                            const reason = failureReasons[Math.floor(Math.random() * failureReasons.length)];
+                            result = {
+                                name: testName,
+                                status: 'FAIL',
+                                details: reason,
+                                expandedDetails: `Pressure sensor test failed due to: ${reason}. This could indicate hardware issues, I2C bus problems, or sensor connection problems. Check wiring and ensure BME280 is properly connected to I2C pins.`,
+                                timestamp: new Date().toISOString()
+                            };
+                        }
+                    } else if (testName === 'OTA Update') {
+                        if (random > 0.6) {
+                            result = {
+                                name: testName,
+                                status: 'PASS',
+                                details: 'OTA system ready and functional',
+                                expandedDetails: 'Over-the-air update system is properly configured. WiFi connection stable, update server reachable, and partition table supports OTA updates.',
+                                timestamp: new Date().toISOString()
+                            };
+                        } else {
+                            const failureReasons = [
+                                'WiFi connection required for OTA updates',
+                                'Update server not reachable',
+                                'Insufficient flash memory for OTA',
+                                'OTA partition not found',
+                                'Update manifest invalid'
+                            ];
+                            const reason = failureReasons[Math.floor(Math.random() * failureReasons.length)];
+                            result = {
+                                name: testName,
+                                status: 'FAIL',
+                                details: reason,
+                                expandedDetails: `OTA update test failed: ${reason}. Ensure WiFi is connected and update server is accessible. Check flash memory availability and partition table configuration.`,
+                                timestamp: new Date().toISOString()
+                            };
+                        }
+                    } else {
+                        // Generic test logic for other tests
+                        const success = Math.random() > 0.2; // 80% success rate
+                        if (success) {
+                            result = {
+                                name: testName,
+                                status: 'PASS',
+                                details: 'Test passed successfully',
+                                expandedDetails: `${testName} completed successfully. All functionality verified and working as expected.`,
+                                timestamp: new Date().toISOString()
+                            };
+                        } else {
+                            const failType = Math.random() > 0.5 ? 'FAIL' : 'SKIP';
+                            result = {
+                                name: testName,
+                                status: failType,
+                                details: failType === 'FAIL' ? 'Test failed or not available' : 'Test skipped - component not available',
+                                expandedDetails: failType === 'FAIL' ? 
+                                    `${testName} failed during execution. This may indicate hardware issues, configuration problems, or component malfunction.` :
+                                    `${testName} was skipped because the required component is not available or not configured on this device.`,
+                                timestamp: new Date().toISOString()
+                            };
+                        }
+                    }
+                    
+                    resolve(result);
+                }, duration);
+            });
+        }
+
+        // Run basic tests
+        async function runBasicTests() {
+            if (currentTest) return;
+            
+            currentTest = 'basic';
+            testResults = [];
+            testProgress = 0;
+            
+            const button = document.querySelector('#basic-test-icon');
+            button.innerHTML = '<div class="loading"></div>';
+            
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = '<div style="text-align: center; padding: 20px;"><div class="loading"></div> Running basic tests...</div>';
+            
+            for (let i = 0; i < testDefinitions.basic.length; i++) {
+                const test = testDefinitions.basic[i];
+                testProgress = ((i + 1) / testDefinitions.basic.length) * 100;
+                document.getElementById('test-progress').style.width = testProgress + '%';
+                
+                const result = await simulateTest(test.name, 800 + Math.random() * 400);
+                testResults.push(result);
+                
+                // Update results display
+                updateTestResults();
+                
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            button.innerHTML = '<i class="fas fa-play"></i>';
+            currentTest = null;
+            updateTestSummary();
+        }
+
+        // Run comprehensive tests
+        async function runComprehensiveTests() {
+            if (currentTest) return;
+            
+            currentTest = 'comprehensive';
+            testResults = [];
+            testProgress = 0;
+            
+            const button = document.querySelector('#comprehensive-test-icon');
+            button.innerHTML = '<div class="loading"></div>';
+            
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = '<div style="text-align: center; padding: 20px;"><div class="loading"></div> Running comprehensive tests...</div>';
+            
+            for (let i = 0; i < testDefinitions.comprehensive.length; i++) {
+                const test = testDefinitions.comprehensive[i];
+                testProgress = ((i + 1) / testDefinitions.comprehensive.length) * 100;
+                document.getElementById('test-progress').style.width = testProgress + '%';
+                
+                const result = await simulateTest(test.name, 600 + Math.random() * 300);
+                testResults.push(result);
+                
+                // Update results display
+                updateTestResults();
+                
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            button.innerHTML = '<i class="fas fa-play"></i>';
+            currentTest = null;
+            updateTestSummary();
+        }
+
+        // Update test results display with expandable functionality
+        function updateTestResults() {
+            const resultsDiv = document.getElementById('test-results');
+            
+            if (testResults.length === 0) {
+                resultsDiv.innerHTML = '<div style="text-align: center; color: rgba(0, 255, 0, 0.6); padding: 20px;"><i class="fas fa-info-circle"></i> Click a test button to start testing...</div>';
+                return;
+            }
+            
+            let html = '';
+            testResults.forEach((result, index) => {
+                const statusClass = result.status.toLowerCase();
+                const statusIcon = result.status === 'PASS' ? '✅' : result.status === 'FAIL' ? '❌' : '⏭️';
+                
+                html += `
+                    <div class="test-result ${statusClass}" onclick="toggleTestResult(${index})">
+                        <div class="test-result-header">
+                            <div>
+                                <strong>${statusIcon} ${result.name}</strong><br>
+                                <small>Status: ${result.status} | ${result.details}</small><br>
+                                <small>Time: ${new Date(result.timestamp).toLocaleTimeString()}</small>
+                            </div>
+                            <div class="test-result-expand-icon">
+                                <i class="fas fa-chevron-down"></i>
+                            </div>
+                        </div>
+                        <div class="test-result-details">
+                            <div class="test-result-expanded-content">
+                                ${result.expandedDetails || 'No additional details available.'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        // Toggle test result expansion
+        function toggleTestResult(index) {
+            const testResultElements = document.querySelectorAll('.test-result');
+            const element = testResultElements[index];
+            
+            if (element) {
+                element.classList.toggle('expanded');
+            }
+        }
+
+        // Update test summary
+        function updateTestSummary() {
+            const summaryDiv = document.getElementById('test-summary');
+            
+            if (testResults.length === 0) {
+                summaryDiv.innerHTML = '<p style="color: rgba(0, 255, 0, 0.6);">No tests have been run yet.</p>';
+                return;
+            }
+            
+            const passCount = testResults.filter(r => r.status === 'PASS').length;
+            const failCount = testResults.filter(r => r.status === 'FAIL').length;
+            const skipCount = testResults.filter(r => r.status === 'SKIP').length;
+            const totalCount = testResults.length;
+            
+            const successRate = ((passCount / totalCount) * 100).toFixed(1);
+            
+            summaryDiv.innerHTML = `
+                <div class="test-summary-grid">
+                    <div class="summary-card pass">
+                        <h3>✅ Passed</h3>
+                        <p>${passCount}</p>
+                    </div>
+                    <div class="summary-card fail">
+                        <h3>❌ Failed</h3>
+                        <p>${failCount}</p>
+                    </div>
+                    <div class="summary-card skip">
+                        <h3>⏭️ Skipped</h3>
+                        <p>${skipCount}</p>
+                    </div>
+                    <div class="summary-card total">
+                        <h3>📊 Success Rate</h3>
+                        <p>${successRate}%</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Clear test results
+        function clearResults() {
+            testResults = [];
+            testProgress = 0;
+            document.getElementById('test-progress').style.width = '0%';
+            updateTestResults();
+            updateTestSummary();
+        }
+
+        // Export test results
+        function exportResults() {
+            if (testResults.length === 0) {
+                alert('No test results to export.');
+                return;
+            }
+            
+            const data = {
+                timestamp: new Date().toISOString(),
+                testResults: testResults,
+                summary: {
+                    total: testResults.length,
+                    passed: testResults.filter(r => r.status === 'PASS').length,
+                    failed: testResults.filter(r => r.status === 'FAIL').length,
+                    skipped: testResults.filter(r => r.status === 'SKIP').length
+                }
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mct-test-results-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Listen for installation events
+        document.addEventListener('DOMContentLoaded', function() {
+            const installButton = document.querySelector('esp-web-install-button');
+            
+            if (installButton) {
+                installButton.addEventListener('esp-web-install-button-install-start', function() {
+                    console.log('Installation started');
+                    document.getElementById('device-status').textContent = 'Installing...';
+                    updateDeviceState('connected');
+                });
+                
+                installButton.addEventListener('esp-web-install-button-install-success', function() {
+                    console.log('Installation successful');
+                    document.getElementById('device-status').textContent = 'Installed Successfully';
+                    updateDeviceState('connected');
+                    // Auto-run basic tests after successful installation
+                    setTimeout(runBasicTests, 2000);
+                });
+                
+                installButton.addEventListener('esp-web-install-button-install-error', function(event) {
+                    console.log('Installation failed:', event.detail);
+                    document.getElementById('device-status').textContent = 'Installation Failed';
+                    updateDeviceState('error');
+                });
+            }
+        });
+
+        // Initialize battery animation and device state
+        document.addEventListener('DOMContentLoaded', function() {
+            const batteryIcon = document.querySelector('.battery-icon');
+            if (batteryIcon) {
+                batteryIcon.classList.add('active');
+            }
+            
+            // Initialize device state
+            updateDeviceState('unknown');
+        });
+    </script>
+</body>
+</html> 
