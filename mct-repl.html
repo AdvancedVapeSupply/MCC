@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MCT BLE REPL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap">
+    <style>
+        body {
+            background: #111;
+            color: #00ff00;
+            font-family: 'Fira Code', monospace;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: #1a1a1a;
+            padding: 20px;
+            border-bottom: 1px solid rgba(0,255,0,0.2);
+            box-shadow: 0 2px 10px rgba(0,255,0,0.1);
+        }
+        .header h1 {
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff0088;
+            font-size: 22px;
+            margin: 0;
+        }
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 20px;
+            background: #181818;
+            border-bottom: 1px solid rgba(0,255,0,0.1);
+        }
+        .btn {
+            background: rgba(0,40,0,0.6);
+            border: 1px solid #00ff0055;
+            color: #00ff00;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #333;
+            margin-right: 8px;
+            transition: all 0.3s;
+        }
+        .status-indicator.connected {
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+        }
+        .status-indicator.connecting {
+            background: #0088ff;
+            box-shadow: 0 0 10px #0088ff;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 0 0 20px 0;
+        }
+        .terminal {
+            flex: 1;
+            background: #181818;
+            margin: 20px;
+            border-radius: 8px;
+            border: 1px solid #00ff0022;
+            padding: 20px;
+            overflow-y: auto;
+            font-size: 14px;
+            min-height: 300px;
+            max-height: 60vh;
+        }
+        .terminal-line {
+            margin-bottom: 4px;
+            white-space: pre-wrap;
+        }
+        .terminal-line.error {
+            color: #ff3333;
+        }
+        .terminal-line.cmd {
+            color: #ffd43b;
+        }
+        .input-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 20px;
+        }
+        .input-bar input {
+            flex: 1;
+            background: #111;
+            color: #00ff00;
+            border: 1px solid #00ff0055;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 15px;
+            padding: 8px 12px;
+            outline: none;
+        }
+        .input-bar .btn {
+            padding: 8px 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1><i class="fas fa-terminal"></i> MCT BLE REPL</h1>
+    </div>
+    <div class="toolbar">
+        <button id="connect-btn" class="btn">
+            <i class="fas fa-bluetooth-b"></i> Connect BLE
+        </button>
+        <div class="status-indicator" id="status-indicator"></div>
+        <span id="status-text">Disconnected</span>
+    </div>
+    <div class="main">
+        <div class="terminal" id="terminal"></div>
+        <form class="input-bar" id="repl-form" autocomplete="off">
+            <input type="text" id="repl-input" placeholder="Enter Python code..." autocomplete="off" />
+            <button type="submit" class="btn"><i class="fas fa-play"></i> Send</button>
+        </form>
+    </div>
+    <script>
+    // UUIDs for REPL BLE service/characteristic
+    const REPL_SERVICE_UUID = '00004222-0000-1000-8000-00805f9b34fb';
+    const REPL_CHAR_UUID = '00001002-0000-1000-8000-00805f9b34fb';
+
+    let bleDevice = null;
+    let bleServer = null;
+    let replChar = null;
+    let isConnected = false;
+
+    const terminal = document.getElementById('terminal');
+    const statusIndicator = document.getElementById('status-indicator');
+    const statusText = document.getElementById('status-text');
+    const connectBtn = document.getElementById('connect-btn');
+    const replForm = document.getElementById('repl-form');
+    const replInput = document.getElementById('repl-input');
+
+    function logTerminal(text, type = '') {
+        const div = document.createElement('div');
+        div.className = 'terminal-line' + (type ? ' ' + type : '');
+        div.textContent = text;
+        terminal.appendChild(div);
+        terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function setStatus(state, msg) {
+        statusIndicator.className = 'status-indicator' + (state ? ' ' + state : '');
+        statusText.textContent = msg;
+    }
+
+    async function connectBLE() {
+        setStatus('connecting', 'Connecting...');
+        connectBtn.disabled = true;
+        try {
+            bleDevice = await navigator.bluetooth.requestDevice({
+                filters: [
+                    { name: 'MCT' },
+                    { namePrefix: 'MCT' },
+                    { services: [REPL_SERVICE_UUID] }
+                ],
+                optionalServices: [REPL_SERVICE_UUID]
+            });
+            bleServer = await bleDevice.gatt.connect();
+            const service = await bleServer.getPrimaryService(REPL_SERVICE_UUID);
+            replChar = await service.getCharacteristic(REPL_CHAR_UUID);
+            isConnected = true;
+            setStatus('connected', 'Connected');
+            connectBtn.textContent = 'Disconnect';
+            logTerminal('[BLE] Connected to device', 'info');
+        } catch (e) {
+            setStatus('', 'Disconnected');
+            logTerminal('[BLE] Connection failed: ' + e, 'error');
+            connectBtn.disabled = false;
+        }
+    }
+
+    async function disconnectBLE() {
+        if (bleDevice && bleDevice.gatt.connected) {
+            await bleDevice.gatt.disconnect();
+        }
+        isConnected = false;
+        setStatus('', 'Disconnected');
+        connectBtn.textContent = 'Connect BLE';
+        logTerminal('[BLE] Disconnected', 'info');
+        connectBtn.disabled = false;
+    }
+
+    connectBtn.addEventListener('click', async () => {
+        if (isConnected) {
+            await disconnectBLE();
+        } else {
+            await connectBLE();
+        }
+    });
+
+    replForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const code = replInput.value.trim();
+        if (!code) return;
+        logTerminal('>>> ' + code, 'cmd');
+        replInput.value = '';
+        if (!isConnected || !replChar) {
+            logTerminal('[BLE] Not connected', 'error');
+            return;
+        }
+        try {
+            await replChar.writeValue(new TextEncoder().encode(code));
+            // Wait for response
+            const resp = await replChar.readValue();
+            const text = new TextDecoder().decode(resp);
+            logTerminal(text);
+        } catch (err) {
+            logTerminal('[BLE] Error: ' + err, 'error');
+        }
+    });
+    </script>
+</body>
+</html> 

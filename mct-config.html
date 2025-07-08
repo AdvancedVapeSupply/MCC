@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MCT Configuration Editor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="shortcut icon" type="image/x-icon" href="https://www.advancedvapesupply.com/cdn/shop/files/AVS_Molecule_5_180x180.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --neon-green: #00ff00;
+            --neon-green-glow: 0 0 10px rgba(0, 255, 0, 0.5);
+            --neon-green-intense: 0 0 20px rgba(0, 255, 0, 0.8), 0 0 30px rgba(0, 255, 0, 0.6);
+            --neon-blue: #0088ff;
+            --neon-blue-glow: 0 0 10px rgba(0, 136, 255, 0.5);
+            --neon-red: #e31837;
+            --neon-red-glow: 0 0 10px rgba(227, 24, 55, 0.5);
+            --background-dark: #1a1a1a;
+            --background-darker: #111111;
+            --border-color: rgba(0, 255, 0, 0.3);
+        }
+
+        body {
+            background: var(--background-darker);
+            color: var(--neon-green);
+            font-family: 'Fira Code', monospace;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: var(--background-dark);
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 2px 10px rgba(0, 255, 0, 0.1);
+        }
+
+        .header h1 {
+            color: var(--neon-green);
+            text-shadow: var(--neon-green-glow);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 24px;
+        }
+
+        .header .subtitle {
+            color: var(--neon-green);
+            opacity: 0.7;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .toolbar {
+            background: var(--background-dark);
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .toolbar-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn {
+            background: rgba(0, 40, 0, 0.6);
+            border: 1px solid var(--border-color);
+            color: var(--neon-green);
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: var(--neon-green-glow);
+        }
+
+        .btn.primary {
+            background: rgba(0, 255, 0, 0.2);
+            border-color: var(--neon-green);
+        }
+
+        .btn.danger {
+            border-color: var(--neon-red);
+            color: var(--neon-red);
+        }
+
+        .btn.danger:hover {
+            background: rgba(227, 24, 55, 0.2);
+            box-shadow: var(--neon-red-glow);
+        }
+
+        .btn.blue {
+            border-color: var(--neon-blue);
+            color: var(--neon-blue);
+        }
+
+        .btn.blue:hover {
+            background: rgba(0, 136, 255, 0.2);
+            box-shadow: var(--neon-blue-glow);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #333;
+            transition: all 0.3s ease;
+        }
+
+        .status-indicator.connected {
+            background: var(--neon-green);
+            box-shadow: var(--neon-green-glow);
+        }
+
+        .status-indicator.connecting {
+            background: var(--neon-blue);
+            box-shadow: var(--neon-blue-glow);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            padding: 20px;
+            gap: 20px;
+            height: calc(100vh - 140px);
+        }
+
+        .editor-panel {
+            flex: 1;
+            background: var(--background-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            padding: 15px;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(0, 40, 0, 0.3);
+        }
+
+        .panel-title {
+            color: var(--neon-green);
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .json-editor {
+            flex: 1;
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            background: var(--background-darker);
+            color: var(--neon-green);
+            border: none;
+            padding: 20px;
+            resize: none;
+            outline: none;
+            line-height: 1.5;
+        }
+
+        .json-editor:focus {
+            box-shadow: inset 0 0 10px rgba(0, 255, 0, 0.2);
+        }
+
+        .status-panel {
+            width: 300px;
+            background: var(--background-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            max-height: 100%;
+        }
+
+        .log-container {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .log-entry.success {
+            color: var(--neon-green);
+            border-left: 3px solid var(--neon-green);
+        }
+
+        .log-entry.error {
+            color: var(--neon-red);
+            border-left: 3px solid var(--neon-red);
+        }
+
+        .log-entry.info {
+            color: var(--neon-blue);
+            border-left: 3px solid var(--neon-blue);
+        }
+
+        .log-entry.warning {
+            color: #ffd43b;
+            border-left: 3px solid #ffd43b;
+        }
+
+        .back-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--neon-green);
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .back-button:hover {
+            background: rgba(0, 255, 0, 0.2);
+            box-shadow: var(--neon-green-glow);
+        }
+
+        .validation-errors {
+            background: rgba(227, 24, 55, 0.1);
+            border: 1px solid var(--neon-red);
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 15px;
+            font-size: 12px;
+            color: var(--neon-red);
+        }
+
+        .validation-errors ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .file-info {
+            padding: 10px 15px;
+            background: rgba(0, 40, 0, 0.3);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 12px;
+            color: var(--neon-green);
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <a href="mcc.html" class="back-button" title="Back to MCT Control Center">
+        <i class="fas fa-arrow-left"></i>
+    </a>
+
+    <div class="header">
+        <h1>
+            <i class="fas fa-cog"></i>
+            MCT Configuration Editor
+        </h1>
+        <div class="subtitle">Edit device configuration via BLE</div>
+    </div>
+
+    <div class="toolbar">
+        <div class="toolbar-left">
+            <button id="connect-btn" class="btn blue">
+                <i class="fas fa-bluetooth-b"></i>
+                Connect BLE
+            </button>
+            <button id="load-config-btn" class="btn" disabled>
+                <i class="fas fa-download"></i>
+                Load Config
+            </button>
+            <button id="save-config-btn" class="btn primary" disabled>
+                <i class="fas fa-upload"></i>
+                Save Config
+            </button>
+        </div>
+        <div class="toolbar-right">
+            <button id="validate-btn" class="btn">
+                <i class="fas fa-check"></i>
+                Validate
+            </button>
+            <button id="format-btn" class="btn">
+                <i class="fas fa-indent"></i>
+                Format
+            </button>
+            <button id="reset-btn" class="btn danger">
+                <i class="fas fa-undo"></i>
+                Reset
+            </button>
+            <div class="connection-status">
+                <div id="connection-indicator" class="status-indicator"></div>
+                <span id="connection-text">Disconnected</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="editor-panel">
+            <div class="panel-header">
+                <div class="panel-title">Configuration JSON</div>
+            </div>
+            <div class="file-info">
+                <strong>File:</strong> config.json | <strong>Size:</strong> <span id="file-size">0 bytes</span> | <strong>Lines:</strong> <span id="line-count">0</span>
+            </div>
+            <div id="validation-errors" class="validation-errors" style="display: none;">
+                <strong>Validation Errors:</strong>
+                <ul id="error-list"></ul>
+            </div>
+            <textarea id="json-editor" class="json-editor" placeholder="Configuration JSON will appear here..."></textarea>
+        </div>
+
+        <div class="status-panel">
+            <div class="panel-header">
+                <div class="panel-title">Activity Log</div>
+            </div>
+            <div id="log-container" class="log-container">
+                <div class="log-entry info">
+                    <i class="fas fa-info-circle"></i> Configuration editor ready
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class MCTConfigEditor {
+            constructor() {
+                this.bleDevice = null;
+                this.bleServer = null;
+                this.bleService = null;
+                this.bleCharacteristic = null;
+                this.isConnected = false;
+                this.currentConfig = null;
+                this.originalConfig = null;
+                
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.updateFileInfo();
+                this.log('Configuration editor initialized', 'info');
+            }
+
+            setupEventListeners() {
+                document.getElementById('connect-btn').addEventListener('click', () => this.toggleBLEConnection());
+                document.getElementById('load-config-btn').addEventListener('click', () => this.loadConfig());
+                document.getElementById('save-config-btn').addEventListener('click', () => this.saveConfig());
+                document.getElementById('validate-btn').addEventListener('click', () => this.validateJSON());
+                document.getElementById('format-btn').addEventListener('click', () => this.formatJSON());
+                document.getElementById('reset-btn').addEventListener('click', () => this.resetConfig());
+                
+                const editor = document.getElementById('json-editor');
+                editor.addEventListener('input', () => this.updateFileInfo());
+                editor.addEventListener('input', () => this.clearValidationErrors());
+            }
+
+            async toggleBLEConnection() {
+                if (this.isConnected) {
+                    await this.disconnect();
+                } else {
+                    await this.connect();
+                }
+            }
+
+            async connect() {
+                try {
+                    this.log('Requesting BLE device...', 'info');
+                    this.updateConnectionStatus('connecting');
+                    
+                    // Request BLE device with MCT service
+                    this.bleDevice = await navigator.bluetooth.requestDevice({
+                        filters: [
+                            { name: 'MCT' },
+                            { namePrefix: 'MCT' },
+                            { services: ['12345678-1234-1234-1234-123456789abc'] }
+                        ],
+                        optionalServices: ['12345678-1234-1234-1234-123456789abc']
+                    });
+
+                    this.log(`Connecting to ${this.bleDevice.name}...`, 'info');
+                    
+                    // Connect to GATT server
+                    this.bleServer = await this.bleDevice.gatt.connect();
+                    
+                    // Get service and characteristic
+                    this.bleService = await this.bleServer.getPrimaryService('12345678-1234-1234-1234-123456789abc');
+                    this.bleCharacteristic = await this.bleService.getCharacteristic('12345678-1234-1234-1234-123456789abc');
+                    
+                    this.isConnected = true;
+                    this.updateConnectionStatus('connected');
+                    this.log('BLE connection established', 'success');
+                    
+                    // Enable buttons
+                    document.getElementById('load-config-btn').disabled = false;
+                    document.getElementById('save-config-btn').disabled = false;
+                    
+                } catch (error) {
+                    this.log(`Connection failed: ${error.message}`, 'error');
+                    this.updateConnectionStatus('disconnected');
+                }
+            }
+
+            async disconnect() {
+                try {
+                    if (this.bleDevice && this.bleDevice.gatt.connected) {
+                        await this.bleDevice.gatt.disconnect();
+                    }
+                    this.isConnected = false;
+                    this.updateConnectionStatus('disconnected');
+                    this.log('BLE connection closed', 'info');
+                    
+                    // Disable buttons
+                    document.getElementById('load-config-btn').disabled = true;
+                    document.getElementById('save-config-btn').disabled = true;
+                    
+                } catch (error) {
+                    this.log(`Disconnect error: ${error.message}`, 'error');
+                }
+            }
+
+            async loadConfig() {
+                if (!this.isConnected) {
+                    this.log('Not connected to device', 'error');
+                    return;
+                }
+
+                try {
+                    this.log('Loading configuration from device...', 'info');
+                    
+                    // Send load config command
+                    const command = JSON.stringify({ action: 'load_config' });
+                    await this.bleCharacteristic.writeValue(new TextEncoder().encode(command));
+                    
+                    // Read response
+                    const response = await this.bleCharacteristic.readValue();
+                    const responseText = new TextDecoder().decode(response);
+                    const responseData = JSON.parse(responseText);
+                    
+                    if (responseData.success) {
+                        this.currentConfig = responseData.config;
+                        this.originalConfig = JSON.parse(JSON.stringify(responseData.config));
+                        
+                        const editor = document.getElementById('json-editor');
+                        editor.value = JSON.stringify(this.currentConfig, null, 2);
+                        this.updateFileInfo();
+                        
+                        this.log('Configuration loaded successfully', 'success');
+                    } else {
+                        this.log(`Failed to load config: ${responseData.error}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`Load config error: ${error.message}`, 'error');
+                }
+            }
+
+            async saveConfig() {
+                if (!this.isConnected) {
+                    this.log('Not connected to device', 'error');
+                    return;
+                }
+
+                try {
+                    // Validate JSON first
+                    const editor = document.getElementById('json-editor');
+                    const configText = editor.value;
+                    
+                    let config;
+                    try {
+                        config = JSON.parse(configText);
+                    } catch (e) {
+                        this.log('Invalid JSON - please fix errors before saving', 'error');
+                        this.validateJSON();
+                        return;
+                    }
+                    
+                    this.log('Saving configuration to device...', 'info');
+                    
+                    // Send save config command
+                    const command = JSON.stringify({ 
+                        action: 'save_config', 
+                        config: config 
+                    });
+                    await this.bleCharacteristic.writeValue(new TextEncoder().encode(command));
+                    
+                    // Read response
+                    const response = await this.bleCharacteristic.readValue();
+                    const responseText = new TextDecoder().decode(response);
+                    const responseData = JSON.parse(responseText);
+                    
+                    if (responseData.success) {
+                        this.currentConfig = config;
+                        this.originalConfig = JSON.parse(JSON.stringify(config));
+                        this.log('Configuration saved successfully', 'success');
+                        this.log('Configuration will be applied on next device restart', 'info');
+                    } else {
+                        this.log(`Failed to save config: ${responseData.error}`, 'error');
+                    }
+                    
+                } catch (error) {
+                    this.log(`Save config error: ${error.message}`, 'error');
+                }
+            }
+
+            validateJSON() {
+                const editor = document.getElementById('json-editor');
+                const configText = editor.value;
+                
+                this.clearValidationErrors();
+                
+                if (!configText.trim()) {
+                    this.log('Editor is empty', 'warning');
+                    return false;
+                }
+                
+                try {
+                    const config = JSON.parse(configText);
+                    this.log('JSON validation passed', 'success');
+                    return true;
+                } catch (error) {
+                    this.log(`JSON validation failed: ${error.message}`, 'error');
+                    this.showValidationErrors([error.message]);
+                    return false;
+                }
+            }
+
+            formatJSON() {
+                const editor = document.getElementById('json-editor');
+                const configText = editor.value;
+                
+                if (!configText.trim()) {
+                    this.log('No content to format', 'warning');
+                    return;
+                }
+                
+                try {
+                    const config = JSON.parse(configText);
+                    editor.value = JSON.stringify(config, null, 2);
+                    this.updateFileInfo();
+                    this.log('JSON formatted successfully', 'success');
+                } catch (error) {
+                    this.log(`Cannot format invalid JSON: ${error.message}`, 'error');
+                }
+            }
+
+            resetConfig() {
+                if (this.originalConfig) {
+                    const editor = document.getElementById('json-editor');
+                    editor.value = JSON.stringify(this.originalConfig, null, 2);
+                    this.updateFileInfo();
+                    this.clearValidationErrors();
+                    this.log('Configuration reset to original', 'info');
+                } else {
+                    this.log('No original configuration to reset to', 'warning');
+                }
+            }
+
+            updateConnectionStatus(status) {
+                const indicator = document.getElementById('connection-indicator');
+                const text = document.getElementById('connection-text');
+                const connectBtn = document.getElementById('connect-btn');
+                
+                indicator.className = `status-indicator ${status}`;
+                
+                switch (status) {
+                    case 'connected':
+                        text.textContent = 'Connected';
+                        connectBtn.innerHTML = '<i class="fas fa-bluetooth-b"></i> Disconnect';
+                        connectBtn.className = 'btn danger';
+                        break;
+                    case 'connecting':
+                        text.textContent = 'Connecting...';
+                        connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting';
+                        connectBtn.disabled = true;
+                        break;
+                    case 'disconnected':
+                    default:
+                        text.textContent = 'Disconnected';
+                        connectBtn.innerHTML = '<i class="fas fa-bluetooth-b"></i> Connect BLE';
+                        connectBtn.className = 'btn blue';
+                        connectBtn.disabled = false;
+                        break;
+                }
+            }
+
+            updateFileInfo() {
+                const editor = document.getElementById('json-editor');
+                const content = editor.value;
+                const lines = content.split('\n').length;
+                const size = new Blob([content]).size;
+                
+                document.getElementById('file-size').textContent = `${size} bytes`;
+                document.getElementById('line-count').textContent = lines;
+            }
+
+            showValidationErrors(errors) {
+                const errorDiv = document.getElementById('validation-errors');
+                const errorList = document.getElementById('error-list');
+                
+                errorList.innerHTML = '';
+                errors.forEach(error => {
+                    const li = document.createElement('li');
+                    li.textContent = error;
+                    errorList.appendChild(li);
+                });
+                
+                errorDiv.style.display = 'block';
+            }
+
+            clearValidationErrors() {
+                const errorDiv = document.getElementById('validation-errors');
+                errorDiv.style.display = 'none';
+            }
+
+            log(message, type = 'info') {
+                const container = document.getElementById('log-container');
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${type}`;
+                
+                const timestamp = new Date().toLocaleTimeString();
+                const icon = this.getLogIcon(type);
+                
+                entry.innerHTML = `<i class="${icon}"></i> [${timestamp}] ${message}`;
+                container.appendChild(entry);
+                container.scrollTop = container.scrollHeight;
+            }
+
+            getLogIcon(type) {
+                switch (type) {
+                    case 'success': return 'fas fa-check-circle';
+                    case 'error': return 'fas fa-exclamation-triangle';
+                    case 'warning': return 'fas fa-exclamation-circle';
+                    case 'info': 
+                    default: return 'fas fa-info-circle';
+                }
+            }
+        }
+
+        // Initialize the config editor when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            new MCTConfigEditor();
+        });
+    </script>
+</body>
+</html> 
