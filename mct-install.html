@@ -400,6 +400,33 @@
             color: var(--neon-green);
         }
 
+        /* Test Status Bar */
+        .test-status-bar {
+            margin-bottom: 20px;
+            padding: 12px;
+            background: rgba(0, 255, 0, 0.1);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .status {
+            font-weight: bold;
+            color: var(--neon-green);
+        }
+
+        .status.running {
+            color: var(--neon-blue);
+        }
+
+        .status.error {
+            color: var(--neon-red);
+        }
+
+        .status.completed {
+            color: var(--neon-green);
+        }
+
         /* Progress Bar */
         .progress-bar {
             width: 100%;
@@ -432,7 +459,7 @@
             line-height: 1.4;
         }
 
-        .test-result {
+        .test-result, .test-tile {
             margin-bottom: 8px;
             padding: 8px;
             border-radius: 4px;
@@ -442,27 +469,49 @@
             position: relative;
         }
 
-        .test-result:hover {
+        .test-result:hover, .test-tile:hover {
             transform: translateX(4px);
             box-shadow: 0 2px 8px rgba(0, 255, 0, 0.2);
         }
 
-        .test-result.pass {
+        .test-result.pass, .test-tile.pass {
             background: rgba(0, 255, 0, 0.1);
             border-color: var(--neon-green);
             color: var(--neon-green);
         }
 
-        .test-result.fail {
+        .test-result.fail, .test-tile.fail {
             background: rgba(227, 24, 55, 0.1);
             border-color: var(--neon-red);
             color: var(--neon-red);
         }
 
-        .test-result.skip {
+        .test-result.skip, .test-tile.skip {
             background: rgba(255, 212, 59, 0.1);
             border-color: var(--neon-yellow);
             color: var(--neon-yellow);
+        }
+
+        .test-name {
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+        }
+
+        .test-status {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+
+        .test-details {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            display: none;
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
         }
 
         .test-result-header {
@@ -702,11 +751,11 @@
                 </div>
 
                 <div class="test-controls">
-                    <button class="test-button" onclick="runBasicTests()">
-                        <span id="basic-test-icon"><i class="fas fa-play"></i></span> Basic Tests
+                    <button class="test-button" id="connect-btn">
+                        <i class="fas fa-usb"></i> Connect Device
                     </button>
-                    <button class="test-button" onclick="runComprehensiveTests()">
-                        <span id="comprehensive-test-icon"><i class="fas fa-play"></i></span> Comprehensive Tests
+                    <button class="test-button" id="run-test-btn" disabled>
+                        <span id="basic-test-icon"><i class="fas fa-play"></i></span> Run MCT Test
                     </button>
                     <button class="test-button secondary" onclick="clearResults()">
                         <i class="fas fa-trash"></i> Clear Results
@@ -714,6 +763,10 @@
                     <button class="test-button secondary" onclick="exportResults()">
                         <i class="fas fa-file-export"></i> Export Results
                     </button>
+                </div>
+                
+                <div class="test-status-bar">
+                    <div id="test-status" class="status ready">Ready to connect</div>
                 </div>
 
                 <div class="progress-bar">
@@ -754,7 +807,7 @@
     </div>
 
     <script>
-        let testResults = [];
+        let simulatedTestResults = [];
         let currentTest = null;
         let testProgress = 0;
 
@@ -852,285 +905,416 @@
         // Update connection status every 3 seconds
         setInterval(updateConnectionStatus, 3000);
 
-        // Enhanced test simulation with specific failure reasons
-        async function simulateTest(testName, duration = 1000) {
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    const random = Math.random();
-                    let result;
+        // Real device connection and testing system
+        let devicePort = null;
+        let deviceConnected = false;
+        let testRunning = false;
+        let realTestResults = {};
+
+        // USB Serial connection management
+        class USBManager {
+            constructor() {
+                this.currentPort = null;
+                this.reader = null;
+                this.writer = null;
+                this.isReading = false;
+            }
+
+            async connect() {
+                try {
+                    // Request USB device
+                    this.currentPort = await navigator.serial.requestPort();
+                    await this.currentPort.open({ baudRate: 115200 });
                     
-                    // Test-specific logic and failure reasons
-                    if (testName === 'Pressure Sensor') {
-                        if (random > 0.7) {
-                            result = {
-                                name: testName,
-                                status: 'PASS',
-                                details: 'Pressure sensor reading: 1013.25 hPa',
-                                expandedDetails: 'BME280 pressure sensor successfully initialized and reading atmospheric pressure. Calibration values loaded correctly.',
-                                timestamp: new Date().toISOString()
-                            };
-                        } else {
-                            const failureReasons = [
-                                'I2C communication timeout - sensor not responding',
-                                'BME280 sensor not detected on I2C bus',
-                                'Pressure calibration data corrupted',
-                                'Sensor initialization failed - check connections',
-                                'I2C bus locked by another process'
-                            ];
-                            const reason = failureReasons[Math.floor(Math.random() * failureReasons.length)];
-                            result = {
-                                name: testName,
-                                status: 'FAIL',
-                                details: reason,
-                                expandedDetails: `Pressure sensor test failed due to: ${reason}. This could indicate hardware issues, I2C bus problems, or sensor connection problems. Check wiring and ensure BME280 is properly connected to I2C pins.`,
-                                timestamp: new Date().toISOString()
-                            };
+                    this.writer = this.currentPort.writable.getWriter();
+                    this.reader = this.currentPort.readable.getReader();
+                    
+                    return true;
+                } catch (error) {
+                    console.error('USB connection failed:', error);
+                    return false;
+                }
+            }
+
+            async disconnect() {
+                if (this.reader) {
+                    await this.reader.cancel();
+                    this.reader.releaseLock();
+                    this.reader = null;
+                }
+                if (this.writer) {
+                    this.writer.releaseLock();
+                    this.writer = null;
+                }
+                if (this.currentPort) {
+                    await this.currentPort.close();
+                    this.currentPort = null;
+                }
+            }
+
+            async sendCommand(command) {
+                if (!this.writer) throw new Error('Device not connected');
+                
+                const encoder = new TextEncoder();
+                await this.writer.write(encoder.encode(command + '\r\n'));
+            }
+
+            async readResponse(timeout = 5000) {
+                if (!this.reader) throw new Error('Device not connected');
+                
+                const decoder = new TextDecoder();
+                let response = '';
+                const startTime = Date.now();
+                
+                while (Date.now() - startTime < timeout) {
+                    try {
+                        const { value, done } = await this.reader.read();
+                        if (done) break;
+                        
+                        response += decoder.decode(value);
+                        
+                        // Check if we have a complete response
+                        if (response.includes('>>>') || response.includes('...')) {
+                            break;
                         }
-                    } else if (testName === 'OTA Update') {
-                        if (random > 0.6) {
-                            result = {
-                                name: testName,
-                                status: 'PASS',
-                                details: 'OTA system ready and functional',
-                                expandedDetails: 'Over-the-air update system is properly configured. WiFi connection stable, update server reachable, and partition table supports OTA updates.',
-                                timestamp: new Date().toISOString()
-                            };
-                        } else {
-                            const failureReasons = [
-                                'WiFi connection required for OTA updates',
-                                'Update server not reachable',
-                                'Insufficient flash memory for OTA',
-                                'OTA partition not found',
-                                'Update manifest invalid'
-                            ];
-                            const reason = failureReasons[Math.floor(Math.random() * failureReasons.length)];
-                            result = {
-                                name: testName,
-                                status: 'FAIL',
-                                details: reason,
-                                expandedDetails: `OTA update test failed: ${reason}. Ensure WiFi is connected and update server is accessible. Check flash memory availability and partition table configuration.`,
-                                timestamp: new Date().toISOString()
-                            };
-                        }
-                    } else {
-                        // Generic test logic for other tests
-                        const success = Math.random() > 0.2; // 80% success rate
-                        if (success) {
-                            result = {
-                                name: testName,
-                                status: 'PASS',
-                                details: 'Test passed successfully',
-                                expandedDetails: `${testName} completed successfully. All functionality verified and working as expected.`,
-                                timestamp: new Date().toISOString()
-                            };
-                        } else {
-                            const failType = Math.random() > 0.5 ? 'FAIL' : 'SKIP';
-                            result = {
-                                name: testName,
-                                status: failType,
-                                details: failType === 'FAIL' ? 'Test failed or not available' : 'Test skipped - component not available',
-                                expandedDetails: failType === 'FAIL' ? 
-                                    `${testName} failed during execution. This may indicate hardware issues, configuration problems, or component malfunction.` :
-                                    `${testName} was skipped because the required component is not available or not configured on this device.`,
-                                timestamp: new Date().toISOString()
-                            };
-                        }
+                    } catch (error) {
+                        console.error('Read error:', error);
+                        break;
                     }
+                }
+                
+                return response;
+            }
+        }
+
+        const usbManager = new USBManager();
+
+        // Device connection functions
+        async function connectToDevice() {
+            updateDeviceState('connecting');
+            
+            try {
+                const connected = await usbManager.connect();
+                if (connected) {
+                    devicePort = usbManager.currentPort;
+                    deviceConnected = true;
+                    updateDeviceState('connected');
                     
-                    resolve(result);
-                }, duration);
-            });
-        }
-
-        // Run basic tests
-        async function runBasicTests() {
-            if (currentTest) return;
-            
-            currentTest = 'basic';
-            testResults = [];
-            testProgress = 0;
-            
-            const button = document.querySelector('#basic-test-icon');
-            button.innerHTML = '<div class="loading"></div>';
-            
-            const resultsDiv = document.getElementById('test-results');
-            resultsDiv.innerHTML = '<div style="text-align: center; padding: 20px;"><div class="loading"></div> Running basic tests...</div>';
-            
-            for (let i = 0; i < testDefinitions.basic.length; i++) {
-                const test = testDefinitions.basic[i];
-                testProgress = ((i + 1) / testDefinitions.basic.length) * 100;
-                document.getElementById('test-progress').style.width = testProgress + '%';
-                
-                const result = await simulateTest(test.name, 800 + Math.random() * 400);
-                testResults.push(result);
-                
-                // Update results display
-                updateTestResults();
-                
-                await new Promise(resolve => setTimeout(resolve, 100));
+                    // Test basic communication
+                    await usbManager.sendCommand('\x03'); // Ctrl-C to interrupt
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await usbManager.sendCommand('print("MCT_INSTALL_READY")');
+                    
+                    const response = await usbManager.readResponse(2000);
+                    if (response.includes('MCT_INSTALL_READY')) {
+                        updateDeviceState('ready');
+                        return true;
+                    }
+                }
+                throw new Error('Failed to establish communication');
+            } catch (error) {
+                console.error('Connection failed:', error);
+                updateDeviceState('error');
+                deviceConnected = false;
+                return false;
             }
-            
-            button.innerHTML = '<i class="fas fa-play"></i>';
-            currentTest = null;
-            updateTestSummary();
         }
 
-        // Run comprehensive tests
-        async function runComprehensiveTests() {
-            if (currentTest) return;
-            
-            currentTest = 'comprehensive';
-            testResults = [];
-            testProgress = 0;
-            
-            const button = document.querySelector('#comprehensive-test-icon');
-            button.innerHTML = '<div class="loading"></div>';
-            
-            const resultsDiv = document.getElementById('test-results');
-            resultsDiv.innerHTML = '<div style="text-align: center; padding: 20px;"><div class="loading"></div> Running comprehensive tests...</div>';
-            
-            for (let i = 0; i < testDefinitions.comprehensive.length; i++) {
-                const test = testDefinitions.comprehensive[i];
-                testProgress = ((i + 1) / testDefinitions.comprehensive.length) * 100;
-                document.getElementById('test-progress').style.width = testProgress + '%';
-                
-                const result = await simulateTest(test.name, 600 + Math.random() * 300);
-                testResults.push(result);
-                
-                // Update results display
-                updateTestResults();
-                
-                await new Promise(resolve => setTimeout(resolve, 100));
+        async function disconnectFromDevice() {
+            try {
+                await usbManager.disconnect();
+                deviceConnected = false;
+                devicePort = null;
+                updateDeviceState('unknown');
+            } catch (error) {
+                console.error('Disconnect error:', error);
             }
-            
-            button.innerHTML = '<i class="fas fa-play"></i>';
-            currentTest = null;
-            updateTestSummary();
         }
 
-        // Update test results display with expandable functionality
-        function updateTestResults() {
-            const resultsDiv = document.getElementById('test-results');
+        // Real MCT_TEST execution
+        async function runMCTTest() {
+            if (!deviceConnected) {
+                alert('Please connect to device first!');
+                return;
+            }
+
+            if (testRunning) {
+                alert('Test already running!');
+                return;
+            }
+
+            testRunning = true;
+            realTestResults = {};
             
-            if (testResults.length === 0) {
-                resultsDiv.innerHTML = '<div style="text-align: center; color: rgba(0, 255, 0, 0.6); padding: 20px;"><i class="fas fa-info-circle"></i> Click a test button to start testing...</div>';
+            // Update UI to show test is running
+            updateTestStatus('running');
+            clearTestResults();
+            
+            try {
+                // Send interrupt to clear any running code
+                await usbManager.sendCommand('\x03');
+                await new Promise(resolve => setTimeout(resolve, 200));
+                
+                // Import and run MCT_TEST
+                const testScript = `
+import json
+import time
+from lib.io.MCT_TEST import MCT_TEST
+from lib.io.MCT import MCT
+
+print("=== MCT Test Suite Starting ===")
+print("Creating MCT instance...")
+
+try:
+    mct = MCT()
+    print("MCT instance created successfully")
+    
+    print("Creating MCT_TEST instance...")
+    tester = MCT_TEST(mct)
+    print("MCT_TEST instance created successfully")
+    
+    print("Running comprehensive test...")
+    tester.comprehensive_test("auto")
+    
+    print("Test completed, getting results...")
+    results = tester.results
+    
+    print("MCT_TEST_RESULTS_START")
+    print(json.dumps(results))
+    print("MCT_TEST_RESULTS_END")
+    
+except Exception as e:
+    print("MCT_TEST_ERROR:", str(e))
+    import sys
+    sys.print_exception(e)
+    
+print("=== MCT Test Suite Finished ===")
+`;
+
+                // Send the test script
+                await usbManager.sendCommand(testScript);
+                
+                // Read response with longer timeout for comprehensive test
+                const response = await usbManager.readResponse(30000); // 30 second timeout
+                
+                // Parse test results from response
+                const resultsMatch = response.match(/MCT_TEST_RESULTS_START\s*\n(.*?)\nMCT_TEST_RESULTS_END/s);
+                if (resultsMatch) {
+                    try {
+                        const results = JSON.parse(resultsMatch[1]);
+                        realTestResults = results;
+                        displayTestResults(results);
+                        updateTestStatus('completed');
+                    } catch (parseError) {
+                        console.error('Failed to parse test results:', parseError);
+                        updateTestStatus('error');
+                        displayTestError('Failed to parse test results');
+                    }
+                } else if (response.includes('MCT_TEST_ERROR:')) {
+                    const errorMatch = response.match(/MCT_TEST_ERROR:\s*(.+)/);
+                    const errorMsg = errorMatch ? errorMatch[1] : 'Unknown error';
+                    updateTestStatus('error');
+                    displayTestError(errorMsg);
+                } else {
+                    updateTestStatus('error');
+                    displayTestError('No test results received');
+                }
+                
+            } catch (error) {
+                console.error('Test execution failed:', error);
+                updateTestStatus('error');
+                displayTestError(error.message);
+            } finally {
+                testRunning = false;
+            }
+        }
+
+        // Display real test results
+        function displayTestResults(results) {
+            const container = document.getElementById('test-results');
+            container.innerHTML = '';
+            
+            if (!results || !results.results) {
+                displayTestError('Invalid test results format');
                 return;
             }
             
-            let html = '';
-            testResults.forEach((result, index) => {
-                const statusClass = result.status.toLowerCase();
-                const statusIcon = result.status === 'PASS' ? '✅' : result.status === 'FAIL' ? '❌' : '⏭️';
+            const testData = results.results;
+            let totalTests = 0;
+            let passedTests = 0;
+            
+            // Create test result tiles
+            Object.entries(testData).forEach(([testName, testResult]) => {
+                totalTests++;
+                const passed = testResult.status === 'PASS';
+                if (passed) passedTests++;
                 
-                html += `
-                    <div class="test-result ${statusClass}" onclick="toggleTestResult(${index})">
-                        <div class="test-result-header">
-                            <div>
-                                <strong>${statusIcon} ${result.name}</strong><br>
-                                <small>Status: ${result.status} | ${result.details}</small><br>
-                                <small>Time: ${new Date(result.timestamp).toLocaleTimeString()}</small>
-                            </div>
-                            <div class="test-result-expand-icon">
-                                <i class="fas fa-chevron-down"></i>
-                            </div>
-                        </div>
-                        <div class="test-result-details">
-                            <div class="test-result-expanded-content">
-                                ${result.expandedDetails || 'No additional details available.'}
-                            </div>
-                        </div>
-                    </div>
+                const tile = document.createElement('div');
+                tile.className = `test-tile ${passed ? 'pass' : testResult.status === 'SKIP' ? 'skip' : 'fail'}`;
+                tile.innerHTML = `
+                    <div class="test-name">${testName.toUpperCase()}</div>
+                    <div class="test-status">${testResult.status}</div>
+                    <div class="test-details">${testResult.details || 'No details'}</div>
                 `;
+                
+                // Add click handler for expandable details
+                tile.addEventListener('click', () => {
+                    const details = tile.querySelector('.test-details');
+                    details.style.display = details.style.display === 'none' ? 'block' : 'none';
+                });
+                
+                container.appendChild(tile);
             });
             
-            resultsDiv.innerHTML = html;
-        }
-
-        // Toggle test result expansion
-        function toggleTestResult(index) {
-            const testResultElements = document.querySelectorAll('.test-result');
-            const element = testResultElements[index];
-            
-            if (element) {
-                element.classList.toggle('expanded');
-            }
-        }
-
-        // Update test summary
-        function updateTestSummary() {
-            const summaryDiv = document.getElementById('test-summary');
-            
-            if (testResults.length === 0) {
-                summaryDiv.innerHTML = '<p style="color: rgba(0, 255, 0, 0.6);">No tests have been run yet.</p>';
-                return;
-            }
-            
-            const passCount = testResults.filter(r => r.status === 'PASS').length;
-            const failCount = testResults.filter(r => r.status === 'FAIL').length;
-            const skipCount = testResults.filter(r => r.status === 'SKIP').length;
-            const totalCount = testResults.length;
-            
-            const successRate = ((passCount / totalCount) * 100).toFixed(1);
-            
-            summaryDiv.innerHTML = `
-                <div class="test-summary-grid">
-                    <div class="summary-card pass">
-                        <h3>✅ Passed</h3>
-                        <p>${passCount}</p>
-                    </div>
-                    <div class="summary-card fail">
-                        <h3>❌ Failed</h3>
-                        <p>${failCount}</p>
-                    </div>
-                    <div class="summary-card skip">
-                        <h3>⏭️ Skipped</h3>
-                        <p>${skipCount}</p>
-                    </div>
-                    <div class="summary-card total">
-                        <h3>📊 Success Rate</h3>
-                        <p>${successRate}%</p>
-                    </div>
+            // Update summary
+            const summary = document.getElementById('test-summary');
+            summary.innerHTML = `
+                <div class="summary-item">
+                    <i class="fas fa-check-circle"></i>
+                    <span>Passed: ${passedTests}</span>
+                </div>
+                <div class="summary-item">
+                    <i class="fas fa-times-circle"></i>
+                    <span>Failed: ${totalTests - passedTests}</span>
+                </div>
+                <div class="summary-item">
+                    <i class="fas fa-list"></i>
+                    <span>Total: ${totalTests}</span>
                 </div>
             `;
         }
 
-        // Clear test results
-        function clearResults() {
-            testResults = [];
-            testProgress = 0;
-            document.getElementById('test-progress').style.width = '0%';
-            updateTestResults();
-            updateTestSummary();
+        function displayTestError(errorMsg) {
+            const container = document.getElementById('test-results');
+            container.innerHTML = `
+                <div class="test-tile fail">
+                    <div class="test-name">TEST ERROR</div>
+                    <div class="test-status">FAIL</div>
+                    <div class="test-details">${errorMsg}</div>
+                </div>
+            `;
+            
+            const summary = document.getElementById('test-summary');
+            summary.innerHTML = `
+                <div class="summary-item">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Test execution failed</span>
+                </div>
+            `;
         }
 
-        // Export test results
+        function clearTestResults() {
+            const container = document.getElementById('test-results');
+            container.innerHTML = '<div class="loading">Running tests...</div>';
+            
+            const summary = document.getElementById('test-summary');
+            summary.innerHTML = '<div class="loading">Please wait...</div>';
+        }
+
+        function updateTestStatus(status) {
+            const statusEl = document.getElementById('test-status');
+            const runBtn = document.getElementById('run-test-btn');
+            
+            switch (status) {
+                case 'running':
+                    statusEl.textContent = 'Running tests...';
+                    statusEl.className = 'status running';
+                    runBtn.disabled = true;
+                    runBtn.textContent = 'Running...';
+                    break;
+                case 'completed':
+                    statusEl.textContent = 'Tests completed';
+                    statusEl.className = 'status completed';
+                    runBtn.disabled = false;
+                    runBtn.textContent = 'Run Test Again';
+                    break;
+                case 'error':
+                    statusEl.textContent = 'Test failed';
+                    statusEl.className = 'status error';
+                    runBtn.disabled = false;
+                    runBtn.textContent = 'Retry Test';
+                    break;
+                default:
+                    statusEl.textContent = 'Ready to test';
+                    statusEl.className = 'status ready';
+                    runBtn.disabled = false;
+                    runBtn.textContent = 'Run MCT Test';
+            }
+        }
+
+        // Add missing utility functions
+        function clearResults() {
+            const container = document.getElementById('test-results');
+            container.innerHTML = '<div style="text-align: center; color: rgba(0, 255, 0, 0.6); padding: 20px;"><i class="fas fa-info-circle"></i> Click a test button to start testing...</div>';
+            
+            const summary = document.getElementById('test-summary');
+            summary.innerHTML = '<p style="color: rgba(0, 255, 0, 0.6);">No tests have been run yet.</p>';
+        }
+
         function exportResults() {
-            if (testResults.length === 0) {
-                alert('No test results to export.');
+            if (!realTestResults || Object.keys(realTestResults).length === 0) {
+                alert('No test results to export');
                 return;
             }
             
-            const data = {
-                timestamp: new Date().toISOString(),
-                testResults: testResults,
-                summary: {
-                    total: testResults.length,
-                    passed: testResults.filter(r => r.status === 'PASS').length,
-                    failed: testResults.filter(r => r.status === 'FAIL').length,
-                    skipped: testResults.filter(r => r.status === 'SKIP').length
-                }
-            };
+            const dataStr = JSON.stringify(realTestResults, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
             
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `mct-test-results-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `mct-test-results-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+            link.click();
+            
             URL.revokeObjectURL(url);
         }
+
+        // Enhanced device connection with better error handling
+        async function connectToDevice() {
+            const connectBtn = document.getElementById('connect-btn');
+            const runBtn = document.getElementById('run-test-btn');
+            
+            connectBtn.disabled = true;
+            connectBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
+            updateDeviceState('connecting');
+            
+            try {
+                const connected = await usbManager.connect();
+                if (connected) {
+                    devicePort = usbManager.currentPort;
+                    deviceConnected = true;
+                    
+                    // Test basic communication
+                    await usbManager.sendCommand('\x03'); // Ctrl-C to interrupt
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await usbManager.sendCommand('print("MCT_INSTALL_READY")');
+                    
+                    const response = await usbManager.readResponse(2000);
+                    if (response.includes('MCT_INSTALL_READY')) {
+                        updateDeviceState('connected');
+                        connectBtn.innerHTML = '<i class="fas fa-check"></i> Connected';
+                        connectBtn.disabled = false;
+                        runBtn.disabled = false;
+                        updateTestStatus('ready');
+                        return true;
+                    }
+                }
+                throw new Error('Failed to establish communication');
+            } catch (error) {
+                console.error('Connection failed:', error);
+                updateDeviceState('error');
+                deviceConnected = false;
+                connectBtn.innerHTML = '<i class="fas fa-usb"></i> Connect Device';
+                connectBtn.disabled = false;
+                runBtn.disabled = true;
+                alert('Connection failed: ' + error.message);
+                return false;
+            }
+        }
+
+        // Event listeners
+        document.getElementById('connect-btn').addEventListener('click', connectToDevice);
+        document.getElementById('run-test-btn').addEventListener('click', runMCTTest);
 
         // Listen for installation events
         document.addEventListener('DOMContentLoaded', function() {
@@ -1147,8 +1331,8 @@
                     console.log('Installation successful');
                     document.getElementById('device-status').textContent = 'Installed Successfully';
                     updateDeviceState('connected');
-                    // Auto-run basic tests after successful installation
-                    setTimeout(runBasicTests, 2000);
+                    // Auto-connect after successful installation
+                    setTimeout(connectToDevice, 2000);
                 });
                 
                 installButton.addEventListener('esp-web-install-button-install-error', function(event) {
