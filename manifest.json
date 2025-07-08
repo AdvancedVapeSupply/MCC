@@ -19,7 +19,7 @@
         },
         {
           "path": "firmware/filesystem.bin",
-          "offset": 4194304
+          "offset": 8519680
         }
       ]
     }
