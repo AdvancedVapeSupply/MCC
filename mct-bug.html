@@ -425,31 +425,7 @@
         <div class="bug-form">
             <div class="info-box">
                 <h3>Before Reporting</h3>
-                <p>Please check the existing issues to avoid duplicates. This form will help you create a structured bug report.</p>
-            </div>
-            
-            <div class="ble-section">
-                <h3>Device Connection (Optional)</h3>
-                <div id="bleStatus" class="ble-status disconnected">Not Connected</div>
-                <button type="button" id="bleConnect" class="ble-btn">Connect to MCT Device</button>
-                <button type="button" id="bleDisconnect" class="ble-btn" disabled>Disconnect</button>
-                <button type="button" id="bleSnapshot" class="ble-btn" disabled>Take Data Snapshot</button>
-                
-                <div id="bleDataContainer" style="display: none;">
-                    <h4>Live Device Data</h4>
-                    <table id="bleDataTable" class="ble-data-table">
-                        <thead>
-                            <tr>
-                                <th>Parameter</th>
-                                <th>UUID</th>
-                                <th>Current Value</th>
-                                <th>Last Updated</th>
-                            </tr>
-                        </thead>
-                        <tbody id="bleDataTableBody">
-                        </tbody>
-                    </table>
-                </div>
+                <p>Please check the <a href="https://github.com/AdvancedVapeSupply/MCC/issues" target="_blank">existing issues</a> to avoid duplicates. This form will help you create a structured bug report.</p>
             </div>
             
             <form id="bugForm">
@@ -537,6 +513,30 @@
                     <div id="bleDataSnapshot" class="ble-data-snapshot">No device data captured. Connect to MCT device and take a snapshot to include current device state.</div>
                     <textarea id="bleData" name="bleData" placeholder="Device data will appear here when connected..." readonly></textarea>
                     <div class="help-text">This field will automatically populate with current device parameters when connected via Bluetooth.</div>
+                </div>
+                
+                <div class="ble-section">
+                    <h3>Device Connection (Optional)</h3>
+                    <div id="bleStatus" class="ble-status disconnected">Not Connected</div>
+                    <button type="button" id="bleConnect" class="ble-btn">Connect to MCT Device</button>
+                    <button type="button" id="bleDisconnect" class="ble-btn" disabled>Disconnect</button>
+                    <button type="button" id="bleSnapshot" class="ble-btn" disabled>Take Data Snapshot</button>
+                    
+                    <div id="bleDataContainer" style="display: none;">
+                        <h4>Live Device Data</h4>
+                        <table id="bleDataTable" class="ble-data-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>UUID</th>
+                                    <th>Current Value</th>
+                                    <th>Last Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bleDataTableBody">
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 
                 <button type="submit" class="submit-btn" id="submitBtn">Generate Bug Report</button>
