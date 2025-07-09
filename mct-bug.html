@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCT Bug Report Generator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap">
+    <style>
+        :root {
+            --neon-green: #00ff00;
+            --neon-green-dark: #00aa00;
+            --neon-green-glow: 0 0 10px rgba(0, 255, 0, 0.6);
+        }
+        /* Override body defaults for neon theme */
+        body {
+            background: #000;
+            color: var(--neon-green);
+            font-family: 'Fira Code', monospace, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        .bug-form {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 30px;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            color: var(--neon-green);
+            border: 1px solid rgba(0,255,0,0.3);
+        }
+        
+        .form-group {
+            margin-bottom: 24px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--neon-green);
+            font-size: 14px;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #404040;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            background-color: #1a1a1a;
+            color: #cecece;
+            transition: all 0.3s ease;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            border-color: var(--neon-green);
+            background-color: #111;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(0, 255, 0, 0.1);
+        }
+        
+        .form-group input:hover,
+        .form-group select:hover,
+        .form-group textarea:hover {
+            border-color: #555;
+        }
+        
+        .form-group input[readonly] {
+            background-color: #2a2a2a;
+            color: #999;
+            cursor: not-allowed;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 120px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .submit-btn {
+            background: linear-gradient(135deg, var(--neon-green) 0%, var(--neon-green-dark) 100%);
+            color: #000;
+            padding: 16px 32px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 167, 233, 0.3);
+        }
+        
+        .submit-btn:hover {
+            background: linear-gradient(135deg, var(--neon-green-dark) 0%, #006600 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 167, 233, 0.4);
+        }
+        
+        .submit-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .status-message {
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 8px;
+            display: none;
+            font-weight: 500;
+        }
+        
+        .status-message.success {
+            background-color: rgba(21, 87, 36, 0.2);
+            color: #4caf50;
+            border: 1px solid #4caf50;
+        }
+        
+        .status-message.error {
+            background-color: rgba(114, 28, 36, 0.2);
+            color: #f44336;
+            border: 1px solid #f44336;
+        }
+        
+        .help-text {
+            font-size: 12px;
+            color: #999;
+            margin-top: 6px;
+            font-style: italic;
+        }
+        
+        .required {
+            color: #ff4757;
+        }
+        
+        .github-link {
+            display: inline-block;
+            margin-top: 12px;
+            color: var(--neon-green);
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+        
+        .github-link:hover {
+            color: var(--neon-green-dark);
+            text-decoration: underline;
+        }
+        
+        .info-box {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+            border: 1px solid #404040;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+            color: #cecece;
+        }
+        
+        .info-box h3 {
+            color: var(--neon-green);
+        }
+        
+        .info-box p {
+            margin: 0;
+            line-height: 1.5;
+        }
+        
+        .info-box a {
+            color: #00a7e9;
+            text-decoration: none;
+        }
+        
+        .info-box a:hover {
+            text-decoration: underline;
+        }
+        
+        .ble-section {
+            background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+            border: 1px solid #404040;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        
+        .ble-section h3 {
+            margin: 0 0 16px 0;
+            color: #00a7e9;
+            font-size: 18px;
+        }
+        
+        .ble-status {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .ble-status.disconnected {
+            background-color: #444;
+            color: #ccc;
+            border: 1px solid #555;
+        }
+        
+        .ble-status.connecting {
+            background-color: #ffc107;
+            color: #000;
+            border: 1px solid #ffca28;
+            animation: pulse 1.5s ease-in-out infinite alternate;
+        }
+        
+        .ble-status.connected {
+            background-color: #4caf50;
+            color: #fff;
+            border: 1px solid #66bb6a;
+        }
+        
+        .ble-status.error {
+            background-color: #f44336;
+            color: #fff;
+            border: 1px solid #ef5350;
+        }
+        
+        @keyframes pulse {
+            from { opacity: 1; }
+            to { opacity: 0.7; }
+        }
+        
+        .ble-btn {
+            background: linear-gradient(135deg, #00a7e9 0%, #0087c4 100%);
+            color: white;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 12px;
+            margin-bottom: 8px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 167, 233, 0.2);
+        }
+        
+        .ble-btn:hover:not(:disabled) {
+            background: linear-gradient(135deg, #0087c4 0%, #006699 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 167, 233, 0.3);
+        }
+        
+        .ble-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+            opacity: 0.6;
+        }
+        
+        .ble-data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #404040;
+        }
+        
+        .ble-data-table th,
+        .ble-data-table td {
+            padding: 12px 16px;
+            text-align: left;
+            color: #cecece;
+            border-bottom: 1px solid #404040;
+        }
+        
+        .ble-data-table th {
+            background: linear-gradient(135deg, #333 0%, #404040 100%);
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .ble-data-table tbody tr:nth-child(even) {
+            background-color: rgba(26, 26, 26, 0.8);
+        }
+        
+        .ble-data-table tbody tr:hover {
+            background-color: rgba(0, 167, 233, 0.1);
+            transition: background-color 0.2s ease;
+        }
+        
+        .ble-data-table td:first-child {
+            font-weight: 600;
+            color: #00a7e9;
+        }
+        
+        .ble-data-snapshot {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+            background-color: #0a0a0a;
+            border: 1px solid #404040;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 12px;
+            white-space: pre-wrap;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #e0e0e0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        #bleDataContainer h4 {
+            color: #00a7e9;
+            margin: 16px 0 8px 0;
+            font-size: 16px;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .bug-form {
+                margin: 10px;
+                padding: 20px;
+            }
+            
+            .form-row {
+                flex-direction: column;
+                gap: 0;
+            }
+            
+            .ble-btn {
+                width: 100%;
+                margin-right: 0;
+                margin-bottom: 8px;
+            }
+            
+            .ble-data-table th,
+            .ble-data-table td {
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+        }
+        
+        /* Custom scrollbar for snapshot */
+        .ble-data-snapshot::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .ble-data-snapshot::-webkit-scrollbar-track {
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+        
+        .ble-data-snapshot::-webkit-scrollbar-thumb {
+            background: #404040;
+            border-radius: 4px;
+        }
+        
+        .ble-data-snapshot::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 600px) {
+            .bug-form {
+                padding: 20px 15px;
+                border-radius: 0;
+            }
+            .form-row {
+                flex-direction: column;
+            }
+            .submit-btn {
+                font-size: 14px;
+                padding: 14px 24px;
+            }
+            .ble-data-table {
+                font-size: 12px;
+            }
+            #bleDataTable {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+            #bleDataTable th,
+            #bleDataTable td {
+                padding: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>MCT Bug Report Generator</h1>
+            <p>Generate structured bug reports for MCT device issues</p>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="subheader">
+            <div class="title">Report a Bug</div>
+        </div>
+        
+        <div class="bug-form">
+            <div class="info-box">
+                <h3>Before Reporting</h3>
+                <p>Please check the existing issues to avoid duplicates. This form will help you create a structured bug report.</p>
+            </div>
+            
+            <div class="ble-section">
+                <h3>Device Connection (Optional)</h3>
+                <div id="bleStatus" class="ble-status disconnected">Not Connected</div>
+                <button type="button" id="bleConnect" class="ble-btn">Connect to MCT Device</button>
+                <button type="button" id="bleDisconnect" class="ble-btn" disabled>Disconnect</button>
+                <button type="button" id="bleSnapshot" class="ble-btn" disabled>Take Data Snapshot</button>
+                
+                <div id="bleDataContainer" style="display: none;">
+                    <h4>Live Device Data</h4>
+                    <table id="bleDataTable" class="ble-data-table">
+                        <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>UUID</th>
+                                <th>Current Value</th>
+                                <th>Last Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bleDataTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <form id="bugForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="title">Issue Title <span class="required">*</span></label>
+                        <input type="text" id="title" name="title" required placeholder="Brief description of the issue">
+                    </div>
+                    <div class="form-group">
+                        <label for="severity">Severity</label>
+                        <select id="severity" name="severity">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="category">Category</label>
+                        <select id="category" name="category">
+                            <option value="bug">Bug</option>
+                            <option value="hardware">Hardware</option>
+                            <option value="firmware">Firmware</option>
+                            <option value="ui">User Interface</option>
+                            <option value="bluetooth">Bluetooth</option>
+                            <option value="temperature">Temperature Control</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="device">Device Model</label>
+                        <input type="text" id="device" name="device" value="MCT 1.0" readonly>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="description">Description <span class="required">*</span></label>
+                    <textarea id="description" name="description" required placeholder="Detailed description of the issue..."></textarea>
+                    <div class="help-text">Please provide as much detail as possible about the issue.</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="steps">Steps to Reproduce</label>
+                    <textarea id="steps" name="steps" placeholder="1. Step one&#10;2. Step two&#10;3. Step three"></textarea>
+                    <div class="help-text">List the steps to reproduce the issue.</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="expected">Expected Behavior</label>
+                    <textarea id="expected" name="expected" placeholder="What should happen?"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="actual">Actual Behavior</label>
+                    <textarea id="actual" name="actual" placeholder="What actually happened?"></textarea>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="firmware">Firmware Version</label>
+                        <input type="text" id="firmware" name="firmware" placeholder="e.g., 0.9.20250202">
+                    </div>
+                    <div class="form-group">
+                        <label for="environment">Environment</label>
+                        <input type="text" id="environment" name="environment" placeholder="e.g., Chrome 120, Windows 11">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="logs">Log Output / Error Messages</label>
+                    <textarea id="logs" name="logs" placeholder="Paste any relevant log output or error messages here..."></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="contact">Contact Email (Optional)</label>
+                    <input type="email" id="contact" name="contact" placeholder="your.email@example.com">
+                    <div class="help-text">Optional: We may contact you for additional information.</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bleData">Device Data Snapshot (Auto-populated if connected)</label>
+                    <div id="bleDataSnapshot" class="ble-data-snapshot">No device data captured. Connect to MCT device and take a snapshot to include current device state.</div>
+                    <textarea id="bleData" name="bleData" placeholder="Device data will appear here when connected..." readonly></textarea>
+                    <div class="help-text">This field will automatically populate with current device parameters when connected via Bluetooth.</div>
+                </div>
+                
+                <button type="submit" class="submit-btn" id="submitBtn">Generate Bug Report</button>
+                
+                <div id="statusMessage" class="status-message"></div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // BLE Configuration
+        const VAPE_SERVICE_UUID = '00000420-0000-1000-8000-00805f9b34fb';
+        const CHAR_UUID_MAP = {
+            'alpha': '00000001-0000-1000-8000-00805f9b34fb',
+            'Tset': '00000002-0000-1000-8000-00805f9b34fb',
+            'Pset': '00000003-0000-1000-8000-00805f9b34fb',
+            'tFset_s': '00000004-0000-1000-8000-00805f9b34fb',
+            'buttons': '00000005-0000-1000-8000-00805f9b34fb',
+            'Tescc': '00000006-0000-1000-8000-00805f9b34fb',
+            'Tkmeter': '00000007-0000-1000-8000-00805f9b34fb',
+            'ms_timestamp': '00000008-0000-1000-8000-00805f9b34fb',
+            'omega': '00000009-0000-1000-8000-00805f9b34fb',
+            
+            // Version information characteristics
+            'micropython_version': '00000070-0000-1000-8000-00805f9b34fb',
+            'mct_version': '00000071-0000-1000-8000-00805f9b34fb',
+            'active_directory': '00000072-0000-1000-8000-00805f9b34fb',
+            'mct_git_commit': '00000073-0000-1000-8000-00805f9b34fb',
+            'mct_git_branch': '00000074-0000-1000-8000-00805f9b34fb',
+            'mct_build_date': '00000075-0000-1000-8000-00805f9b34fb',
+            'device_mac_address': '00000076-0000-1000-8000-00805f9b34fb'
+        };
+        
+        // Global variables
+        let device, server, service;
+        let characteristicsCache = {};
+        let bleConnected = false;
+        let bleDataInterval = null;
+        let currentBleData = {};
+        
+        // DOM elements
+        const bleStatus = document.getElementById('bleStatus');
+        const bleConnect = document.getElementById('bleConnect');
+        const bleDisconnect = document.getElementById('bleDisconnect');
+        const bleSnapshot = document.getElementById('bleSnapshot');
+        const bleDataContainer = document.getElementById('bleDataContainer');
+        const bleDataTableBody = document.getElementById('bleDataTableBody');
+        const bleDataField = document.getElementById('bleData');
+        const bleDataSnapshot = document.getElementById('bleDataSnapshot');
+        
+        // BLE Event Listeners
+        bleConnect.addEventListener('click', connectToDevice);
+        bleDisconnect.addEventListener('click', disconnectFromDevice);
+        bleSnapshot.addEventListener('click', takeDataSnapshot);
+        
+        // BLE Functions
+        async function connectToDevice() {
+            try {
+                updateBleStatus('Scanning for devices...', 'connecting');
+                bleConnect.disabled = true;
+                
+                device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [VAPE_SERVICE_UUID]
+                });
+                
+                updateBleStatus('Connecting to device...', 'connecting');
+                server = await device.gatt.connect();
+                
+                updateBleStatus('Getting services...', 'connecting');
+                service = await server.getPrimaryService(VAPE_SERVICE_UUID);
+                
+                await cacheCharacteristics();
+                initializeBleDataTable();
+                startDataCollection();
+                
+                updateBleStatus('Connected to ' + (device.name || 'MCT Device'), 'connected');
+                bleConnected = true;
+                bleConnect.disabled = true;
+                bleDisconnect.disabled = false;
+                bleSnapshot.disabled = false;
+                bleDataContainer.style.display = 'block';
+                
+                // Device model is always MCT 1.0
+                const deviceField = document.getElementById('device');
+                deviceField.value = 'MCT 1.0';
+                
+            } catch (error) {
+                console.error('BLE connection error:', error);
+                updateBleStatus('Connection failed: ' + error.message, 'error');
+                bleConnect.disabled = false;
+                bleConnected = false;
+            }
+        }
+        
+        async function disconnectFromDevice() {
+            try {
+                if (bleDataInterval) {
+                    clearInterval(bleDataInterval);
+                    bleDataInterval = null;
+                }
+                
+                if (server && server.connected) {
+                    await server.disconnect();
+                }
+                
+                updateBleStatus('Disconnected', 'disconnected');
+                bleConnected = false;
+                bleConnect.disabled = false;
+                bleDisconnect.disabled = true;
+                bleSnapshot.disabled = true;
+                bleDataContainer.style.display = 'none';
+                
+                // Clear cached data
+                characteristicsCache = {};
+                currentBleData = {};
+                
+            } catch (error) {
+                console.error('BLE disconnect error:', error);
+                updateBleStatus('Disconnect error: ' + error.message, 'error');
+            }
+        }
+        
+        async function cacheCharacteristics() {
+            const tableBody = document.getElementById('bleDataTableBody');
+            tableBody.innerHTML = '';
+            
+            for (const [key, uuid] of Object.entries(CHAR_UUID_MAP)) {
+                try {
+                    const characteristic = await service.getCharacteristic(uuid);
+                    characteristicsCache[key] = characteristic;
+                    currentBleData[key] = { value: 'N/A', timestamp: 'Never' };
+                    
+                    // Add row to table
+                    const row = tableBody.insertRow();
+                    row.insertCell(0).textContent = key;
+                    row.insertCell(1).textContent = uuid;
+                    row.insertCell(2).id = `ble-value-${key}`;
+                    row.insertCell(3).id = `ble-timestamp-${key}`;
+                    
+                } catch (error) {
+                    console.warn(`Characteristic ${key} not found:`, error);
+                }
+            }
+        }
+        
+        function initializeBleDataTable() {
+            for (const key in characteristicsCache) {
+                const valueCell = document.getElementById(`ble-value-${key}`);
+                const timestampCell = document.getElementById(`ble-timestamp-${key}`);
+                if (valueCell) valueCell.textContent = 'Reading...';
+                if (timestampCell) timestampCell.textContent = 'Initializing...';
+            }
+        }
+        
+        function startDataCollection() {
+            if (bleDataInterval) {
+                clearInterval(bleDataInterval);
+            }
+            
+            bleDataInterval = setInterval(async () => {
+                for (const [key, characteristic] of Object.entries(characteristicsCache)) {
+                    try {
+                        const value = await characteristic.readValue();
+                        const parsedValue = parseCharacteristicValue(key, value);
+                        const timestamp = new Date().toLocaleTimeString();
+                        
+                        currentBleData[key] = { value: parsedValue, timestamp: timestamp };
+                        
+                        // Update table
+                        const valueCell = document.getElementById(`ble-value-${key}`);
+                        const timestampCell = document.getElementById(`ble-timestamp-${key}`);
+                        if (valueCell) valueCell.textContent = parsedValue;
+                        if (timestampCell) timestampCell.textContent = timestamp;
+                        
+                    } catch (error) {
+                        console.error(`Error reading ${key}:`, error);
+                        currentBleData[key] = { value: 'Error', timestamp: new Date().toLocaleTimeString() };
+                    }
+                }
+            }, 2000); // Read every 2 seconds
+        }
+        
+        function parseCharacteristicValue(key, value) {
+            try {
+                // Version characteristics are text strings
+                if (key === 'micropython_version' || key === 'mct_version' || key === 'active_directory' || 
+                    key === 'mct_git_commit' || key === 'mct_git_branch' || key === 'mct_build_date' || 
+                    key === 'device_mac_address') {
+                    return new TextDecoder().decode(value);
+                }
+                
+                if (value.byteLength === 4) {
+                    return new DataView(value.buffer).getFloat32(0, true).toFixed(2);
+                } else if (value.byteLength === 8) {
+                    return Number(new DataView(value.buffer).getBigUint64(0, true));
+                } else {
+                    const decoded = new TextDecoder().decode(value);
+                    if (!isNaN(Number(decoded))) {
+                        return Number(decoded);
+                    }
+                    return decoded;
+                }
+            } catch (error) {
+                console.error(`Error parsing value for ${key}:`, error);
+                return 'Parse Error';
+            }
+        }
+        
+        function takeDataSnapshot() {
+            if (!bleConnected || Object.keys(currentBleData).length === 0) {
+                alert('No device data available. Please connect to a device first.');
+                return;
+            }
+            
+                                     const timestamp = new Date().toISOString();
+            let snapshotText = `Device Data Snapshot - ${timestamp}\n`;
+            snapshotText += `Device: MCT 1.0\n`;
+            snapshotText += `Connection: Bluetooth LE\n`;
+            snapshotText += `Service UUID: ${VAPE_SERVICE_UUID}\n\n`;
+            
+            // Add version information at the top
+            snapshotText += 'VERSION INFORMATION:\n';
+            const versionKeys = ['mct_version', 'micropython_version', 'active_directory', 'mct_git_commit', 'mct_git_branch', 'mct_build_date', 'device_mac_address'];
+            for (const key of versionKeys) {
+                if (currentBleData[key]) {
+                    snapshotText += `${key}: ${currentBleData[key].value} (${currentBleData[key].timestamp})\n`;
+                }
+            }
+            snapshotText += '\n';
+            
+            snapshotText += 'DEVICE PARAMETERS:\n';
+            for (const [key, data] of Object.entries(currentBleData)) {
+                if (!versionKeys.includes(key)) {
+                    snapshotText += `${key}: ${data.value} (${data.timestamp})\n`;
+                }
+            }
+            
+            snapshotText += '\nCHARACTERISTIC UUIDs:\n';
+            for (const [key, uuid] of Object.entries(CHAR_UUID_MAP)) {
+                snapshotText += `${key}: ${uuid}\n`;
+            }
+            
+            bleDataField.value = snapshotText;
+            bleDataSnapshot.textContent = snapshotText;
+            
+            // Also try to populate firmware version from device data
+            if (currentBleData.mct_version && currentBleData.mct_version.value !== 'N/A') {
+                const firmwareField = document.getElementById('firmware');
+                if (!firmwareField.value) {
+                    firmwareField.value = currentBleData.mct_version.value;
+                }
+            } else if (currentBleData.ms_timestamp && currentBleData.ms_timestamp.value !== 'N/A') {
+                const firmwareField = document.getElementById('firmware');
+                if (!firmwareField.value) {
+                    firmwareField.value = 'Connected via BLE - see device data';
+                }
+            }
+        }
+        
+        function updateBleStatus(message, status) {
+            bleStatus.textContent = message;
+            bleStatus.className = `ble-status ${status}`;
+        }
+        
+        // Bug report form submission code
+        const GITHUB_API_URL = null; // Configure for your repository
+        const GITHUB_TOKEN = null; // Not needed for static form
+        
+        document.getElementById('bugForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            // Disable submit button and show loading state
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Generating Report...';
+            
+            try {
+                const formData = new FormData(this);
+                const issueData = createIssueData(formData);
+                
+                // Generate a formatted bug report for copying
+                await handleBugSubmission(issueData, statusMessage);
+                
+            } catch (error) {
+                showStatus('Error generating bug report: ' + error.message, 'error', statusMessage);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Generate Bug Report';
+            }
+        });
+        
+        function createIssueData(formData) {
+            const data = {};
+            for (let [key, value] of formData.entries()) {
+                data[key] = value;
+            }
+            
+            // Create bug report template
+            const issueBody = `
+## Bug Report
+
+**Severity:** ${data.severity}
+**Category:** ${data.category}
+**Device:** ${data.device || 'MCT 1.0'}
+**Firmware Version:** ${data.firmware || 'Not specified'}
+**Environment:** ${data.environment || 'Not specified'}
+
+### Description
+${data.description}
+
+### Steps to Reproduce
+${data.steps || 'Not provided'}
+
+### Expected Behavior
+${data.expected || 'Not provided'}
+
+### Actual Behavior
+${data.actual || 'Not provided'}
+
+### Log Output / Error Messages
+\`\`\`
+${data.logs || 'None provided'}
+\`\`\`
+
+### Device Data Snapshot
+\`\`\`
+${data.bleData || 'No device data captured'}
+\`\`\`
+
+### Contact
+${data.contact || 'Not provided'}
+
+---
+*This bug report was generated using the MCT Bug Report tool.*
+            `.trim();
+            
+            return {
+                title: data.title,
+                body: issueBody,
+                labels: [
+                    'bug',
+                    `severity:${data.severity}`,
+                    `category:${data.category}`
+                ].filter(Boolean)
+            };
+        }
+        
+        async function handleBugSubmission(issueData, statusMessage) {
+            // Store the issue data for copying
+            if (typeof(Storage) !== "undefined") {
+                const bugReport = {
+                    timestamp: new Date().toISOString(),
+                    bleConnected: bleConnected,
+                    deviceName: device ? device.name : null,
+                    bleData: currentBleData,
+                    ...issueData
+                };
+                localStorage.setItem('mct-bug-report', JSON.stringify(bugReport));
+            }
+            
+            // Create a text area with the formatted report for copying
+            const reportContainer = document.createElement('div');
+            reportContainer.className = 'bug-report-output';
+            reportContainer.innerHTML = `
+                <h4>Bug Report Generated Successfully!</h4>
+                <p>Copy the report below and paste it into your issue tracker:</p>
+                <textarea id="generatedReport" readonly style="width: 100%; height: 300px; font-family: monospace; font-size: 12px; padding: 10px; border: 1px solid #333; background: #1a1a1a; color: #cecece; border-radius: 4px; margin: 10px 0;"></textarea>
+                <div style="margin-top: 10px;">
+                    <button id="copyReport" style="padding: 8px 16px; background: var(--neon-green); color: #000; border: none; border-radius: 4px; cursor: pointer;">Copy to Clipboard</button>
+                    <button id="downloadReport" style="padding: 8px 16px; background: var(--neon-green-dark); color: #000; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">Download as Text</button>
+                </div>
+            `;
+            
+            statusMessage.innerHTML = '';
+            statusMessage.appendChild(reportContainer);
+            statusMessage.style.display = 'block';
+            
+            // Fill the textarea with the report
+            const textarea = document.getElementById('generatedReport');
+            const reportText = `# ${issueData.title}\n\n${issueData.body}`;
+            textarea.value = reportText;
+            
+            // Add copy button functionality
+            document.getElementById('copyReport').addEventListener('click', async function() {
+                try {
+                    await navigator.clipboard.writeText(reportText);
+                    this.textContent = 'Copied!';
+                    setTimeout(() => {
+                        this.textContent = 'Copy to Clipboard';
+                    }, 2000);
+                } catch (err) {
+                    // Fallback for browsers that don't support clipboard API
+                    textarea.select();
+                    document.execCommand('copy');
+                    this.textContent = 'Copied!';
+                    setTimeout(() => {
+                        this.textContent = 'Copy to Clipboard';
+                    }, 2000);
+                }
+            });
+            
+            // Add download button functionality
+            document.getElementById('downloadReport').addEventListener('click', function() {
+                const blob = new Blob([reportText], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `bug-report-${new Date().toISOString().split('T')[0]}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        }
+        
+        function createGitHubIssueUrl(issueData) {
+            // Generic GitHub issue URL - user can customize for their repository
+            const baseUrl = 'https://github.com/YOUR-USERNAME/YOUR-REPOSITORY/issues/new';
+            const params = new URLSearchParams({
+                title: issueData.title,
+                body: issueData.body,
+                labels: issueData.labels.join(',')
+            });
+            
+            return `${baseUrl}?${params.toString()}`;
+        }
+        
+        function showStatus(message, type, statusElement) {
+            statusElement.textContent = message;
+            statusElement.className = `status-message ${type}`;
+            statusElement.style.display = 'block';
+            
+            // Auto-hide after 10 seconds for error messages
+            if (type === 'error') {
+                setTimeout(() => {
+                    statusElement.style.display = 'none';
+                }, 10000);
+            }
+        }
+        
+        // Auto-save form data as user types
+        const formInputs = document.querySelectorAll('#bugForm input, #bugForm select, #bugForm textarea');
+        formInputs.forEach(input => {
+            input.addEventListener('input', function() {
+                if (typeof(Storage) !== "undefined") {
+                    localStorage.setItem(`mct-bug-${this.id}`, this.value);
+                }
+            });
+            
+            // Restore saved data on page load
+            if (typeof(Storage) !== "undefined") {
+                const savedValue = localStorage.getItem(`mct-bug-${input.id}`);
+                if (savedValue) {
+                    input.value = savedValue;
+                }
+            }
+        });
+        
+        // Check for BLE support on page load
+        if (!navigator.bluetooth) {
+            updateBleStatus('Bluetooth not supported in this browser', 'error');
+            bleConnect.disabled = true;
+            bleConnect.textContent = 'Bluetooth Not Supported';
+        }
+    </script>
+</body>
+</html> 
