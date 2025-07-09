@@ -1374,6 +1374,14 @@
         .action-button.connect-btn i {
             transition: transform 0.2s;
         }
+
+        .bug-icon {
+            color: var(--neon-yellow);
+        }
+        .bug-icon:hover {
+            color: var(--neon-yellow);
+            text-shadow: var(--neon-yellow-glow);
+        }
     </style>
 </head>
 <body>
@@ -1395,6 +1403,9 @@
                 <span id="wifi-icon" class="status-icon wifi-icon" data-tile="wifi-tile"><i class="fas fa-wifi"></i></span>
                 <span id="ble-icon" class="status-icon ble-icon" data-tile="ble-tile"><i class="fa-brands fa-bluetooth-b"></i></span>
                 <span id="usb-icon" class="status-icon usb-icon" data-tile="usb-tile"><i class="fa-brands fa-usb"></i></span>
+                <a href="mct-bug.html" target="_blank" title="Report a Bug">
+                    <span id="bug-icon" class="status-icon bug-icon"><i class="fas fa-bug"></i></span>
+                </a>
                 <div id="battery-icon" class="status-icon battery-icon" data-tile="battery-tile">
                     <div class="battery-level"></div>
                 </div>
