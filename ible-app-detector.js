@@ -401,8 +401,8 @@
             const timestamp = document.createElement("div");
             timestamp.style.cssText = `
                 position: fixed;
-                top: 10px;
-                right: 10px;
+                top: 60px;
+                left: 10px;
                 background: rgba(0,0,0,0.8);
                 color: white;
                 padding: 5px;
@@ -410,7 +410,7 @@
                 border-radius: 3px;
                 z-index: 1000;
             `;
-            timestamp.textContent = "Version: " + "2025-07-28 14:43:07";
+            timestamp.textContent = "Version: " + "2025-07-28 14:35:07";
             document.body.appendChild(timestamp);
             
             // Insert button at the top of the page
