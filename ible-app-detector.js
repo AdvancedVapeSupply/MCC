@@ -215,12 +215,35 @@
             const container = document.createElement('div');
             container.style.cssText = `
                 position: fixed;
-                top: 20px;
+                bottom: 20px;
+                left: 20px;
                 right: 20px;
+                background: rgba(0, 0, 0, 0.9);
+                border: 2px solid #667eea;
+                border-radius: 12px;
+                padding: 16px;
                 display: flex;
                 flex-direction: column;
-                gap: 8px;
+                gap: 12px;
                 z-index: 10000;
+                backdrop-filter: blur(10px);
+            `;
+            
+            const title = document.createElement('div');
+            title.textContent = 'iBLE App Options';
+            title.style.cssText = `
+                color: white;
+                font-weight: 600;
+                font-size: 16px;
+                margin-bottom: 8px;
+                text-align: center;
+            `;
+            
+            const buttonRow = document.createElement('div');
+            buttonRow.style.cssText = `
+                display: flex;
+                gap: 8px;
+                justify-content: center;
             `;
             
             const openButton = this.createButton(
@@ -235,8 +258,66 @@
                 () => window.open(this.config.installUrl, '_blank')
             );
             
-            container.appendChild(openButton);
-            container.appendChild(installButton);
+            // Manual URL entry section
+            const urlSection = document.createElement('div');
+            urlSection.style.cssText = `
+                margin-top: 12px;
+                padding-top: 12px;
+                border-top: 1px solid rgba(255, 255, 255, 0.2);
+            `;
+            
+            const urlLabel = document.createElement('div');
+            urlLabel.textContent = 'Or enter custom URL:';
+            urlLabel.style.cssText = `
+                color: white;
+                font-size: 12px;
+                margin-bottom: 4px;
+            `;
+            
+            const urlInput = document.createElement('input');
+            urlInput.type = 'text';
+            urlInput.placeholder = 'ible://your-custom-url';
+            urlInput.value = this.config.appUrl;
+            urlInput.style.cssText = `
+                width: 100%;
+                padding: 8px 12px;
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                border-radius: 6px;
+                background: rgba(255, 255, 255, 0.1);
+                color: white;
+                font-size: 14px;
+                margin-bottom: 8px;
+            `;
+            
+            const urlButton = document.createElement('button');
+            urlButton.textContent = 'Open URL';
+            urlButton.style.cssText = `
+                background: #667eea;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-size: 14px;
+                cursor: pointer;
+                width: 100%;
+            `;
+            urlButton.onclick = () => {
+                const url = urlInput.value.trim();
+                if (url) {
+                    window.location.href = url;
+                }
+            };
+            
+            buttonRow.appendChild(openButton);
+            buttonRow.appendChild(installButton);
+            
+            urlSection.appendChild(urlLabel);
+            urlSection.appendChild(urlInput);
+            urlSection.appendChild(urlButton);
+            
+            container.appendChild(title);
+            container.appendChild(buttonRow);
+            container.appendChild(urlSection);
             
             document.body.appendChild(container);
             this.buttonCreated = true;
@@ -252,17 +333,20 @@
             // Add default styles
             button.style.cssText = `
                 position: fixed;
-                top: 20px;
+                bottom: 20px;
+                left: 20px;
                 right: 20px;
-                background: #667eea;
+                background: rgba(0, 0, 0, 0.9);
                 color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 12px 20px;
-                font-size: 14px;
+                border: 2px solid #667eea;
+                border-radius: 12px;
+                padding: 16px 20px;
+                font-size: 16px;
                 font-weight: 600;
                 cursor: pointer;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                backdrop-filter: blur(10px);
+                text-align: center;
                 z-index: 10000;
                 transition: all 0.3s ease;
             `;
