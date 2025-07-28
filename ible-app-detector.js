@@ -70,12 +70,9 @@
                 return;
             }
             
-            console.log('iBLE app detector: Not in app, trying custom URL scheme');
-            // Method 2: Try custom URL scheme
-            this.tryCustomScheme();
-            
-            // Method 3: Universal Links detection
-            this.tryUniversalLinks();
+            console.log('iBLE app detector: Not in app, showing both options');
+            // Show both options when not in app
+            this.showBothOptions();
         },
         
         // Try custom URL scheme detection
