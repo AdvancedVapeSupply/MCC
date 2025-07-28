@@ -38,6 +38,19 @@
             // Don't detect if already detected
             if (this.detected) return;
             
+            // Only run on mobile devices with WebBLE support
+            if (!this.isMobile()) {
+                console.log('iBLE app detector: Desktop detected, skipping');
+                return;
+            }
+            
+            // Check if WebBLE is supported
+            if (!this.supportsWebBLE()) {
+                console.log('iBLE app detector: WebBLE not supported, showing install button');
+                this.showInstallButton();
+                return;
+            }
+            
             // Store original page state
             this.originalTitle = document.title;
             this.originalHref = window.location.href;
@@ -82,6 +95,19 @@
                     this.onAppNotDetected();
                 }
             }, this.config.timeout);
+        },
+        
+        // Check if running on mobile device
+        isMobile: function() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                   (window.innerWidth <= 768 && window.innerHeight <= 1024);
+        },
+        
+        // Check if Web Bluetooth API is supported
+        supportsWebBLE: function() {
+            return 'bluetooth' in navigator && 
+                   'requestDevice' in navigator.bluetooth &&
+                   navigator.bluetooth.availability !== 'unavailable';
         },
         
         // Check if running in web app mode
