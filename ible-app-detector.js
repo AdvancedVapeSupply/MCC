@@ -55,8 +55,8 @@
             this.originalTitle = document.title;
             this.originalHref = window.location.href;
             
-            // For now, show both options and let user choose
-            this.showBothOptions();
+            // Try to detect if app is installed
+            this.attemptDetection();
         },
         
         // Attempt to detect if app is installed
@@ -78,24 +78,36 @@
         tryCustomScheme: function() {
             console.log('iBLE app detector: Trying custom URL scheme...');
             
-            // Method 1: Try iframe approach
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = this.config.appUrl;
-            document.body.appendChild(iframe);
+            // Method 1: Check if we're already in the app
+            if (this.isInWebApp()) {
+                console.log('iBLE app detector: Already in app detected');
+                this.onAppDetected();
+                return;
+            }
             
-            // Remove iframe after attempt
-            setTimeout(() => {
-                if (document.body.contains(iframe)) {
-                    document.body.removeChild(iframe);
-                }
-            }, 100);
-            
-            // Method 2: Try direct link click (more reliable)
+            // Method 2: Try direct link click (most reliable)
             const link = document.createElement('a');
             link.href = this.config.appUrl;
             link.style.display = 'none';
             document.body.appendChild(link);
+            
+            // Listen for page visibility changes (app opened)
+            const visibilityHandler = () => {
+                if (document.hidden) {
+                    console.log('iBLE app detector: Page hidden, app likely opened');
+                    this.onAppDetected();
+                    document.removeEventListener('visibilitychange', visibilityHandler);
+                }
+            };
+            document.addEventListener('visibilitychange', visibilityHandler);
+            
+            // Listen for page blur (app opened)
+            const blurHandler = () => {
+                console.log('iBLE app detector: Page blurred, app likely opened');
+                this.onAppDetected();
+                window.removeEventListener('blur', blurHandler);
+            };
+            window.addEventListener('blur', blurHandler);
             
             // Simulate click
             setTimeout(() => {
@@ -103,12 +115,14 @@
                 if (document.body.contains(link)) {
                     document.body.removeChild(link);
                 }
-            }, 200);
+            }, 100);
             
             // Set up detection timeout
             this.detectionTimeout = setTimeout(() => {
                 if (!this.detected) {
                     console.log('iBLE app detector: Timeout reached, app not detected');
+                    document.removeEventListener('visibilitychange', visibilityHandler);
+                    window.removeEventListener('blur', blurHandler);
                     this.onAppNotDetected();
                 }
             }, this.config.timeout);
