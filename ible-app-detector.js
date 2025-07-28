@@ -235,7 +235,11 @@
         
         // Show both options (Open in App / Install App)
         showBothOptions: function() {
-            if (this.buttonCreated) return;
+            console.log('iBLE app detector: showBothOptions called');
+            if (this.buttonCreated) {
+                console.log('iBLE app detector: Button already created, returning');
+                return;
+            }
             
             const container = document.createElement('div');
             container.style.cssText = `
