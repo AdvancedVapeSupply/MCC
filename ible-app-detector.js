@@ -70,9 +70,9 @@
                 return;
             }
             
-            console.log('iBLE app detector: Not in app, trying iframe detection');
-            // Method 2: Try iframe detection
-            this.tryIframeDetection();
+            console.log('iBLE app detector: Not in app, showing both options');
+            // Always show both options for better UX
+            this.showBothOptions();
         },
         
         // Try iframe detection method
@@ -463,7 +463,7 @@
                 border-radius: 3px;
                 z-index: 1000;
             `;
-            timestamp.textContent = "Version: " + "2025-07-28 14:35:07";
+            timestamp.textContent = "Version: " + "2025-07-28 15:05:48";
             document.body.appendChild(timestamp);
             
             // Insert button at the top of the page
