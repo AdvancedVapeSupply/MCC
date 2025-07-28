@@ -86,47 +86,65 @@
                 return;
             }
             
-            // Method 2: Try direct link click (most reliable)
+            // Method 2: Try direct link click with immediate timeout check
             const link = document.createElement('a');
             link.href = this.config.appUrl;
             link.style.display = 'none';
             document.body.appendChild(link);
             
+            let appOpened = false;
+            
             // Listen for page visibility changes (app opened)
             const visibilityHandler = () => {
-                if (document.hidden) {
+                if (document.hidden && !appOpened) {
                     console.log('iBLE app detector: Page hidden, app likely opened');
+                    appOpened = true;
                     this.onAppDetected();
                     document.removeEventListener('visibilitychange', visibilityHandler);
+                    window.removeEventListener('blur', blurHandler);
                 }
             };
             document.addEventListener('visibilitychange', visibilityHandler);
             
             // Listen for page blur (app opened)
             const blurHandler = () => {
-                console.log('iBLE app detector: Page blurred, app likely opened');
-                this.onAppDetected();
-                window.removeEventListener('blur', blurHandler);
+                if (!appOpened) {
+                    console.log('iBLE app detector: Page blurred, app likely opened');
+                    appOpened = true;
+                    this.onAppDetected();
+                    document.removeEventListener('visibilitychange', visibilityHandler);
+                    window.removeEventListener('blur', blurHandler);
+                }
             };
             window.addEventListener('blur', blurHandler);
             
-            // Simulate click
+            // Simulate click and check immediately
             setTimeout(() => {
+                console.log('iBLE app detector: Clicking link...');
                 link.click();
+                
+                // Check if page is still focused after a short delay
+                setTimeout(() => {
+                    if (!appOpened && !document.hidden && document.hasFocus()) {
+                        console.log('iBLE app detector: Page still focused, app not installed');
+                        this.onAppNotDetected();
+                    }
+                }, 500);
+                
                 if (document.body.contains(link)) {
                     document.body.removeChild(link);
                 }
             }, 100);
             
-            // Set up detection timeout
+            // Set up detection timeout (shorter)
             this.detectionTimeout = setTimeout(() => {
-                if (!this.detected) {
+                if (!this.detected && !appOpened) {
                     console.log('iBLE app detector: Timeout reached, app not detected');
                     document.removeEventListener('visibilitychange', visibilityHandler);
                     window.removeEventListener('blur', blurHandler);
                     this.onAppNotDetected();
                 }
-            }, this.config.timeout);
+            }, 2000); // Shorter timeout
         },
         
         // Check if running on mobile device
