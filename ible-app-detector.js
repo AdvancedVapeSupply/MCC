@@ -395,8 +395,25 @@
         },
         
         // Insert button into page
+        // Insert button into page
         insertButton: function(button) {
-            // Try to insert at the top of the page
+            // Add timestamp at the bottom of the page
+            const timestamp = document.createElement("div");
+            timestamp.style.cssText = "
+                position: fixed;
+                bottom: 10px;
+                right: 10px;
+                background: rgba(0,0,0,0.8);
+                color: white;
+                padding: 5px;
+                font-size: 10px;
+                border-radius: 3px;
+                z-index: 1000;
+            ";
+            timestamp.textContent = "Version: " + new Date().toLocaleString();
+            document.body.appendChild(timestamp);
+            
+            // Insert button at the top of the page
             const firstElement = document.body.firstChild;
             if (firstElement) {
                 document.body.insertBefore(button, firstElement);
