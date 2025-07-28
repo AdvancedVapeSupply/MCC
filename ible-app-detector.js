@@ -70,9 +70,44 @@
                 return;
             }
             
-            console.log('iBLE app detector: Not in app, showing both options');
-            // Always show both options for now
-            this.showBothOptions();
+            console.log('iBLE app detector: Not in app, trying iframe detection');
+            // Method 2: Try iframe detection
+            this.tryIframeDetection();
+        },
+        
+        // Try iframe detection method
+        tryIframeDetection: function() {
+            console.log('iBLE app detector: Trying iframe detection...');
+            
+            // Create a hidden iframe
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = this.config.appUrl;
+            
+            // Listen for iframe load events
+            iframe.onload = () => {
+                console.log('iBLE app detector: Iframe loaded, app not installed');
+                this.onAppNotDetected();
+            };
+            
+            iframe.onerror = () => {
+                console.log('iBLE app detector: Iframe error, app likely installed');
+                this.onAppDetected();
+            };
+            
+            // Add iframe to page
+            document.body.appendChild(iframe);
+            
+            // Set timeout for detection
+            this.detectionTimeout = setTimeout(() => {
+                if (!this.detected) {
+                    console.log('iBLE app detector: Iframe timeout, showing both options');
+                    this.showBothOptions();
+                }
+                if (document.body.contains(iframe)) {
+                    document.body.removeChild(iframe);
+                }
+            }, 1000);
         },
         
         // Try custom URL scheme detection
