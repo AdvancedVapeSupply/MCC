@@ -43,10 +43,52 @@ const iBLEAppDetector = {
     
     // Check if running in the iBLE app
     isInWebApp: function() {
-        return !!(window.Capacitor || 
-                 window.webkit || 
-                 document.referrer.includes('ible://') ||
-                 window.location.href.includes('ible://'));
+        console.log('iBLE app detector: Checking if in web app...');
+        console.log('iBLE app detector: window.Capacitor:', !!window.Capacitor);
+        console.log('iBLE app detector: window.webkit:', !!window.webkit);
+        console.log('iBLE app detector: document.referrer:', document.referrer);
+        console.log('iBLE app detector: window.location.href:', window.location.href);
+        console.log('iBLE app detector: navigator.userAgent:', navigator.userAgent);
+        
+        // Check for Capacitor (most reliable indicator)
+        if (window.Capacitor) {
+            console.log('iBLE app detector: Capacitor detected');
+            return true;
+        }
+        
+        // Check for WebKit (iOS WebView)
+        if (window.webkit && window.webkit.messageHandlers) {
+            console.log('iBLE app detector: WebKit detected');
+            return true;
+        }
+        
+        // Check for Android WebView
+        if (window.Android) {
+            console.log('iBLE app detector: Android WebView detected');
+            return true;
+        }
+        
+        // Check referrer for ible:// scheme
+        if (document.referrer && document.referrer.includes('ible://')) {
+            console.log('iBLE app detector: iBLE referrer detected');
+            return true;
+        }
+        
+        // Check current URL for ible:// scheme
+        if (window.location.href.includes('ible://')) {
+            console.log('iBLE app detector: iBLE URL detected');
+            return true;
+        }
+        
+        // Check user agent for WebView indicators
+        const userAgent = navigator.userAgent.toLowerCase();
+        if (userAgent.includes('wv') || userAgent.includes('webview')) {
+            console.log('iBLE app detector: WebView user agent detected');
+            return true;
+        }
+        
+        console.log('iBLE app detector: Not in web app');
+        return false;
     },
     
     // Check if mobile device
