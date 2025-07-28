@@ -410,7 +410,7 @@
                 border-radius: 3px;
                 z-index: 1000;
             ";
-            timestamp.textContent = "Version: " + new Date().toLocaleString();
+            timestamp.textContent = "Version: " + "2025-07-28 14:01:26";
             document.body.appendChild(timestamp);
             
             // Insert button at the top of the page
