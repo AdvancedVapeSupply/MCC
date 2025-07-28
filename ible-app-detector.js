@@ -38,7 +38,7 @@
             // Don't detect if already detected
             if (this.detected) return;
             
-            // Only run on mobile devices with WebBLE support
+            // Only run on mobile devices
             if (!this.isMobile()) {
                 console.log('iBLE app detector: Desktop detected, skipping');
                 return;
@@ -55,8 +55,8 @@
             this.originalTitle = document.title;
             this.originalHref = window.location.href;
             
-            // Try to detect app
-            this.attemptDetection();
+            // For now, show both options and let user choose
+            this.showBothOptions();
         },
         
         // Attempt to detect if app is installed
@@ -76,7 +76,9 @@
         
         // Try custom URL scheme detection
         tryCustomScheme: function() {
-            // Create hidden iframe to avoid page navigation
+            console.log('iBLE app detector: Trying custom URL scheme...');
+            
+            // Method 1: Try iframe approach
             const iframe = document.createElement('iframe');
             iframe.style.display = 'none';
             iframe.src = this.config.appUrl;
@@ -89,9 +91,24 @@
                 }
             }, 100);
             
+            // Method 2: Try direct link click (more reliable)
+            const link = document.createElement('a');
+            link.href = this.config.appUrl;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            
+            // Simulate click
+            setTimeout(() => {
+                link.click();
+                if (document.body.contains(link)) {
+                    document.body.removeChild(link);
+                }
+            }, 200);
+            
             // Set up detection timeout
             this.detectionTimeout = setTimeout(() => {
                 if (!this.detected) {
+                    console.log('iBLE app detector: Timeout reached, app not detected');
                     this.onAppNotDetected();
                 }
             }, this.config.timeout);
@@ -188,6 +205,40 @@
             );
             
             this.insertButton(button);
+            this.buttonCreated = true;
+        },
+        
+        // Show both options (Open in App / Install App)
+        showBothOptions: function() {
+            if (this.buttonCreated) return;
+            
+            const container = document.createElement('div');
+            container.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                z-index: 10000;
+            `;
+            
+            const openButton = this.createButton(
+                this.config.buttonText,
+                this.config.buttonClass,
+                () => window.location.href = this.config.appUrl
+            );
+            
+            const installButton = this.createButton(
+                this.config.installText,
+                this.config.installClass,
+                () => window.open(this.config.installUrl, '_blank')
+            );
+            
+            container.appendChild(openButton);
+            container.appendChild(installButton);
+            
+            document.body.appendChild(container);
             this.buttonCreated = true;
         },
         
