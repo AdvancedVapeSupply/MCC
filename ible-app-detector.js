@@ -206,7 +206,7 @@ const iBLEAppDetector = {
             border-radius: 3px;
             z-index: 1000;
         `;
-        timestamp.textContent = "Version: 2025-07-28 15:50:00";
+        timestamp.textContent = "Version: 2025-07-28 16:00:00";
         
         document.body.appendChild(timestamp);
         document.body.appendChild(container);
@@ -267,7 +267,7 @@ const iBLEAppDetector = {
             border-radius: 3px;
             z-index: 1000;
         `;
-        timestamp.textContent = "Version: 2025-07-28 15:50:00";
+        timestamp.textContent = "Version: 2025-07-28 16:00:00";
         
         document.body.appendChild(timestamp);
         document.body.appendChild(button);
