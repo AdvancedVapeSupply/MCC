@@ -21,11 +21,11 @@
     
     window.iBLEAppDetector = {
         config: {
-            appUrl: 'ible://../MCC/mct_ble.html',
+            appUrl: 'ible://advancedvapesupply.github.io/MCC/mcc-ble.html',
             installUrl: 'https://apps.apple.com/app/ible',
             buttonText: 'Open in iBLE App',
             installText: 'Install iBLE App',
-            timeout: 2000,
+            timeout: 5000, // Increased timeout for better detection
             buttonClass: 'ible-app-button',
             installClass: 'ible-install-button'
         },
@@ -48,14 +48,14 @@
         
         // Attempt to detect if app is installed
         attemptDetection: function() {
-            // Method 1: Try custom URL scheme
-            this.tryCustomScheme();
-            
-            // Method 2: Check if running in web app mode
+            // Method 1: Check if already in the app (most reliable)
             if (this.isInWebApp()) {
                 this.onAppDetected();
                 return;
             }
+            
+            // Method 2: Try custom URL scheme
+            this.tryCustomScheme();
             
             // Method 3: Universal Links detection
             this.tryUniversalLinks();
@@ -86,12 +86,21 @@
         
         // Check if running in web app mode
         isInWebApp: function() {
+            // Check if running in standalone mode (PWA) or in Capacitor WebView
             return (
                 'standalone' in window.navigator && 
                 window.navigator.standalone === true
             ) || (
                 window.matchMedia && 
                 window.matchMedia('(display-mode: standalone)').matches
+            ) || (
+                window.Capacitor !== undefined
+            ) || (
+                window.webkit !== undefined
+            ) || (
+                document.referrer && document.referrer.includes('ible')
+            ) || (
+                window.location.href.includes('ible://')
             );
         },
         
