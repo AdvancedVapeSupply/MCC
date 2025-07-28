@@ -61,12 +61,16 @@
         
         // Attempt to detect if app is installed
         attemptDetection: function() {
+            console.log('iBLE app detector: Starting detection...');
+            
             // Method 1: Check if already in the app (most reliable)
             if (this.isInWebApp()) {
+                console.log('iBLE app detector: Already in app, calling onAppDetected');
                 this.onAppDetected();
                 return;
             }
             
+            console.log('iBLE app detector: Not in app, trying custom URL scheme');
             // Method 2: Try custom URL scheme
             this.tryCustomScheme();
             
@@ -143,22 +147,32 @@
         
         // Check if running in web app mode
         isInWebApp: function() {
+            console.log('iBLE app detector: Checking if in web app...');
+            console.log('iBLE app detector: window.navigator.standalone:', window.navigator.standalone);
+            console.log('iBLE app detector: window.Capacitor:', window.Capacitor);
+            console.log('iBLE app detector: window.webkit:', window.webkit);
+            console.log('iBLE app detector: document.referrer:', document.referrer);
+            console.log('iBLE app detector: window.location.href:', window.location.href);
+            
             // Check if running in standalone mode (PWA) or in Capacitor WebView
-            return (
-                'standalone' in window.navigator && 
-                window.navigator.standalone === true
-            ) || (
-                window.matchMedia && 
-                window.matchMedia('(display-mode: standalone)').matches
-            ) || (
-                window.Capacitor !== undefined
-            ) || (
-                window.webkit !== undefined
-            ) || (
-                document.referrer && document.referrer.includes('ible')
-            ) || (
-                window.location.href.includes('ible://')
-            );
+            const inStandalone = 'standalone' in window.navigator && window.navigator.standalone === true;
+            const inDisplayMode = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+            const inCapacitor = window.Capacitor !== undefined;
+            const inWebKit = window.webkit !== undefined;
+            const hasIbleReferrer = document.referrer && document.referrer.includes('ible');
+            const hasIbleUrl = window.location.href.includes('ible://');
+            
+            console.log('iBLE app detector: inStandalone:', inStandalone);
+            console.log('iBLE app detector: inDisplayMode:', inDisplayMode);
+            console.log('iBLE app detector: inCapacitor:', inCapacitor);
+            console.log('iBLE app detector: inWebKit:', inWebKit);
+            console.log('iBLE app detector: hasIbleReferrer:', hasIbleReferrer);
+            console.log('iBLE app detector: hasIbleUrl:', hasIbleUrl);
+            
+            const result = inStandalone || inDisplayMode || inCapacitor || inWebKit || hasIbleReferrer || hasIbleUrl;
+            console.log('iBLE app detector: Final result:', result);
+            
+            return result;
         },
         
         // Try Universal Links detection
