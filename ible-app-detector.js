@@ -70,9 +70,9 @@
                 return;
             }
             
-            console.log('iBLE app detector: Not in app, showing both options');
-            // Show both options when not in app
-            this.showBothOptions();
+            console.log('iBLE app detector: Not in app, trying custom URL scheme');
+            // Method 2: Try custom URL scheme
+            this.tryCustomScheme();
         },
         
         // Try custom URL scheme detection
@@ -399,7 +399,7 @@
         insertButton: function(button) {
             // Add timestamp at the bottom of the page
             const timestamp = document.createElement("div");
-            timestamp.style.cssText = "
+            timestamp.style.cssText = `
                 position: fixed;
                 bottom: 10px;
                 right: 10px;
@@ -409,7 +409,7 @@
                 font-size: 10px;
                 border-radius: 3px;
                 z-index: 1000;
-            ";
+            `;
             timestamp.textContent = "Version: " + "2025-07-28 14:35:07";
             document.body.appendChild(timestamp);
             
