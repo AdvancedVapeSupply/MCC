@@ -18,6 +18,9 @@ const iBLEAppDetector = {
     detect: function() {
         console.log('iBLE app detector: Starting detection...');
         
+        // Always show timestamp regardless of app state
+        this.showTimestamp();
+        
         // Check if already in the app
         if (this.isInWebApp()) {
             console.log('iBLE app detector: Already in app');
@@ -193,24 +196,6 @@ const iBLEAppDetector = {
         buttonRow.appendChild(installButton);
         container.appendChild(buttonRow);
         
-        // Add timestamp
-        const timestamp = document.createElement("div");
-        timestamp.style.cssText = `
-            position: fixed;
-            top: calc(60px + env(safe-area-inset-top));
-            left: 10px;
-            background: rgba(0, 0, 0, 0.8);
-            color: #00ff00;
-            padding: 5px 10px;
-            font-size: 12px;
-            font-family: monospace;
-            border: 1px solid #00ff00;
-            border-radius: 3px;
-            z-index: 1000;
-        `;
-        timestamp.textContent = "Version: 2025-07-28 16:00:00";
-        
-        document.body.appendChild(timestamp);
         document.body.appendChild(container);
         this.buttonCreated = true;
         
@@ -256,7 +241,14 @@ const iBLEAppDetector = {
             button.style.transform = 'translateY(0)';
         });
         
-        // Add timestamp
+        document.body.appendChild(button);
+        this.buttonCreated = true;
+        
+        console.log('iBLE app detector: Install button displayed');
+    },
+
+    // Show timestamp
+    showTimestamp: function() {
         const timestamp = document.createElement("div");
         timestamp.style.cssText = `
             position: fixed;
@@ -272,12 +264,7 @@ const iBLEAppDetector = {
             z-index: 1000;
         `;
         timestamp.textContent = "Version: 2025-07-28 16:00:00";
-        
         document.body.appendChild(timestamp);
-        document.body.appendChild(button);
-        this.buttonCreated = true;
-        
-        console.log('iBLE app detector: Install button displayed');
     }
 };
 
