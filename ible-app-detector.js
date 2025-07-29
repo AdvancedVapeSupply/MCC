@@ -197,12 +197,14 @@ const iBLEAppDetector = {
         const timestamp = document.createElement("div");
         timestamp.style.cssText = `
             position: fixed;
-            top: 60px;
+            top: calc(60px + env(safe-area-inset-top));
             left: 10px;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 5px;
-            font-size: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-family: monospace;
+            border: 1px solid #00ff00;
             border-radius: 3px;
             z-index: 1000;
         `;
@@ -258,12 +260,14 @@ const iBLEAppDetector = {
         const timestamp = document.createElement("div");
         timestamp.style.cssText = `
             position: fixed;
-            top: 60px;
+            top: calc(60px + env(safe-area-inset-top));
             left: 10px;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 5px;
-            font-size: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-family: monospace;
+            border: 1px solid #00ff00;
             border-radius: 3px;
             z-index: 1000;
         `;
